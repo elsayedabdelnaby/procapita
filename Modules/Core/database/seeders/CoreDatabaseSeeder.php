@@ -1,6 +1,6 @@
 <?php
 
-namespace Modules\Core\Database\Seeders;
+namespace Modules\Core\database\seeders;
 
 use Illuminate\Database\Seeder;
 
@@ -11,6 +11,9 @@ class CoreDatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // $this->call([]);
+        $this->call([
+            CorePermissionsSeeder::class,
+            SuperAdminSeeder::class,
+        ]);
     }
 }
