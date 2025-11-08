@@ -449,7 +449,7 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
                                     Visual representation of the company's role structure showing parent-child
                                     relationships.
                                 </p>
-                                <RoleTree roles={roleHierarchy} />
+                                <RoleTree roles={roleHierarchy} companyId={company.id} />
                             </div>
                         ) : (
                             <div className="py-8 text-center text-neutral-500">

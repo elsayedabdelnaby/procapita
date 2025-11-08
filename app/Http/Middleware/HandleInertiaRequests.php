@@ -78,6 +78,72 @@ class HandleInertiaRequests extends Middleware
             ];
         }
 
+        // Marketing Module
+        if ($user->canAccessModule('marketing') || $user->isSuperAdmin()) {
+            $marketingItems = [];
+
+            // Campaigns
+            if ($user->hasPermissionTo('marketing.campaigns.read') || $user->isSuperAdmin()) {
+                $marketingItems[] = [
+                    'title' => 'Campaigns',
+                    'href' => '/marketing/campaigns',
+                    'icon' => 'Megaphone',
+                ];
+            }
+
+            // Marketing Lists
+            if ($user->hasPermissionTo('marketing.marketing_lists.read') || $user->isSuperAdmin()) {
+                $marketingItems[] = [
+                    'title' => 'Marketing Lists',
+                    'href' => '/marketing/marketing-lists',
+                    'icon' => 'Users',
+                ];
+            }
+
+            // Templates
+            if ($user->hasPermissionTo('marketing.marketing_templates.read') || $user->isSuperAdmin()) {
+                $marketingItems[] = [
+                    'title' => 'Templates',
+                    'href' => '/marketing/templates',
+                    'icon' => 'FileText',
+                ];
+            }
+
+            // Settings submenu (with permission checks)
+            if ($user->hasPermissionTo('marketing.campaign_types.read') || $user->isSuperAdmin()) {
+                $marketingItems[] = [
+                    'title' => 'Campaign Types',
+                    'href' => '/marketing/campaign-types',
+                    'icon' => 'Tag',
+                ];
+            }
+            
+            if ($user->hasPermissionTo('marketing.campaign_statuses.read') || $user->isSuperAdmin()) {
+                $marketingItems[] = [
+                    'title' => 'Campaign Statuses',
+                    'href' => '/marketing/campaign-statuses',
+                    'icon' => 'Flag',
+                ];
+            }
+            
+            if ($user->hasPermissionTo('marketing.campaign_channels.read') || $user->isSuperAdmin()) {
+                $marketingItems[] = [
+                    'title' => 'Campaign Channels',
+                    'href' => '/marketing/campaign-channels',
+                    'icon' => 'Radio',
+                ];
+            }
+
+            // Only add Marketing group if there are items
+            if (! empty($marketingItems)) {
+                $navigation[] = [
+                    'title' => 'Marketing',
+                    'icon' => 'TrendingUp',
+                    'items' => $marketingItems,
+                ];
+            }
+        }
+
         return $navigation;
     }
 }

@@ -1,0 +1,16 @@
+{
+    "name": "Marketing",
+    "alias": "marketing",
+    "description": "Marketing module for campaigns, leads, and templates",
+    "keywords": [
+        "marketing",
+        "campaigns",
+        "leads"
+    ],
+    "priority": 1,
+    "providers": [
+        "Modules\\Marketing\\app\\Providers\\MarketingServiceProvider"
+    ],
+    "files": []
+}
+

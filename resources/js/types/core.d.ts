@@ -39,6 +39,7 @@ export interface Role {
     updated_at: string;
     permissions?: Permission[];
     children?: Role[];
+    all_children?: Role[];
     parent?: Role;
 }
 

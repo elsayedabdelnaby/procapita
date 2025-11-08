@@ -1,25 +1,28 @@
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Role } from '@/types/core';
-import { Link } from '@inertiajs/react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 
 interface RoleTreeProps {
     roles: Role[];
+    companyId: number;
 }
 
 interface RoleNodeProps {
     role: Role;
     level: number;
+    companyId: number;
 }
 
-function RoleNode({ role, level }: RoleNodeProps) {
+function RoleNode({ role, level, companyId }: RoleNodeProps) {
     const [isExpanded, setIsExpanded] = useState(true);
-    const hasChildren = role.children && role.children.length > 0;
+    
+    // Check both 'children' and 'all_children' properties
+    const children = role.all_children || role.children || [];
+    const hasChildren = children.length > 0;
 
     return (
-        <div className="ml-4">
+        <div>
             <div
                 className="flex items-center gap-2 rounded-md p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 style={{ paddingLeft: `${level * 1.5}rem` }}
@@ -41,34 +44,22 @@ function RoleNode({ role, level }: RoleNodeProps) {
 
                 <div className="flex flex-1 items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <Link
-                            href={`/core/roles/${role.id}`}
-                            className="font-medium hover:underline"
-                        >
-                            {role.name}
-                        </Link>
+                        <span className="font-medium">{role.name}</span>
                         {role.is_root && <Badge variant="default">Root</Badge>}
-                        <span className="text-sm text-neutral-500">
-                            Level {role.hierarchy_level}
-                        </span>
+                        <span className="text-xs text-neutral-500">{role.hierarchy_path}</span>
                         {role.module_name && (
-                            <Badge variant="outline">{role.module_name}</Badge>
+                            <Badge variant="outline" className="text-xs">
+                                {role.module_name}
+                            </Badge>
                         )}
-                    </div>
-                    <div className="flex gap-1">
-                        <Link href={`/core/roles/${role.id}/edit`}>
-                            <Button variant="ghost" size="sm">
-                                Edit
-                            </Button>
-                        </Link>
                     </div>
                 </div>
             </div>
 
             {hasChildren && isExpanded && (
                 <div className="mt-1">
-                    {role.children!.map((child) => (
-                        <RoleNode key={child.id} role={child} level={level + 1} />
+                    {children.map((child) => (
+                        <RoleNode key={child.id} role={child} level={level + 1} companyId={companyId} />
                     ))}
                 </div>
             )}
@@ -76,7 +67,7 @@ function RoleNode({ role, level }: RoleNodeProps) {
     );
 }
 
-export function RoleTree({ roles }: RoleTreeProps) {
+export function RoleTree({ roles, companyId }: RoleTreeProps) {
     if (roles.length === 0) {
         return (
             <div className="rounded-lg border p-8 text-center text-neutral-500">
@@ -88,7 +79,7 @@ export function RoleTree({ roles }: RoleTreeProps) {
     return (
         <div className="rounded-lg border p-4">
             {roles.map((role) => (
-                <RoleNode key={role.id} role={role} level={0} />
+                <RoleNode key={role.id} role={role} level={0} companyId={companyId} />
             ))}
         </div>
     );
