@@ -14,6 +14,7 @@ class CoreDatabaseSeeder extends Seeder
         $this->call([
             CorePermissionsSeeder::class,
             SuperAdminSeeder::class,
+            DemoCompaniesSeeder::class,
         ]);
     }
 }

@@ -23,45 +23,51 @@ class UserController extends Controller
         protected CompanyService $companyService
     ) {}
 
-    public function index(Request $request): Response
+    public function index(int $company, Request $request): Response
     {
-        $companyId = $request->user()->isSuperAdmin()
-            ? $request->input('company_id')
-            : $request->user()->company_id;
+        $companyModel = $this->companyService->getCompanyById($company);
+        
+        if (! $companyModel) {
+            abort(404, 'Company not found.');
+        }
 
-        $users = $this->userService->getAllUsers($companyId);
+        // Set team context for Spatie Permission to load roles correctly
+        setPermissionsTeamId($company);
+
+        $users = $this->userService->getAllUsers($company);
 
         return Inertia::render('Core/Users/Index', [
+            'company' => $companyModel,
             'users' => $users,
         ]);
     }
 
-    public function create(Request $request): Response
+    public function create(int $company, Request $request): Response
     {
-        $user = $request->user();
-        $companyId = $user->company_id;
+        $companyModel = $this->companyService->getCompanyById($company);
+        
+        if (! $companyModel) {
+            abort(404, 'Company not found.');
+        }
 
-        $companies = $user->isSuperAdmin()
-            ? $this->companyService->getAllCompanies(true)
-            : collect([$user->company]);
-
-        $roles = $this->roleService->getAllRoles($companyId);
-        $permissions = $this->permissionService->getGroupedPermissions();
+        $roles = $this->roleService->getAllRoles($company);
 
         return Inertia::render('Core/Users/Create', [
-            'companies' => $companies,
+            'company' => $companyModel,
             'roles' => $roles,
-            'permissions' => $permissions,
         ]);
     }
 
-    public function store(UserStoreRequest $request): RedirectResponse
+    public function store(int $company, UserStoreRequest $request): RedirectResponse
     {
         try {
-            $this->userService->createUser($request->validated());
+            $data = $request->validated();
+            $data['company_id'] = $company;
+            
+            $this->userService->createUser($data);
 
             return redirect()
-                ->route('core.users.index')
+                ->route('core.companies.show', $company)
                 ->with('success', 'User created successfully.');
         } catch (\Exception $e) {
             return redirect()
@@ -71,55 +77,65 @@ class UserController extends Controller
         }
     }
 
-    public function show(int $id): Response
+    public function show(int $company, int $user): Response
     {
-        $user = $this->userService->getUserById($id);
+        $userModel = $this->userService->getUserById($user);
 
-        if (! $user) {
+        if (! $userModel || $userModel->company_id !== $company) {
             abort(404, 'User not found.');
         }
 
-        $permissions = $this->userService->getUserPermissions($id);
+        $permissions = $this->userService->getUserPermissions($user);
 
         return Inertia::render('Core/Users/Show', [
-            'user' => $user,
+            'company' => $userModel->company,
+            'user' => $userModel,
             'userPermissions' => $permissions,
         ]);
     }
 
-    public function edit(int $id, Request $request): Response
+    public function edit(int $company, int $user, Request $request): Response
     {
-        $user = $this->userService->getUserById($id);
+        $userModel = $this->userService->getUserById($user);
 
-        if (! $user) {
+        if (! $userModel || $userModel->company_id !== $company) {
             abort(404, 'User not found.');
         }
 
-        $authUser = $request->user();
-        $companyId = $authUser->company_id;
-
-        $companies = $authUser->isSuperAdmin()
-            ? $this->companyService->getAllCompanies(true)
-            : collect([$authUser->company]);
-
-        $roles = $this->roleService->getAllRoles($companyId);
-        $permissions = $this->permissionService->getGroupedPermissions();
+        $companyModel = $this->companyService->getCompanyById($company);
+        
+        // Set team context for Spatie Permission to load roles correctly
+        setPermissionsTeamId($company);
+        
+        $roles = $this->roleService->getAllRoles($company);
+        
+        // Reload the user's roles in the correct team context
+        $userModel->load('roles');
+        
+        // Get user's current role IDs
+        $userRoles = $userModel->roles->pluck('id')->toArray();
 
         return Inertia::render('Core/Users/Edit', [
-            'user' => $user,
-            'companies' => $companies,
+            'company' => $companyModel,
+            'user' => $userModel,
             'roles' => $roles,
-            'permissions' => $permissions,
+            'userRoles' => $userRoles,
         ]);
     }
 
-    public function update(UserUpdateRequest $request, int $id): RedirectResponse
+    public function update(int $company, int $user, UserUpdateRequest $request): RedirectResponse
     {
         try {
-            $this->userService->updateUser($id, $request->validated());
+            $userModel = $this->userService->getUserById($user);
+            
+            if (! $userModel || $userModel->company_id !== $company) {
+                abort(404, 'User not found.');
+            }
+
+            $this->userService->updateUser($user, $request->validated());
 
             return redirect()
-                ->route('core.users.show', $id)
+                ->route('core.companies.show', $company)
                 ->with('success', 'User updated successfully.');
         } catch (\Exception $e) {
             return redirect()
@@ -129,13 +145,19 @@ class UserController extends Controller
         }
     }
 
-    public function destroy(int $id): RedirectResponse
+    public function destroy(int $company, int $user): RedirectResponse
     {
         try {
-            $this->userService->deleteUser($id);
+            $userModel = $this->userService->getUserById($user);
+            
+            if (! $userModel || $userModel->company_id !== $company) {
+                abort(404, 'User not found.');
+            }
+
+            $this->userService->deleteUser($user);
 
             return redirect()
-                ->route('core.users.index')
+                ->route('core.companies.show', $company)
                 ->with('success', 'User deleted successfully.');
         } catch (\Exception $e) {
             return redirect()
@@ -144,10 +166,16 @@ class UserController extends Controller
         }
     }
 
-    public function activate(int $id): RedirectResponse
+    public function activate(int $company, int $user): RedirectResponse
     {
         try {
-            $this->userService->activateUser($id);
+            $userModel = $this->userService->getUserById($user);
+            
+            if (! $userModel || $userModel->company_id !== $company) {
+                abort(404, 'User not found.');
+            }
+
+            $this->userService->activateUser($user);
 
             return redirect()
                 ->back()
@@ -159,10 +187,16 @@ class UserController extends Controller
         }
     }
 
-    public function deactivate(int $id): RedirectResponse
+    public function deactivate(int $company, int $user): RedirectResponse
     {
         try {
-            $this->userService->deactivateUser($id);
+            $userModel = $this->userService->getUserById($user);
+            
+            if (! $userModel || $userModel->company_id !== $company) {
+                abort(404, 'User not found.');
+            }
+
+            $this->userService->deactivateUser($user);
 
             return redirect()
                 ->back()

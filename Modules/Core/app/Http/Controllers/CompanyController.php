@@ -56,9 +56,24 @@ class CompanyController extends Controller
 
         $statistics = $this->companyService->getCompanyStatistics($id);
 
+        // Set team context for Spatie Permission to load roles correctly
+        setPermissionsTeamId($id);
+
+        // Load company users with roles
+        $users = $company->users()->with('roles')->get();
+
+        // Load company roles with hierarchy
+        $roles = $company->roles()->with('parent', 'children')->get();
+
+        // Build role hierarchy tree
+        $roleHierarchy = $company->roles()->rootRoles()->with('allChildren')->get();
+
         return Inertia::render('Core/Companies/Show', [
-            'company' => $company,
+            'company' => $company->load('users', 'roles'),
             'statistics' => $statistics,
+            'users' => $users,
+            'roles' => $roles,
+            'roleHierarchy' => $roleHierarchy,
         ]);
     }
 

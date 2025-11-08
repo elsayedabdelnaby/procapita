@@ -68,46 +68,13 @@ class HandleInertiaRequests extends Middleware
             'icon' => 'LayoutGrid',
         ];
 
-        // Core Module
-        $coreItems = [];
-
-        // Companies (Super Admin Only)
+        // Core Module - Only show Companies for Super Admin
+        // Roles, Users, and Hierarchy are now accessed from the Company view
         if ($user->isSuperAdmin()) {
-            $coreItems[] = [
+            $navigation[] = [
                 'title' => 'Companies',
                 'href' => '/core/companies',
                 'icon' => 'Building2',
-            ];
-        }
-
-        // Roles (if user has access)
-        if ($user->isSuperAdmin() || $user->isCompanyAdmin() || $user->can('core.roles.read')) {
-            $coreItems[] = [
-                'title' => 'Roles',
-                'href' => '/core/roles',
-                'icon' => 'ShieldCheck',
-            ];
-
-            $coreItems[] = [
-                'title' => 'Role Hierarchy',
-                'href' => '/core/roles/hierarchy',
-                'icon' => 'Network',
-            ];
-        }
-
-        // Users (if user has access)
-        if ($user->isSuperAdmin() || $user->isCompanyAdmin() || $user->can('core.users.read')) {
-            $coreItems[] = [
-                'title' => 'Users',
-                'href' => '/core/users',
-                'icon' => 'Users',
-            ];
-        }
-
-        if (! empty($coreItems)) {
-            $navigation[] = [
-                'title' => 'Core',
-                'items' => $coreItems,
             ];
         }
 

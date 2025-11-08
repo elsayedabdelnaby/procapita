@@ -9,6 +9,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Core\app\Http\Requests\RoleStoreRequest;
 use Modules\Core\app\Http\Requests\RoleUpdateRequest;
+use Modules\Core\app\Services\CompanyService;
 use Modules\Core\app\Services\PermissionService;
 use Modules\Core\app\Services\RoleService;
 
@@ -16,41 +17,54 @@ class RoleController extends Controller
 {
     public function __construct(
         protected RoleService $roleService,
-        protected PermissionService $permissionService
+        protected PermissionService $permissionService,
+        protected CompanyService $companyService
     ) {}
 
-    public function index(Request $request): Response
+    public function index(int $company): Response
     {
-        $companyId = $request->user()->isSuperAdmin()
-            ? $request->input('company_id')
-            : $request->user()->company_id;
+        $companyModel = $this->companyService->getCompanyById($company);
+        
+        if (! $companyModel) {
+            abort(404, 'Company not found.');
+        }
 
-        $roles = $this->roleService->getAllRoles($companyId);
+        $roles = $this->roleService->getAllRoles($company);
 
         return Inertia::render('Core/Roles/Index', [
+            'company' => $companyModel,
             'roles' => $roles,
         ]);
     }
 
-    public function create(Request $request): Response
+    public function create(int $company): Response
     {
-        $companyId = $request->user()->company_id;
-        $roles = $this->roleService->getAllRoles($companyId);
+        $companyModel = $this->companyService->getCompanyById($company);
+        
+        if (! $companyModel) {
+            abort(404, 'Company not found.');
+        }
+
+        $roles = $this->roleService->getAllRoles($company);
         $permissions = $this->permissionService->getGroupedPermissions();
 
         return Inertia::render('Core/Roles/Create', [
+            'company' => $companyModel,
             'availableRoles' => $roles,
             'permissions' => $permissions,
         ]);
     }
 
-    public function store(RoleStoreRequest $request): RedirectResponse
+    public function store(int $company, RoleStoreRequest $request): RedirectResponse
     {
         try {
-            $this->roleService->createRole($request->validated());
+            $data = $request->validated();
+            $data['team_id'] = $company;
+            
+            $this->roleService->createRole($data);
 
             return redirect()
-                ->route('core.roles.index')
+                ->route('core.companies.show', $company)
                 ->with('success', 'Role created successfully.');
         } catch (\Exception $e) {
             return redirect()
@@ -60,45 +74,53 @@ class RoleController extends Controller
         }
     }
 
-    public function show(int $id): Response
+    public function show(int $company, int $role): Response
     {
-        $role = $this->roleService->getRoleById($id);
+        $roleModel = $this->roleService->getRoleById($role);
 
-        if (! $role) {
+        if (! $roleModel || $roleModel->team_id !== $company) {
             abort(404, 'Role not found.');
         }
 
         return Inertia::render('Core/Roles/Show', [
-            'role' => $role,
+            'company' => $roleModel->company,
+            'role' => $roleModel,
         ]);
     }
 
-    public function edit(int $id, Request $request): Response
+    public function edit(int $company, int $role): Response
     {
-        $role = $this->roleService->getRoleById($id);
+        $roleModel = $this->roleService->getRoleById($role);
 
-        if (! $role) {
+        if (! $roleModel || $roleModel->team_id !== $company) {
             abort(404, 'Role not found.');
         }
 
-        $companyId = $request->user()->company_id;
-        $availableRoles = $this->roleService->getAllRoles($companyId);
+        $companyModel = $this->companyService->getCompanyById($company);
+        $availableRoles = $this->roleService->getAllRoles($company);
         $permissions = $this->permissionService->getGroupedPermissions();
 
         return Inertia::render('Core/Roles/Edit', [
-            'role' => $role,
+            'company' => $companyModel,
+            'role' => $roleModel,
             'availableRoles' => $availableRoles,
             'permissions' => $permissions,
         ]);
     }
 
-    public function update(RoleUpdateRequest $request, int $id): RedirectResponse
+    public function update(int $company, int $role, RoleUpdateRequest $request): RedirectResponse
     {
         try {
-            $this->roleService->updateRole($id, $request->validated());
+            $roleModel = $this->roleService->getRoleById($role);
+            
+            if (! $roleModel || $roleModel->team_id !== $company) {
+                abort(404, 'Role not found.');
+            }
+
+            $this->roleService->updateRole($role, $request->validated());
 
             return redirect()
-                ->route('core.roles.show', $id)
+                ->route('core.companies.show', $company)
                 ->with('success', 'Role updated successfully.');
         } catch (\Exception $e) {
             return redirect()
@@ -108,13 +130,19 @@ class RoleController extends Controller
         }
     }
 
-    public function destroy(int $id): RedirectResponse
+    public function destroy(int $company, int $role): RedirectResponse
     {
         try {
-            $this->roleService->deleteRole($id);
+            $roleModel = $this->roleService->getRoleById($role);
+            
+            if (! $roleModel || $roleModel->team_id !== $company) {
+                abort(404, 'Role not found.');
+            }
+
+            $this->roleService->deleteRole($role);
 
             return redirect()
-                ->route('core.roles.index')
+                ->route('core.companies.show', $company)
                 ->with('success', 'Role deleted successfully.');
         } catch (\Exception $e) {
             return redirect()
@@ -123,15 +151,18 @@ class RoleController extends Controller
         }
     }
 
-    public function hierarchy(Request $request): Response
+    public function hierarchy(int $company): Response
     {
-        $companyId = $request->user()->isSuperAdmin()
-            ? $request->input('company_id')
-            : $request->user()->company_id;
+        $companyModel = $this->companyService->getCompanyById($company);
+        
+        if (! $companyModel) {
+            abort(404, 'Company not found.');
+        }
 
-        $hierarchy = $this->roleService->getRoleHierarchy($companyId);
+        $hierarchy = $this->roleService->getRoleHierarchy($company);
 
         return Inertia::render('Core/Roles/Hierarchy', [
+            'company' => $companyModel,
             'hierarchy' => $hierarchy,
         ]);
     }

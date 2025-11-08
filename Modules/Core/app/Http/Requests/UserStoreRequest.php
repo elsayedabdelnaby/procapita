@@ -15,6 +15,8 @@ class UserStoreRequest extends FormRequest
 
     public function rules(): array
     {
+        $companyId = $this->route('company') ?? $this->input('company_id');
+
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
@@ -23,7 +25,16 @@ class UserStoreRequest extends FormRequest
             'is_company_admin' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
             'roles' => ['nullable', 'array'],
-            'roles.*' => ['integer', 'exists:roles,id'],
+            'roles.*' => [
+                'integer',
+                'exists:roles,id',
+                function ($attribute, $value, $fail) use ($companyId) {
+                    $role = \Modules\Core\app\Models\Role::find($value);
+                    if ($role && $role->team_id != $companyId) {
+                        $fail('The selected role does not belong to this company.');
+                    }
+                },
+            ],
             'permissions' => ['nullable', 'array'],
             'permissions.*' => ['integer', 'exists:permissions,id'],
         ];

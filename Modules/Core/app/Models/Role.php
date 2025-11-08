@@ -49,6 +49,12 @@ class Role extends SpatieRole
             ->with('descendants');
     }
 
+    // Alias for descendants (used in eager loading)
+    public function allChildren(): HasMany
+    {
+        return $this->descendants();
+    }
+
     public function ancestors()
     {
         $ancestors = collect();
@@ -66,11 +72,18 @@ class Role extends SpatieRole
     {
         if ($this->parent_id) {
             $parent = $this->parent;
-            $this->hierarchy_path = $parent->hierarchy_path . ':H' . $this->id;
+            
+            // Get the hierarchical number for this role within the company
+            $hierarchicalNumber = $this->getHierarchicalNumber();
+            
+            $this->hierarchy_path = $parent->hierarchy_path . ':H' . $hierarchicalNumber;
             $this->hierarchy_level = $parent->hierarchy_level + 1;
             $this->is_root = false;
         } else {
-            $this->hierarchy_path = 'H' . $this->id;
+            // For root roles, get the next hierarchical number for root roles in this company
+            $hierarchicalNumber = $this->getHierarchicalNumber();
+            
+            $this->hierarchy_path = 'H' . $hierarchicalNumber;
             $this->hierarchy_level = 1;
             $this->is_root = true;
         }
@@ -81,6 +94,58 @@ class Role extends SpatieRole
         foreach ($this->children as $child) {
             $child->updateHierarchy();
         }
+    }
+
+    /**
+     * Get the hierarchical number for this role within its company.
+     * This ensures H1, H2, H3 are unique per company, not globally.
+     * 
+     * For root roles: H1, H2, H3 (sequential across company)
+     * For child roles: parent_path + next number (e.g., H1:H2, H2:H3)
+     */
+    protected function getHierarchicalNumber(): int
+    {
+        // If role already has a hierarchy path, extract its number
+        if ($this->hierarchy_path) {
+            // Extract the last number from the path (e.g., "H1:H3" -> 3, "H2" -> 2)
+            $parts = explode(':', $this->hierarchy_path);
+            $lastPart = end($parts);
+            if (preg_match('/H(\d+)/', $lastPart, $matches)) {
+                return (int) $matches[1];
+            }
+        }
+
+        // Get the highest hierarchical number used in this company
+        $query = static::where('team_id', $this->team_id);
+        
+        // Exclude current role if updating
+        if ($this->id) {
+            $query->where('id', '!=', $this->id);
+        }
+        
+        // Get ALL roles in the company
+        $existingRoles = $query->get();
+        
+        // Find the highest H number used anywhere in this company
+        $maxNumber = 0;
+        
+        foreach ($existingRoles as $role) {
+            if ($role->hierarchy_path) {
+                // Extract ALL numbers from the path
+                preg_match_all('/H(\d+)/', $role->hierarchy_path, $matches);
+                if (!empty($matches[1])) {
+                    foreach ($matches[1] as $number) {
+                        $num = (int) $number;
+                        if ($num > $maxNumber) {
+                            $maxNumber = $num;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Return next available number
+        return $maxNumber + 1;
     }
 
     public function isAncestorOf(Role $role): bool

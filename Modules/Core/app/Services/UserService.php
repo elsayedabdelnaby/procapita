@@ -25,7 +25,8 @@ class UserService
 
     public function getUserById(int $id): ?User
     {
-        return User::with(['company', 'roles.permissions'])->find($id);
+        // Don't eager-load roles here - let controllers load them with proper team context
+        return User::with('company')->find($id);
     }
 
     public function createUser(array $data): User
@@ -35,6 +36,11 @@ class UserService
         }
 
         $user = User::create($data);
+
+        // Set team context for Spatie Permission before assigning roles
+        if ($user->company_id) {
+            setPermissionsTeamId($user->company_id);
+        }
 
         if (isset($data['roles'])) {
             $this->syncRoles($user, $data['roles']);
@@ -58,6 +64,11 @@ class UserService
         }
 
         $user->update($data);
+
+        // Set team context for Spatie Permission before syncing roles
+        if ($user->company_id) {
+            setPermissionsTeamId($user->company_id);
+        }
 
         if (isset($data['roles'])) {
             $this->syncRoles($user, $data['roles']);
