@@ -26,8 +26,21 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    navigation: NavigationItem[];
+    flash: {
+        success?: string;
+        error?: string;
+        info?: string;
+    };
     sidebarOpen: boolean;
     [key: string]: unknown;
+}
+
+export interface NavigationItem {
+    title: string;
+    href?: string;
+    icon?: string;
+    items?: NavigationItem[];
 }
 
 export interface User {

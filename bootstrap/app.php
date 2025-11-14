@@ -22,6 +22,13 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
+
+        $middleware->alias([
+            'company.access' => \Modules\Core\app\Middleware\CheckCompanyAccess::class,
+            'module.access' => \Modules\Core\app\Middleware\CheckModuleAccess::class,
+            'permission' => \Modules\Core\app\Middleware\CheckPermission::class,
+            'super.admin' => \Modules\Core\app\Middleware\SuperAdminOnly::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

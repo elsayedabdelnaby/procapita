@@ -1,0 +1,29 @@
+{
+    "name": "nwidart/marketing",
+    "description": "",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Marketing\\": "app/",
+            "Modules\\Marketing\\database\\factories\\": "database/factories/",
+            "Modules\\Marketing\\database\\seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\Marketing\\tests\\": "tests/"
+        }
+    }
+}
+
