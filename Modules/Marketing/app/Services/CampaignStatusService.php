@@ -9,7 +9,7 @@ class CampaignStatusService
 {
     public function getAllCampaignStatuses(?int $companyId = null): Collection
     {
-        $query = CampaignStatus::query();
+        $query = CampaignStatus::with('company');
 
         if ($companyId) {
             $query->forCompany($companyId);
@@ -20,7 +20,7 @@ class CampaignStatusService
 
     public function getCampaignStatusById(int $id): ?CampaignStatus
     {
-        return CampaignStatus::find($id);
+        return CampaignStatus::with('company')->find($id);
     }
 
     public function createCampaignStatus(array $data): CampaignStatus

@@ -4,8 +4,10 @@ namespace Modules\Marketing\app\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Core\app\Models\Company;
 use Modules\Marketing\app\Http\Requests\CampaignTypeStoreRequest;
 use Modules\Marketing\app\Http\Requests\CampaignTypeUpdateRequest;
 use Modules\Marketing\app\Services\CampaignTypeService;
@@ -30,14 +32,28 @@ class CampaignTypeController extends Controller
 
     public function create(): Response
     {
-        return Inertia::render('Marketing/CampaignTypes/Create');
+        $user = Auth::user();
+        $companies = null;
+        
+        if ($user->isSuperAdmin()) {
+            $companies = Company::active()->get();
+        }
+
+        return Inertia::render('Marketing/CampaignTypes/Create', [
+            'companies' => $companies,
+            'company' => $user->company,
+        ]);
     }
 
     public function store(CampaignTypeStoreRequest $request): RedirectResponse
     {
         try {
             $data = $request->validated();
-            $data['company_id'] = auth()->user()->company_id;
+            
+            // If not super admin, force their company_id
+            if (! Auth::user()->isSuperAdmin()) {
+                $data['company_id'] = Auth::user()->company_id;
+            }
             
             $this->campaignTypeService->createCampaignType($data);
 

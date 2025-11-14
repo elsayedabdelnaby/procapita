@@ -7,6 +7,11 @@ import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
+interface Company {
+    id: number;
+    name: string;
+}
+
 interface CampaignStatus {
     id: number;
     name: string;
@@ -16,6 +21,8 @@ interface CampaignStatus {
     is_active: boolean;
     is_final: boolean;
     sort_order: number;
+    company_id: number;
+    company?: Company;
 }
 
 interface CampaignStatusesIndexProps {
@@ -65,6 +72,10 @@ export default function CampaignStatusesIndex({ campaignStatuses }: CampaignStat
                             columns={[
                                 { header: 'Name', accessor: 'name' },
                                 { header: 'Slug', accessor: 'slug' },
+                                {
+                                    header: 'Company',
+                                    accessor: (row) => row.company?.name || '-',
+                                },
                                 {
                                     header: 'Type',
                                     accessor: (row) => (

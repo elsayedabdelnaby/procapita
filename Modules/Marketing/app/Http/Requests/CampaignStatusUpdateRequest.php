@@ -15,7 +15,7 @@ class CampaignStatusUpdateRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['required', 'string', 'max:255'],
+            'slug' => ['nullable', 'string', 'max:255'], // Auto-generated if empty
             'description' => ['nullable', 'string'],
             'color' => ['nullable', 'string', 'max:50'],
             'is_active' => ['nullable', 'boolean'],

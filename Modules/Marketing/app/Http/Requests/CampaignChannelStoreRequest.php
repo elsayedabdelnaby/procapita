@@ -13,15 +13,20 @@ class CampaignChannelStoreRequest extends FormRequest
 
     public function rules(): array
     {
+        $user = $this->user();
+        
         return [
             'campaign_type_id' => ['required', 'integer', 'exists:campaign_types,id'],
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['required', 'string', 'max:255'],
+            'slug' => ['nullable', 'string', 'max:255'], // Auto-generated if empty
             'description' => ['nullable', 'string'],
             'icon' => ['nullable', 'string', 'max:255'],
             'settings' => ['nullable', 'array'],
             'is_active' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer'],
+            'company_id' => $user->isSuperAdmin() 
+                ? ['required', 'integer', 'exists:companies,id'] 
+                : ['nullable'],
         ];
     }
 

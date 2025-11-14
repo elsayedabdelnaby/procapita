@@ -9,7 +9,7 @@ class CampaignTypeService
 {
     public function getAllCampaignTypes(?int $companyId = null): Collection
     {
-        $query = CampaignType::with('channels');
+        $query = CampaignType::with('channels', 'company');
 
         if ($companyId) {
             $query->forCompany($companyId);
@@ -20,7 +20,7 @@ class CampaignTypeService
 
     public function getCampaignTypeById(int $id): ?CampaignType
     {
-        return CampaignType::with('channels')->find($id);
+        return CampaignType::with('channels', 'company')->find($id);
     }
 
     public function createCampaignType(array $data): CampaignType

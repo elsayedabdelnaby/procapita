@@ -4,8 +4,10 @@ namespace Modules\Marketing\app\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Core\app\Models\Company;
 use Modules\Marketing\app\Http\Requests\CampaignChannelStoreRequest;
 use Modules\Marketing\app\Http\Requests\CampaignChannelUpdateRequest;
 use Modules\Marketing\app\Services\CampaignChannelService;
@@ -32,13 +34,20 @@ class CampaignChannelController extends Controller
 
     public function create(): Response
     {
-        $user = auth()->user();
-        $companyId = $user->company_id;
+        $user = Auth::user();
+        $companies = null;
+        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
         
         $campaignTypes = $this->campaignTypeService->getActiveCampaignTypes($companyId);
 
+        if ($user->isSuperAdmin()) {
+            $companies = Company::active()->get();
+        }
+
         return Inertia::render('Marketing/CampaignChannels/Create', [
             'campaignTypes' => $campaignTypes,
+            'companies' => $companies,
+            'company' => $user->company,
         ]);
     }
 
@@ -46,7 +55,11 @@ class CampaignChannelController extends Controller
     {
         try {
             $data = $request->validated();
-            $data['company_id'] = auth()->user()->company_id;
+            
+            // If not super admin, force their company_id
+            if (! Auth::user()->isSuperAdmin()) {
+                $data['company_id'] = Auth::user()->company_id;
+            }
             
             $this->campaignChannelService->createCampaignChannel($data);
 
@@ -69,8 +82,8 @@ class CampaignChannelController extends Controller
             abort(404, 'Campaign channel not found.');
         }
 
-        $user = auth()->user();
-        $companyId = $user->company_id;
+        $user = Auth::user();
+        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
         
         $campaignTypes = $this->campaignTypeService->getActiveCampaignTypes($companyId);
 
