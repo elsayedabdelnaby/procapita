@@ -4,14 +4,20 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
+use Modules\Core\app\Models\Company;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\CausesActivity;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, TwoFactorAuthenticatable;
+    use CausesActivity, HasFactory, HasRoles, LogsActivity, Notifiable, TwoFactorAuthenticatable;
 
     /**
      * The attributes that are mass assignable.
@@ -22,6 +28,10 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'company_id',
+        'is_super_admin',
+        'is_company_admin',
+        'is_active',
     ];
 
     /**
@@ -47,6 +57,91 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'is_super_admin' => 'boolean',
+            'is_company_admin' => 'boolean',
+            'is_active' => 'boolean',
         ];
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['name', 'email', 'company_id', 'is_super_admin', 'is_company_admin', 'is_active'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->is_super_admin === true;
+    }
+
+    public function isCompanyAdmin(): bool
+    {
+        return $this->is_company_admin === true;
+    }
+
+    public function canAccessCompany(int $companyId): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->company_id === $companyId;
+    }
+
+    public function canAccessModule(string $moduleName): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($this->isCompanyAdmin()) {
+            return $this->company?->hasModule($moduleName) ?? false;
+        }
+
+        return $this->hasPermissionTo("{$moduleName}.*") ||
+               $this->hasAnyPermission([
+                   "{$moduleName}.*.create",
+                   "{$moduleName}.*.read",
+                   "{$moduleName}.*.update",
+                   "{$moduleName}.*.delete",
+               ]);
+    }
+
+    public function scopeSuperAdmins($query)
+    {
+        return $query->where('is_super_admin', true);
+    }
+
+    public function scopeCompanyAdmins($query)
+    {
+        return $query->where('is_company_admin', true);
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeForCompany($query, int $companyId)
+    {
+        return $query->where('company_id', $companyId);
+    }
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function (User $user) {
+            if (! isset($user->is_active)) {
+                $user->is_active = true;
+            }
+        });
     }
 }
