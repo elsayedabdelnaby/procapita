@@ -1,25 +1,125 @@
 import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Company, Role } from '@/types/core';
 import { Head, Link, useForm } from '@inertiajs/react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+
+interface Permission {
+    id: number;
+    name: string;
+    module_name?: string;
+    entity_name?: string;
+    action?: string;
+}
 
 interface RoleEditProps {
     company: Company;
     role: Role;
     availableRoles: Role[];
-    permissions?: any;
+    permissions?: Record<string, Record<string, Permission[]>>;
 }
 
-export default function RoleEdit({ company, role, availableRoles }: RoleEditProps) {
+export default function RoleEdit({
+    company,
+    role,
+    availableRoles,
+    permissions = {},
+}: RoleEditProps) {
+    const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
+    const [expandedEntities, setExpandedEntities] = useState<Record<string, boolean>>({});
+
     const { data, setData, put, processing, errors } = useForm({
         name: role.name || '',
         parent_id: role.parent_id || '',
         module_name: role.module_name || '',
         entity_name: role.entity_name || '',
+        permissions: (role.permissions || []).map((p: Permission) => p.id) as number[],
     });
+
+    const toggleModule = (moduleName: string) => {
+        setExpandedModules((prev) => ({
+            ...prev,
+            [moduleName]: !prev[moduleName],
+        }));
+    };
+
+    const toggleEntity = (moduleName: string, entityName: string) => {
+        const key = `${moduleName}-${entityName}`;
+        setExpandedEntities((prev) => ({
+            ...prev,
+            [key]: !prev[key],
+        }));
+    };
+
+    const expandAllModules = () => {
+        const allExpanded: Record<string, boolean> = {};
+        Object.keys(permissions).forEach((moduleName) => {
+            allExpanded[moduleName] = true;
+        });
+        setExpandedModules(allExpanded);
+    };
+
+    const collapseAllModules = () => {
+        setExpandedModules({});
+        setExpandedEntities({});
+    };
+
+    const handlePermissionToggle = (permissionId: number, checked: boolean) => {
+        const currentPermissions = data.permissions || [];
+        if (checked) {
+            setData('permissions', [...currentPermissions, permissionId]);
+        } else {
+            setData(
+                'permissions',
+                currentPermissions.filter((id) => id !== permissionId)
+            );
+        }
+    };
+
+    const handleSelectAllModule = (moduleName: string, checked: boolean) => {
+        const currentPermissions = data.permissions || [];
+        const modulePermissions: number[] = [];
+
+        Object.values(permissions[moduleName] || {}).forEach((entityPermissions) => {
+            entityPermissions.forEach((permission) => {
+                modulePermissions.push(permission.id);
+            });
+        });
+
+        if (checked) {
+            setData('permissions', [...new Set([...currentPermissions, ...modulePermissions])]);
+        } else {
+            setData(
+                'permissions',
+                currentPermissions.filter((id) => !modulePermissions.includes(id))
+            );
+        }
+    };
+
+    const handleSelectAllEntity = (
+        moduleName: string,
+        entityName: string,
+        checked: boolean
+    ) => {
+        const currentPermissions = data.permissions || [];
+        const entityPermissions = (permissions[moduleName]?.[entityName] || []).map(
+            (p) => p.id
+        );
+
+        if (checked) {
+            setData('permissions', [...new Set([...currentPermissions, ...entityPermissions])]);
+        } else {
+            setData(
+                'permissions',
+                currentPermissions.filter((id) => !entityPermissions.includes(id))
+            );
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -145,6 +245,237 @@ export default function RoleEdit({ company, role, availableRoles }: RoleEditProp
                                 </ul>
                             </div>
                         </div>
+
+                        {/* Permissions Section */}
+                        {Object.keys(permissions).length > 0 && (
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-lg font-semibold">Permissions</h2>
+                                    <div className="flex items-center gap-4">
+                                        <p className="text-sm text-neutral-500">
+                                            {data.permissions?.length || 0} permission
+                                            {(data.permissions?.length || 0) !== 1 ? 's' : ''} selected
+                                        </p>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={expandAllModules}
+                                            >
+                                                Expand All
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={collapseAllModules}
+                                            >
+                                                Collapse All
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="max-h-[600px] space-y-2 overflow-y-auto rounded-md border p-4">
+                                    {Object.entries(permissions).map(([moduleName, entities]) => {
+                                        const modulePermissions = Object.values(entities)
+                                            .flat()
+                                            .map((p) => p.id);
+                                        const allModuleSelected =
+                                            modulePermissions.length > 0 &&
+                                            modulePermissions.every((id) =>
+                                                data.permissions?.includes(id)
+                                            );
+                                        const isModuleExpanded = expandedModules[moduleName] ?? false;
+
+                                        return (
+                                            <div
+                                                key={moduleName}
+                                                className="rounded-md border border-neutral-200 dark:border-neutral-800"
+                                            >
+                                                <div
+                                                    className="flex items-center gap-2 border-b bg-neutral-50 p-3 dark:bg-neutral-900/50"
+                                                    onClick={() => toggleModule(moduleName)}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        className="flex items-center justify-center"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleModule(moduleName);
+                                                        }}
+                                                    >
+                                                        {isModuleExpanded ? (
+                                                            <ChevronDown className="h-4 w-4" />
+                                                        ) : (
+                                                            <ChevronRight className="h-4 w-4" />
+                                                        )}
+                                                    </button>
+                                                    <Checkbox
+                                                        id={`module-${moduleName}`}
+                                                        checked={allModuleSelected}
+                                                        onCheckedChange={(checked) =>
+                                                            handleSelectAllModule(
+                                                                moduleName,
+                                                                checked as boolean
+                                                            )
+                                                        }
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                    <Label
+                                                        htmlFor={`module-${moduleName}`}
+                                                        className="flex-1 cursor-pointer text-base font-semibold capitalize"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleModule(moduleName);
+                                                        }}
+                                                    >
+                                                        {moduleName} Module
+                                                    </Label>
+                                                    <span className="text-xs text-neutral-500">
+                                                        ({modulePermissions.length} permissions)
+                                                    </span>
+                                                </div>
+
+                                                {isModuleExpanded && (
+                                                    <div className="p-3 space-y-3">
+                                                        {Object.entries(entities).map(
+                                                            ([entityName, entityPermissions]) => {
+                                                                const entityPermissionIds =
+                                                                    entityPermissions.map(
+                                                                        (p) => p.id
+                                                                    );
+                                                                const allEntitySelected =
+                                                                    entityPermissionIds.length > 0 &&
+                                                                    entityPermissionIds.every((id) =>
+                                                                        data.permissions?.includes(id)
+                                                                    );
+                                                                const entityKey = `${moduleName}-${entityName}`;
+                                                                const isEntityExpanded =
+                                                                    expandedEntities[entityKey] ?? true;
+
+                                                                return (
+                                                                    <div
+                                                                        key={entityName}
+                                                                        className="rounded-md border border-neutral-200 dark:border-neutral-800"
+                                                                    >
+                                                                        <div
+                                                                            className="flex items-center gap-2 bg-neutral-50/50 p-2 dark:bg-neutral-900/30"
+                                                                            onClick={() =>
+                                                                                toggleEntity(
+                                                                                    moduleName,
+                                                                                    entityName
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            <button
+                                                                                type="button"
+                                                                                className="flex items-center justify-center"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    toggleEntity(
+                                                                                        moduleName,
+                                                                                        entityName
+                                                                                    );
+                                                                                }}
+                                                                            >
+                                                                                {isEntityExpanded ? (
+                                                                                    <ChevronDown className="h-4 w-4" />
+                                                                                ) : (
+                                                                                    <ChevronRight className="h-4 w-4" />
+                                                                                )}
+                                                                            </button>
+                                                                            <Checkbox
+                                                                                id={`entity-${moduleName}-${entityName}`}
+                                                                                checked={
+                                                                                    allEntitySelected
+                                                                                }
+                                                                                onCheckedChange={(
+                                                                                    checked
+                                                                                ) =>
+                                                                                    handleSelectAllEntity(
+                                                                                        moduleName,
+                                                                                        entityName,
+                                                                                        checked as boolean
+                                                                                    )
+                                                                                }
+                                                                                onClick={(e) =>
+                                                                                    e.stopPropagation()
+                                                                                }
+                                                                            />
+                                                                            <Label
+                                                                                htmlFor={`entity-${moduleName}-${entityName}`}
+                                                                                className="flex-1 cursor-pointer font-medium capitalize"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    toggleEntity(
+                                                                                        moduleName,
+                                                                                        entityName
+                                                                                    );
+                                                                                }}
+                                                                            >
+                                                                                {entityName}
+                                                                            </Label>
+                                                                            <span className="text-xs text-neutral-500">
+                                                                                ({entityPermissionIds.length}{' '}
+                                                                                permissions)
+                                                                            </span>
+                                                                        </div>
+
+                                                                        {isEntityExpanded && (
+                                                                            <div className="p-3 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+                                                                                {entityPermissions.map(
+                                                                                    (permission) => (
+                                                                                        <div
+                                                                                            key={
+                                                                                                permission.id
+                                                                                            }
+                                                                                            className="flex items-center gap-2"
+                                                                                        >
+                                                                                            <Checkbox
+                                                                                                id={`permission-${permission.id}`}
+                                                                                                checked={data.permissions?.includes(
+                                                                                                    permission.id
+                                                                                                )}
+                                                                                                onCheckedChange={(
+                                                                                                    checked
+                                                                                                ) =>
+                                                                                                    handlePermissionToggle(
+                                                                                                        permission.id,
+                                                                                                        checked as boolean
+                                                                                                    )
+                                                                                                }
+                                                                                            />
+                                                                                            <Label
+                                                                                                htmlFor={`permission-${permission.id}`}
+                                                                                                className="text-sm font-normal capitalize cursor-pointer"
+                                                                                            >
+                                                                                                {permission.action ||
+                                                                                                    permission.name.split(
+                                                                                                        '.'
+                                                                                                    )[2]}
+                                                                                            </Label>
+                                                                                        </div>
+                                                                                    )
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            }
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                {errors.permissions && (
+                                    <p className="text-sm text-red-500">{errors.permissions}</p>
+                                )}
+                            </div>
+                        )}
 
                         <div className="flex justify-end gap-4">
                             <Link href={`/core/companies/${company.id}`}>
