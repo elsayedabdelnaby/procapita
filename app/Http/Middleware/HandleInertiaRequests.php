@@ -144,6 +144,38 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
+        // Riding Car Companies Module
+        if ($user->canAccessModule('ridingcarcompanies') || $user->isSuperAdmin()) {
+            $ridingCarItems = [];
+
+            // Riding Companies
+            if ($user->hasPermissionTo('ridingcarcompanies.ridingcompanies.read') || $user->isSuperAdmin()) {
+                $ridingCarItems[] = [
+                    'title' => 'Riding Companies',
+                    'href' => '/ridingcarcompanies/riding-companies',
+                    'icon' => 'Car',
+                ];
+            }
+
+            // Company Rides
+            if ($user->hasPermissionTo('ridingcarcompanies.companyrides.read') || $user->isSuperAdmin()) {
+                $ridingCarItems[] = [
+                    'title' => 'Company Rides',
+                    'href' => '/ridingcarcompanies/company-rides',
+                    'icon' => 'Navigation',
+                ];
+            }
+
+            // Only add Riding Car Companies group if there are items
+            if (! empty($ridingCarItems)) {
+                $navigation[] = [
+                    'title' => 'Riding Car Companies',
+                    'icon' => 'Car',
+                    'items' => $ridingCarItems,
+                ];
+            }
+        }
+
         return $navigation;
     }
 }

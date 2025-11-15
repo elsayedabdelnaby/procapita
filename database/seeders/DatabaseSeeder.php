@@ -16,6 +16,8 @@ class DatabaseSeeder extends Seeder
         // Seed Core module
         $this->call([
             \Modules\Core\database\seeders\CoreDatabaseSeeder::class,
+            \Modules\Marketing\database\seeders\MarketingDatabaseSeeder::class,
+            \Modules\RidingCarCompanies\database\seeders\RidingCarCompaniesDatabaseSeeder::class,
         ]);
     }
 }
