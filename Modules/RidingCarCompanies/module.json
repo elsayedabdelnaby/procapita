@@ -1,0 +1,11 @@
+{
+    "name": "RidingCarCompanies",
+    "alias": "ridingcarcompanies",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\RidingCarCompanies\\app\\Providers\\RidingCarCompaniesServiceProvider"
+    ],
+    "files": []
+}
