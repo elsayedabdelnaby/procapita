@@ -55,8 +55,6 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->index('company_id');
-            $table->index('status');
-            $table->index('type');
             $table->index(['start_date', 'end_date']);
         });
     }
