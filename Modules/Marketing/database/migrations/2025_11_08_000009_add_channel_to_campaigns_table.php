@@ -14,10 +14,6 @@ return new class extends Migration
             $table->foreignId('campaign_status_id')->nullable()->after('campaign_type_id')->constrained()->nullOnDelete();
             $table->foreignId('campaign_channel_id')->nullable()->after('campaign_status_id')->constrained()->nullOnDelete();
             
-            // Keep old columns for backward compatibility during migration
-            $table->string('type')->nullable()->change();
-            $table->string('status')->nullable()->change();
-            
             $table->index('campaign_type_id');
             $table->index('campaign_status_id');
             $table->index('campaign_channel_id');
@@ -34,9 +30,6 @@ return new class extends Migration
             $table->dropIndex(['campaign_status_id']);
             $table->dropIndex(['campaign_channel_id']);
             $table->dropColumn(['campaign_type_id', 'campaign_status_id', 'campaign_channel_id']);
-            
-            $table->string('type')->default('email')->change();
-            $table->string('status')->default('draft')->change();
         });
     }
 };
