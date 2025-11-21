@@ -1,5 +1,6 @@
 {
     "Core": true,
     "Marketing": true,
-    "RidingCarCompanies": true
+    "RidingCarCompanies": true,
+    "Drivers": true
 }

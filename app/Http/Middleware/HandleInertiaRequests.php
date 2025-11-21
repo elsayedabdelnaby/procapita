@@ -92,22 +92,22 @@ class HandleInertiaRequests extends Middleware
             }
 
             // Marketing Lists
-            if ($user->hasPermissionTo('marketing.marketing_lists.read') || $user->isSuperAdmin()) {
-                $marketingItems[] = [
-                    'title' => 'Marketing Lists',
-                    'href' => '/marketing/marketing-lists',
-                    'icon' => 'Users',
-                ];
-            }
+            // if ($user->hasPermissionTo('marketing.marketing_lists.read') || $user->isSuperAdmin()) {
+            //     $marketingItems[] = [
+            //         'title' => 'Marketing Lists',
+            //         'href' => '/marketing/marketing-lists',
+            //         'icon' => 'Users',
+            //     ];
+            // }
 
             // Templates
-            if ($user->hasPermissionTo('marketing.marketing_templates.read') || $user->isSuperAdmin()) {
-                $marketingItems[] = [
-                    'title' => 'Templates',
-                    'href' => '/marketing/templates',
-                    'icon' => 'FileText',
-                ];
-            }
+            // if ($user->hasPermissionTo('marketing.marketing_templates.read') || $user->isSuperAdmin()) {
+            //     $marketingItems[] = [
+            //         'title' => 'Templates',
+            //         'href' => '/marketing/templates',
+            //         'icon' => 'FileText',
+            //     ];
+            // }
 
             // Settings submenu (with permission checks)
             if ($user->hasPermissionTo('marketing.campaign_types.read') || $user->isSuperAdmin()) {
@@ -157,21 +157,71 @@ class HandleInertiaRequests extends Middleware
                 ];
             }
 
-            // Company Rides
-            if ($user->hasPermissionTo('ridingcarcompanies.companyrides.read') || $user->isSuperAdmin()) {
-                $ridingCarItems[] = [
-                    'title' => 'Company Rides',
-                    'href' => '/ridingcarcompanies/company-rides',
-                    'icon' => 'Navigation',
-                ];
-            }
-
             // Only add Riding Car Companies group if there are items
             if (! empty($ridingCarItems)) {
                 $navigation[] = [
                     'title' => 'Riding Car Companies',
                     'icon' => 'Car',
                     'items' => $ridingCarItems,
+                ];
+            }
+        }
+
+        // Drivers Module
+        if ($user->canAccessModule('drivers') || $user->isSuperAdmin()) {
+            $driversItems = [];
+
+            // Drivers
+            if ($user->hasPermissionTo('drivers.drivers.read') || $user->isSuperAdmin()) {
+                $driversItems[] = [
+                    'title' => 'Drivers',
+                    'href' => '/drivers/drivers',
+                    'icon' => 'User',
+                ];
+            }
+
+            // Lead Sources
+            if ($user->hasPermissionTo('drivers.leadsources.read') || $user->isSuperAdmin()) {
+                $driversItems[] = [
+                    'title' => 'Lead Sources',
+                    'href' => '/drivers/lead-sources',
+                    'icon' => 'Source',
+                ];
+            }
+
+            // Lead Statuses
+            if ($user->hasPermissionTo('drivers.leadstatuses.read') || $user->isSuperAdmin()) {
+                $driversItems[] = [
+                    'title' => 'Lead Statuses',
+                    'href' => '/drivers/lead-statuses',
+                    'icon' => 'Flag',
+                ];
+            }
+
+            // Driver Stages
+            if ($user->hasPermissionTo('drivers.driverstages.read') || $user->isSuperAdmin()) {
+                $driversItems[] = [
+                    'title' => 'Driver Stages',
+                    'href' => '/drivers/driver-stages',
+                    'icon' => 'ListChecks',
+                ];
+            }
+
+            // Driver Documents
+            if ($user->hasPermissionTo('drivers.driverdocuments.read') || $user->isSuperAdmin()) {
+                $driversItems[] = [
+                    'title' => 'Driver Documents',
+                    'href' => '/drivers/driver-documents',
+                    'icon' => 'FileText',
+                ];
+            }
+
+            // Only add Drivers group if there are items
+            if (! empty($driversItems)) {
+                $navigation[] = [
+                    'title' => 'Drivers',
+                    'icon' => 'Users',
+                    'items' => $driversItems,
                 ];
             }
         }
