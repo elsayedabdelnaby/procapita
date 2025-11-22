@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             \Modules\Core\database\seeders\CoreDatabaseSeeder::class,
             \Modules\Marketing\database\seeders\MarketingDatabaseSeeder::class,
             \Modules\RidingCarCompanies\database\seeders\RidingCarCompaniesDatabaseSeeder::class,
+            \Modules\Drivers\database\seeders\DriversDatabaseSeeder::class,
         ]);
     }
 }

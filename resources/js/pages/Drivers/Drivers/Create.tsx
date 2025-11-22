@@ -49,13 +49,22 @@ interface DriversCreateProps {
 export default function DriversCreate({
     companies,
     ridingCompanies: initialRidingCompanies,
-    campaigns,
-    leadSources,
-    leadStatuses,
-    users,
+    campaigns: initialCampaigns,
+    leadSources: initialLeadSources,
+    leadStatuses: initialLeadStatuses,
+    users: initialUsers,
 }: DriversCreateProps) {
     const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies || []);
+    const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns || []);
+    const [leadSources, setLeadSources] = useState<LeadSource[]>(initialLeadSources || []);
+    const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>(initialLeadStatuses || []);
+    const [users, setUsers] = useState<User[]>(initialUsers || []);
+
     const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
+    const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+    const [loadingLeadSources, setLoadingLeadSources] = useState(false);
+    const [loadingLeadStatuses, setLoadingLeadStatuses] = useState(false);
+    const [loadingUsers, setLoadingUsers] = useState(false);
 
     const { data, setData, post, processing, errors } = useForm({
         company_id: '',
@@ -72,16 +81,15 @@ export default function DriversCreate({
         notes: '',
     });
 
-    // Fetch riding companies when company changes (for super admin)
+    // Fetch data when company changes (for super admin)
     useEffect(() => {
         if (companies && data.company_id) {
+            // Fetch riding companies
             setLoadingRidingCompanies(true);
-            
             axios
                 .get(`/api/drivers/companies/${data.company_id}/riding-companies`)
                 .then((response) => {
                     setRidingCompanies(response.data);
-                    // Reset riding company selection when company changes
                     setData('riding_company_id', '');
                 })
                 .catch((error) => {
@@ -91,9 +99,77 @@ export default function DriversCreate({
                 .finally(() => {
                     setLoadingRidingCompanies(false);
                 });
+
+            // Fetch campaigns
+            setLoadingCampaigns(true);
+            axios
+                .get(`/api/drivers/companies/${data.company_id}/campaigns`)
+                .then((response) => {
+                    setCampaigns(response.data);
+                    setData('campaign_id', '');
+                })
+                .catch((error) => {
+                    console.error('Error fetching campaigns:', error);
+                    setCampaigns([]);
+                })
+                .finally(() => {
+                    setLoadingCampaigns(false);
+                });
+
+            // Fetch lead sources
+            setLoadingLeadSources(true);
+            axios
+                .get(`/api/drivers/companies/${data.company_id}/lead-sources`)
+                .then((response) => {
+                    setLeadSources(response.data);
+                    setData('lead_source_id', '');
+                })
+                .catch((error) => {
+                    console.error('Error fetching lead sources:', error);
+                    setLeadSources([]);
+                })
+                .finally(() => {
+                    setLoadingLeadSources(false);
+                });
+
+            // Fetch lead statuses
+            setLoadingLeadStatuses(true);
+            axios
+                .get(`/api/drivers/companies/${data.company_id}/lead-statuses`)
+                .then((response) => {
+                    setLeadStatuses(response.data);
+                    setData('lead_status_id', '');
+                })
+                .catch((error) => {
+                    console.error('Error fetching lead statuses:', error);
+                    setLeadStatuses([]);
+                })
+                .finally(() => {
+                    setLoadingLeadStatuses(false);
+                });
+
+            // Fetch users
+            setLoadingUsers(true);
+            axios
+                .get(`/api/drivers/companies/${data.company_id}/users`)
+                .then((response) => {
+                    setUsers(response.data);
+                    setData('assigned_to', '');
+                })
+                .catch((error) => {
+                    console.error('Error fetching users:', error);
+                    setUsers([]);
+                })
+                .finally(() => {
+                    setLoadingUsers(false);
+                });
         } else if (!companies) {
-            // If not super admin, keep initial riding companies
+            // If not super admin, keep initial data
             setRidingCompanies(initialRidingCompanies || []);
+            setCampaigns(initialCampaigns || []);
+            setLeadSources(initialLeadSources || []);
+            setLeadStatuses(initialLeadStatuses || []);
+            setUsers(initialUsers || []);
         }
     }, [data.company_id, companies]);
 
@@ -258,8 +334,15 @@ export default function DriversCreate({
                                     value={data.campaign_id}
                                     onChange={(e) => setData('campaign_id', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
+                                    disabled={loadingCampaigns || (companies && !data.company_id)}
                                 >
-                                    <option value="">Select a campaign</option>
+                                    <option value="">
+                                        {loadingCampaigns
+                                            ? 'Loading...'
+                                            : companies && !data.company_id
+                                              ? 'Select a company first'
+                                              : 'Select a campaign'}
+                                    </option>
                                     {campaigns.map((campaign) => (
                                         <option key={campaign.id} value={campaign.id}>
                                             {campaign.name}
@@ -279,8 +362,15 @@ export default function DriversCreate({
                                     value={data.lead_source_id}
                                     onChange={(e) => setData('lead_source_id', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
+                                    disabled={loadingLeadSources || (companies && !data.company_id)}
                                 >
-                                    <option value="">Select a lead source</option>
+                                    <option value="">
+                                        {loadingLeadSources
+                                            ? 'Loading...'
+                                            : companies && !data.company_id
+                                              ? 'Select a company first'
+                                              : 'Select a lead source'}
+                                    </option>
                                     {leadSources.map((source) => (
                                         <option key={source.id} value={source.id}>
                                             {source.name}
@@ -300,8 +390,15 @@ export default function DriversCreate({
                                     value={data.lead_status_id}
                                     onChange={(e) => setData('lead_status_id', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
+                                    disabled={loadingLeadStatuses || (companies && !data.company_id)}
                                 >
-                                    <option value="">Select a lead status</option>
+                                    <option value="">
+                                        {loadingLeadStatuses
+                                            ? 'Loading...'
+                                            : companies && !data.company_id
+                                              ? 'Select a company first'
+                                              : 'Select a lead status'}
+                                    </option>
                                     {leadStatuses.map((status) => (
                                         <option key={status.id} value={status.id}>
                                             {status.name}
@@ -321,8 +418,15 @@ export default function DriversCreate({
                                     value={data.assigned_to}
                                     onChange={(e) => setData('assigned_to', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
+                                    disabled={loadingUsers || (companies && !data.company_id)}
                                 >
-                                    <option value="">Select a user</option>
+                                    <option value="">
+                                        {loadingUsers
+                                            ? 'Loading...'
+                                            : companies && !data.company_id
+                                              ? 'Select a company first'
+                                              : 'Select a user'}
+                                    </option>
                                     {users.map((user) => (
                                         <option key={user.id} value={user.id}>
                                             {user.name}
