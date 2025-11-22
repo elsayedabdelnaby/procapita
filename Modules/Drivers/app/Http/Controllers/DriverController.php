@@ -73,7 +73,8 @@ class DriverController extends Controller
         $companyId = $user->isSuperAdmin() ? null : $user->company_id;
 
         $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get() : null;
-        $ridingCompanies = RidingCompany::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get();
+        // Only load riding companies if not super admin (for super admin, they'll be loaded dynamically)
+        $ridingCompanies = $user->isSuperAdmin() ? [] : RidingCompany::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get();
         $campaigns = Campaign::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
         $leadSources = LeadSource::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get();
         $leadStatuses = LeadStatus::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->ordered()->get();

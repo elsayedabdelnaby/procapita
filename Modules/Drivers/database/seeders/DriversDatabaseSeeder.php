@@ -13,8 +13,7 @@ class DriversDatabaseSeeder extends Seeder
     {
         $this->call([
             DriversPermissionsSeeder::class,
-            LeadSourcesSeeder::class,
-            LeadStatusesSeeder::class,
+            DriversDefaultDataSeeder::class,
         ]);
     }
 }
