@@ -40,6 +40,9 @@ class CompanyService
         // Create default CEO role (root role) for the company
         $this->roleService->createRootRole($company);
 
+        // Seed default data for the company
+        $this->seedDefaultDataForCompany($company);
+
         // If admin user data is provided, create the admin user
         if (isset($data['admin_user'])) {
             $this->createCompanyAdmin($company, $data['admin_user']);
@@ -154,6 +157,21 @@ class CompanyService
             'active_modules' => $company->activeModules()->count(),
             'company' => $company,
         ];
+    }
+
+    protected function seedDefaultDataForCompany(Company $company): void
+    {
+        // Seed Marketing module default data (Campaign Types, Statuses, Channels)
+        if (class_exists(\Modules\Marketing\database\seeders\CampaignTypesSeeder::class)) {
+            $marketingSeeder = new \Modules\Marketing\database\seeders\CampaignTypesSeeder();
+            $marketingSeeder->seedForCompany($company);
+        }
+
+        // Seed Drivers module default data (Lead Sources, Lead Statuses)
+        if (class_exists(\Modules\Drivers\database\seeders\DriversDefaultDataSeeder::class)) {
+            $driversSeeder = new \Modules\Drivers\database\seeders\DriversDefaultDataSeeder();
+            $driversSeeder->seedForCompany($company);
+        }
     }
 }
 

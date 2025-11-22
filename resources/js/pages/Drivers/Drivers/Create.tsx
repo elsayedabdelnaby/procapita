@@ -4,6 +4,8 @@ import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
+import axios from 'axios';
+import { useEffect, useState } from 'react';
 
 interface Company {
     id: number;
@@ -46,12 +48,15 @@ interface DriversCreateProps {
 
 export default function DriversCreate({
     companies,
-    ridingCompanies,
+    ridingCompanies: initialRidingCompanies,
     campaigns,
     leadSources,
     leadStatuses,
     users,
 }: DriversCreateProps) {
+    const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies || []);
+    const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
+
     const { data, setData, post, processing, errors } = useForm({
         company_id: '',
         full_name: '',
@@ -66,6 +71,31 @@ export default function DriversCreate({
         current_stage_id: '',
         notes: '',
     });
+
+    // Fetch riding companies when company changes (for super admin)
+    useEffect(() => {
+        if (companies && data.company_id) {
+            setLoadingRidingCompanies(true);
+            
+            axios
+                .get(`/api/drivers/companies/${data.company_id}/riding-companies`)
+                .then((response) => {
+                    setRidingCompanies(response.data);
+                    // Reset riding company selection when company changes
+                    setData('riding_company_id', '');
+                })
+                .catch((error) => {
+                    console.error('Error fetching riding companies:', error);
+                    setRidingCompanies([]);
+                })
+                .finally(() => {
+                    setLoadingRidingCompanies(false);
+                });
+        } else if (!companies) {
+            // If not super admin, keep initial riding companies
+            setRidingCompanies(initialRidingCompanies || []);
+        }
+    }, [data.company_id, companies]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -200,8 +230,15 @@ export default function DriversCreate({
                                     value={data.riding_company_id}
                                     onChange={(e) => setData('riding_company_id', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
+                                    disabled={loadingRidingCompanies || (companies && !data.company_id)}
                                 >
-                                    <option value="">Select a riding company</option>
+                                    <option value="">
+                                        {loadingRidingCompanies
+                                            ? 'Loading...'
+                                            : companies && !data.company_id
+                                              ? 'Select a company first'
+                                              : 'Select a riding company'}
+                                    </option>
                                     {ridingCompanies.map((company) => (
                                         <option key={company.id} value={company.id}>
                                             {company.name}
