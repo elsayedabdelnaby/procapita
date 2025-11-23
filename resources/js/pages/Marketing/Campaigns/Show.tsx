@@ -1,16 +1,35 @@
+import { ActivityLog } from '@/components/core/activity-log';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { type Campaign } from '@/types/marketing';
 import { Head, Link, router } from '@inertiajs/react';
-import { Calendar, DollarSign, Target, TrendingUp } from 'lucide-react';
+import { Activity, Calendar, DollarSign, Target, TrendingUp } from 'lucide-react';
+import { useState } from 'react';
 
 interface CampaignShowProps {
     campaign: Campaign;
+    activities?: Array<{
+        id: number;
+        description: string;
+        event?: string;
+        properties?: {
+            old?: Record<string, any>;
+            attributes?: Record<string, any>;
+        };
+        causer?: {
+            id: number;
+            name: string;
+            email?: string;
+        } | null;
+        created_at: string;
+    }>;
 }
 
-export default function CampaignShow({ campaign }: CampaignShowProps) {
+export default function CampaignShow({ campaign, activities = [] }: CampaignShowProps) {
+    const [activeTab, setActiveTab] = useState<'overview' | 'updates'>('overview');
+
     const handleDelete = () => {
         if (confirm(`Are you sure you want to delete "${campaign.name}"?`)) {
             router.delete(`/marketing/campaigns/${campaign.id}`);
@@ -53,6 +72,38 @@ export default function CampaignShow({ campaign }: CampaignShowProps) {
                     </div>
                 </div>
 
+                {/* Tabs */}
+                <div className="mb-6 border-b">
+                    <nav className="flex gap-6">
+                        <button
+                            onClick={() => setActiveTab('overview')}
+                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                activeTab === 'overview'
+                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                            }`}
+                        >
+                            Overview
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('updates')}
+                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                activeTab === 'updates'
+                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <Activity className="h-4 w-4" />
+                                Updates ({activities.length})
+                            </div>
+                        </button>
+                    </nav>
+                </div>
+
+                {/* Tab Content */}
+                {activeTab === 'overview' && (
+                    <>
                 <div className="grid gap-6 md:grid-cols-2">
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Campaign Information</h2>
@@ -147,6 +198,15 @@ export default function CampaignShow({ campaign }: CampaignShowProps) {
                         </div>
                     </Card>
                 </div>
+                    </>
+                )}
+
+                {activeTab === 'updates' && (
+                    <Card className="p-6">
+                        <h2 className="mb-4 text-lg font-semibold">Activity Log</h2>
+                        <ActivityLog activities={activities} />
+                    </Card>
+                )}
             </div>
         </AppLayout>
     );

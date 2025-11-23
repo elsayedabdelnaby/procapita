@@ -71,17 +71,17 @@ export default function DriversEdit({
     users,
 }: DriversEditProps) {
     const { data, setData, put, processing, errors } = useForm({
-        company_id: driver.company_id?.toString() || '',
+        company_id: driver.company_id ? String(driver.company_id) : '',
         full_name: driver.full_name || '',
         phone: driver.phone || '',
         whatsapp_phone: driver.whatsapp_phone || '',
         email: driver.email || '',
-        riding_company_id: driver.riding_company_id?.toString() || '',
-        campaign_id: driver.campaign_id?.toString() || '',
-        lead_source_id: driver.lead_source_id?.toString() || '',
-        assigned_to: driver.assigned_to?.toString() || '',
-        lead_status_id: driver.lead_status_id?.toString() || '',
-        current_stage_id: driver.current_stage_id?.toString() || '',
+        riding_company_id: driver.riding_company_id ? String(driver.riding_company_id) : '',
+        campaign_id: driver.campaign_id ? String(driver.campaign_id) : '',
+        lead_source_id: driver.lead_source_id ? String(driver.lead_source_id) : '',
+        assigned_to: driver.assigned_to ? String(driver.assigned_to) : '',
+        lead_status_id: driver.lead_status_id ? String(driver.lead_status_id) : '',
+        current_stage_id: driver.current_stage_id ? String(driver.current_stage_id) : '',
         notes: driver.notes || '',
     });
 
@@ -153,7 +153,7 @@ export default function DriversEdit({
                                     >
                                         <option value="">Select a company</option>
                                         {companies.map((company) => (
-                                            <option key={company.id} value={company.id}>
+                                            <option key={company.id} value={String(company.id)}>
                                                 {company.name}
                                             </option>
                                         ))}
@@ -217,7 +217,7 @@ export default function DriversEdit({
                                 >
                                     <option value="">Select a riding company</option>
                                     {ridingCompanies.map((company) => (
-                                        <option key={company.id} value={company.id}>
+                                        <option key={company.id} value={String(company.id)}>
                                             {company.name}
                                         </option>
                                     ))}
@@ -238,7 +238,7 @@ export default function DriversEdit({
                                 >
                                     <option value="">Select a campaign</option>
                                     {campaigns.map((campaign) => (
-                                        <option key={campaign.id} value={campaign.id}>
+                                        <option key={campaign.id} value={String(campaign.id)}>
                                             {campaign.name}
                                         </option>
                                     ))}
@@ -259,7 +259,7 @@ export default function DriversEdit({
                                 >
                                     <option value="">Select a lead source</option>
                                     {leadSources.map((source) => (
-                                        <option key={source.id} value={source.id}>
+                                        <option key={source.id} value={String(source.id)}>
                                             {source.name}
                                         </option>
                                     ))}
@@ -280,7 +280,7 @@ export default function DriversEdit({
                                 >
                                     <option value="">Select a lead status</option>
                                     {leadStatuses.map((status) => (
-                                        <option key={status.id} value={status.id}>
+                                        <option key={status.id} value={String(status.id)}>
                                             {status.name}
                                         </option>
                                     ))}
@@ -301,7 +301,7 @@ export default function DriversEdit({
                                 >
                                     <option value="">Select a user</option>
                                     {users.map((user) => (
-                                        <option key={user.id} value={user.id}>
+                                        <option key={user.id} value={String(user.id)}>
                                             {user.name}
                                         </option>
                                     ))}
