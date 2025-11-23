@@ -54,11 +54,15 @@ export default function LeadSourcesIndex({ leadSources }: LeadSourcesIndexProps)
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Link href="/drivers/lead-sources/export">
-                            <Button type="button" variant="outline">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                window.location.href = '/drivers/lead-sources/export';
+                            }}
+                        >
                                 Export
                             </Button>
-                        </Link>
                         <Link href="/drivers/lead-sources/import">
                             <Button type="button" variant="outline">
                                 Import

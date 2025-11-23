@@ -85,11 +85,15 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Link href="/drivers/driver-documents/export">
-                            <Button type="button" variant="outline">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                window.location.href = '/drivers/driver-documents/export';
+                            }}
+                        >
                                 Export
                             </Button>
-                        </Link>
                         <Link href="/drivers/driver-documents/create">
                             <Button>Create Driver Document</Button>
                         </Link>

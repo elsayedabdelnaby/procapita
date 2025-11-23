@@ -2,9 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use Closure;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use Symfony\Component\HttpFoundation\Response;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -25,6 +27,93 @@ class HandleInertiaRequests extends Middleware
     public function version(Request $request): ?string
     {
         return parent::version($request);
+    }
+
+    /**
+     * Handle an incoming request.
+     */
+    public function handle(Request $request, Closure $next): Response
+    {
+        // Skip Inertia completely for export routes
+        if ($this->isExportRoute($request)) {
+            // Remove Inertia headers from request to prevent processing
+            $request->headers->remove('X-Inertia');
+            $request->headers->remove('X-Inertia-Version');
+            $request->headers->remove('X-Requested-With');
+            
+            $response = $next($request);
+            
+            // Ensure response headers are correct for file download
+            if ($response instanceof \Symfony\Component\HttpFoundation\StreamedResponse) {
+                $response->headers->remove('X-Inertia');
+                $response->headers->set('X-Inertia', 'false');
+                $response->headers->set('Content-Type', 'text/csv; charset=UTF-8');
+                $response->headers->set('Cache-Control', 'no-cache, must-revalidate');
+                $response->headers->set('Pragma', 'no-cache');
+                $response->headers->set('Expires', '0');
+            }
+            
+            return $response;
+        }
+
+        return parent::handle($request, $next);
+    }
+
+    /**
+     * Determine if Inertia should handle the request.
+     */
+    public function shouldHandle(Request $request): bool
+    {
+        // Skip Inertia for export routes
+        if ($this->isExportRoute($request)) {
+            return false;
+        }
+
+        return parent::shouldHandle($request);
+    }
+
+    /**
+     * Check if the request is for an export route.
+     */
+    protected function isExportRoute(Request $request): bool
+    {
+        // Check route name first (most reliable)
+        $route = $request->route();
+        $routeName = $route?->getName() ?? '';
+        
+        if (str_ends_with($routeName, '.export') || str_contains($routeName, '.import.download')) {
+            return true;
+        }
+        
+        // Check route name pattern
+        if ($request->routeIs('*.export') || $request->routeIs('*.import.download')) {
+            return true;
+        }
+        
+        // Check if path ends with /export
+        $path = $request->path();
+        if (str_ends_with($path, '/export')) {
+            return true;
+        }
+        
+        // Check if path contains /import/download
+        if (str_contains($path, '/import/download/')) {
+            return true;
+        }
+        
+        // Check full URI
+        $uri = $request->getRequestUri();
+        $parsedUri = parse_url($uri, PHP_URL_PATH);
+        if ($parsedUri) {
+            if (str_ends_with($parsedUri, '/export')) {
+                return true;
+            }
+            if (str_contains($parsedUri, '/import/download/')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

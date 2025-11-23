@@ -79,11 +79,15 @@ export default function DriverStagesIndex({ driverStages }: DriverStagesIndexPro
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Link href="/drivers/driver-stages/export">
-                            <Button type="button" variant="outline">
-                                Export
-                            </Button>
-                        </Link>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                window.location.href = '/drivers/driver-stages/export';
+                            }}
+                        >
+                            Export
+                        </Button>
                         <Link href="/drivers/driver-stages/create">
                             <Button>Create Driver Stage</Button>
                         </Link>

@@ -18,7 +18,7 @@ class DriverService
             $query->where('company_id', $companyId);
         }
 
-        return $query->orderBy('created_at', 'desc')->get();
+        return $query->orderBy('updated_at', 'desc')->get();
     }
 
     public function getDriverById(int $id): ?Driver
@@ -38,6 +38,14 @@ class DriverService
 
     public function createDriver(array $data): Driver
     {
+        // Reformat phone numbers
+        if (isset($data['phone'])) {
+            $data['phone'] = $this->reformatPhoneNumber($data['phone']);
+        }
+        if (isset($data['whatsapp_phone'])) {
+            $data['whatsapp_phone'] = $this->reformatPhoneNumber($data['whatsapp_phone']);
+        }
+
         $driver = Driver::create($data);
 
         // If riding company is selected, create stages and documents automatically
@@ -126,6 +134,14 @@ class DriverService
 
     public function updateDriver(int $id, array $data): Driver
     {
+        // Reformat phone numbers
+        if (isset($data['phone'])) {
+            $data['phone'] = $this->reformatPhoneNumber($data['phone']);
+        }
+        if (isset($data['whatsapp_phone'])) {
+            $data['whatsapp_phone'] = $this->reformatPhoneNumber($data['whatsapp_phone']);
+        }
+
         $driver = Driver::findOrFail($id);
         $driver->update($data);
 
@@ -144,6 +160,33 @@ class DriverService
         $driver->update(['assigned_to' => $userId]);
 
         return $driver->fresh();
+    }
+
+    /**
+     * Helper function to reformat phone numbers
+     */
+    protected function reformatPhoneNumber($phoneNumber)
+    {
+        // تحويل الأرقام العربية إلى إنجليزية
+        $arabicNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+        $englishNumerals = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        $phoneNumber = str_replace($arabicNumerals, $englishNumerals, $phoneNumber);
+
+        // ✅ إزالة جميع الرموز غير الرقمية (بما فيها النقطة ".")
+        $cleanedNumber = preg_replace('/[^0-9+]/', '', $phoneNumber);
+
+        // تطبيق قواعد التنسيق
+        if (strpos($cleanedNumber, '0020') === 0 && strlen($cleanedNumber) === 14) {
+            return '0' . substr($cleanedNumber, 4);
+        } elseif (strpos($cleanedNumber, '+20') === 0 && strlen($cleanedNumber) === 13) {
+            return '0' . substr($cleanedNumber, 3);
+        } elseif (strpos($cleanedNumber, '20') === 0 && strlen($cleanedNumber) === 12) {
+            return '0' . substr($cleanedNumber, 2);
+        } elseif (preg_match('/^(10|11|12|15)/', $cleanedNumber) && strlen($cleanedNumber) === 10) {
+            return '0' . $cleanedNumber;
+        }
+
+        return $cleanedNumber;
     }
 }
 

@@ -75,8 +75,29 @@ class DriverDocumentController extends Controller
             abort(404, 'Driver document not found.');
         }
 
+        // Load activity logs
+        $activities = \Spatie\Activitylog\Models\Activity::forSubject($driverDocumentModel)
+            ->with('causer:id,name,email')
+            ->latest()
+            ->get()
+            ->map(function ($activity) {
+                return [
+                    'id' => $activity->id,
+                    'description' => $activity->description,
+                    'event' => $activity->event,
+                    'properties' => $activity->properties,
+                    'causer' => $activity->causer ? [
+                        'id' => $activity->causer->id,
+                        'name' => $activity->causer->name,
+                        'email' => $activity->causer->email,
+                    ] : null,
+                    'created_at' => $activity->created_at->toISOString(),
+                ];
+            });
+
         return Inertia::render('Drivers/DriverDocuments/Show', [
             'driverDocument' => $driverDocumentModel,
+            'activities' => $activities,
         ]);
     }
 
@@ -208,17 +229,22 @@ class DriverDocumentController extends Controller
         return Storage::download($driverDocumentModel->uploaded_path);
     }
 
-    public function export(): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $driverDocuments = $this->driverDocumentService->getAllDriverDocuments();
 
         $filename = 'driver_documents_export_' . date('Y-m-d_His') . '.csv';
-        $file = fopen('php://temp', 'r+');
+        
+        // Add UTF-8 BOM for Excel compatibility
+        $content = "\xEF\xBB\xBF";
+        
+        // Open output stream
+        $output = fopen('php://temp', 'r+');
 
-        fputcsv($file, ['ID', 'Driver', 'Document Template', 'Status', 'Reviewer', 'Created At']);
+        fputcsv($output, ['ID', 'Driver', 'Document Template', 'Status', 'Reviewer', 'Created At']);
 
         foreach ($driverDocuments as $doc) {
-            fputcsv($file, [
+            fputcsv($output, [
                 $doc->id,
                 $doc->driver?->full_name ?? '',
                 $doc->documentTemplate?->name ?? '',
@@ -228,13 +254,25 @@ class DriverDocumentController extends Controller
             ]);
         }
 
-        rewind($file);
-        $content = stream_get_contents($file);
-        fclose($file);
+        rewind($output);
+        $content .= stream_get_contents($output);
+        fclose($output);
 
-        return response()->streamDownload(function () use ($content) {
+        $response = response()->streamDownload(function () use ($content) {
             echo $content;
-        }, $filename, ['Content-Type' => 'text/csv']);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+        
+        // Prevent Inertia from processing this response
+        $response->headers->remove('X-Inertia');
+        $response->headers->set('X-Inertia', 'false');
+        $response->headers->set('Cache-Control', 'no-cache, must-revalidate');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
+        
+        return $response;
     }
 }
 

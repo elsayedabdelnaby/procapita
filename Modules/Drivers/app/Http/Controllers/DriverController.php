@@ -12,6 +12,7 @@ use Modules\Core\app\Models\Company;
 use Modules\Drivers\app\Http\Requests\DriverStoreRequest;
 use Modules\Drivers\app\Http\Requests\DriverUpdateRequest;
 use Modules\Drivers\app\Services\DriverService;
+use Modules\Drivers\app\Models\Driver;
 use Modules\Drivers\app\Models\LeadSource;
 use Modules\Drivers\app\Models\LeadStatus;
 use Modules\Marketing\app\Models\Campaign;
@@ -30,6 +31,60 @@ class DriverController extends Controller
         $companyId = $user->isSuperAdmin() ? null : $user->company_id;
 
         $drivers = $this->driverService->getAllDrivers($companyId);
+
+        // Prepare import available fields with types and options
+        $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get(['id', 'name']) : collect();
+        $ridingCompanies = $user->isSuperAdmin() 
+            ? RidingCompany::active()->orderBy('name')->get(['id', 'name'])
+            : RidingCompany::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get(['id', 'name']);
+        $campaigns = Campaign::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('name')->get(['id', 'name']);
+        $leadSources = LeadSource::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get(['id', 'name']);
+        $leadStatuses = LeadStatus::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->ordered()->get(['id', 'name']);
+        $users = User::when($companyId, fn($q) => $q->where('company_id', $companyId))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
+        $importAvailableFields = [
+            ['value' => 'full_name', 'label' => 'Full Name', 'type' => 'text'],
+            ['value' => 'phone', 'label' => 'Phone', 'type' => 'phone'],
+            ['value' => 'whatsapp_phone', 'label' => 'WhatsApp Phone', 'type' => 'phone'],
+            ['value' => 'email', 'label' => 'Email', 'type' => 'email'],
+            [
+                'value' => 'company_id',
+                'label' => 'Company',
+                'type' => 'picklist',
+                'options' => $companies->map(fn($c) => ['value' => $c->id, 'label' => $c->name])->toArray(),
+            ],
+            [
+                'value' => 'riding_company_id',
+                'label' => 'Riding Company',
+                'type' => 'picklist',
+                'options' => $ridingCompanies->map(fn($rc) => ['value' => $rc->id, 'label' => $rc->name])->toArray(),
+            ],
+            [
+                'value' => 'campaign_id',
+                'label' => 'Campaign',
+                'type' => 'picklist',
+                'options' => $campaigns->map(fn($c) => ['value' => $c->id, 'label' => $c->name])->toArray(),
+            ],
+            [
+                'value' => 'lead_source_id',
+                'label' => 'Lead Source',
+                'type' => 'picklist',
+                'options' => $leadSources->map(fn($ls) => ['value' => $ls->id, 'label' => $ls->name])->toArray(),
+            ],
+            [
+                'value' => 'lead_status_id',
+                'label' => 'Lead Status',
+                'type' => 'picklist',
+                'options' => $leadStatuses->map(fn($ls) => ['value' => $ls->id, 'label' => $ls->name])->toArray(),
+            ],
+            [
+                'value' => 'assigned_to',
+                'label' => 'Assigned To',
+                'type' => 'picklist',
+                'options' => $users->map(fn($u) => ['value' => $u->id, 'label' => $u->name])->toArray(),
+            ],
+            ['value' => 'notes', 'label' => 'Notes', 'type' => 'textarea'],
+        ];
 
         return Inertia::render('Drivers/Drivers/Index', [
             'drivers' => $drivers->map(fn($driver) => [
@@ -64,6 +119,15 @@ class DriverController extends Controller
                 'created_at' => $driver->created_at,
                 'updated_at' => $driver->updated_at,
             ]),
+            'importAvailableFields' => $importAvailableFields,
+            'filterOptions' => [
+                'companies' => $companies->map(fn($c) => ['id' => $c->id, 'name' => $c->name])->toArray(),
+                'ridingCompanies' => $ridingCompanies->map(fn($rc) => ['id' => $rc->id, 'name' => $rc->name])->toArray(),
+                'campaigns' => $campaigns->map(fn($c) => ['id' => $c->id, 'name' => $c->name])->toArray(),
+                'leadSources' => $leadSources->map(fn($ls) => ['id' => $ls->id, 'name' => $ls->name])->toArray(),
+                'leadStatuses' => $leadStatuses->map(fn($ls) => ['id' => $ls->id, 'name' => $ls->name])->toArray(),
+                'users' => $users->map(fn($u) => ['id' => $u->id, 'name' => $u->name])->toArray(),
+            ],
         ]);
     }
 
@@ -124,6 +188,36 @@ class DriverController extends Controller
         $stagesProgress = $driverModel->getStagesProgress();
         $stagesStatus = $driverModel->getStagesStatus();
         $nextStage = $driverModel->getNextStage();
+
+        // Load activity logs with relationship names
+        $activities = \Spatie\Activitylog\Models\Activity::forSubject($driverModel)
+            ->with('causer:id,name,email')
+            ->latest()
+            ->get()
+            ->map(function ($activity) use ($driverModel) {
+                $properties = $activity->properties;
+                
+                // Resolve relationship IDs to names
+                if (isset($properties['old'])) {
+                    $properties['old'] = $this->resolveActivityPropertyNames($properties['old']);
+                }
+                if (isset($properties['attributes'])) {
+                    $properties['attributes'] = $this->resolveActivityPropertyNames($properties['attributes']);
+                }
+                
+                return [
+                    'id' => $activity->id,
+                    'description' => $activity->description,
+                    'event' => $activity->event,
+                    'properties' => $properties,
+                    'causer' => $activity->causer ? [
+                        'id' => $activity->causer->id,
+                        'name' => $activity->causer->name,
+                        'email' => $activity->causer->email,
+                    ] : null,
+                    'created_at' => $activity->created_at->toISOString(),
+                ];
+            });
 
         return Inertia::render('Drivers/Drivers/Show', [
             'driver' => [
@@ -190,6 +284,83 @@ class DriverController extends Controller
                 'created_at' => $driverModel->created_at,
                 'updated_at' => $driverModel->updated_at,
             ],
+            'activities' => $activities,
+        ]);
+    }
+
+    public function details(int $driver): \Illuminate\Http\JsonResponse
+    {
+        $driverModel = $this->driverService->getDriverById($driver);
+
+        if (! $driverModel) {
+            return response()->json(['error' => 'Driver not found.'], 404);
+        }
+
+        // Load activity logs with relationship names
+        $activities = \Spatie\Activitylog\Models\Activity::forSubject($driverModel)
+            ->with('causer:id,name,email')
+            ->latest()
+            ->get()
+            ->map(function ($activity) use ($driverModel) {
+                $properties = $activity->properties;
+                
+                // Resolve relationship IDs to names
+                if (isset($properties['old'])) {
+                    $properties['old'] = $this->resolveActivityPropertyNames($properties['old']);
+                }
+                if (isset($properties['attributes'])) {
+                    $properties['attributes'] = $this->resolveActivityPropertyNames($properties['attributes']);
+                }
+                
+                return [
+                    'id' => $activity->id,
+                    'description' => $activity->description,
+                    'event' => $activity->event,
+                    'properties' => $properties,
+                    'causer' => $activity->causer ? [
+                        'id' => $activity->causer->id,
+                        'name' => $activity->causer->name,
+                        'email' => $activity->causer->email,
+                    ] : null,
+                    'created_at' => $activity->created_at->toISOString(),
+                ];
+            });
+
+        return response()->json([
+            'driver' => [
+                'id' => $driverModel->id,
+                'uuid' => $driverModel->uuid,
+                'company_id' => $driverModel->company_id,
+                'full_name' => $driverModel->full_name,
+                'phone' => $driverModel->phone,
+                'whatsapp_phone' => $driverModel->whatsapp_phone,
+                'email' => $driverModel->email,
+                'riding_company' => $driverModel->ridingCompany ? [
+                    'id' => $driverModel->ridingCompany->id,
+                    'name' => $driverModel->ridingCompany->name,
+                ] : null,
+                'campaign' => $driverModel->campaign ? [
+                    'id' => $driverModel->campaign->id,
+                    'name' => $driverModel->campaign->name,
+                ] : null,
+                'lead_source' => $driverModel->leadSource ? [
+                    'id' => $driverModel->leadSource->id,
+                    'name' => $driverModel->leadSource->name,
+                ] : null,
+                'assigned_to' => $driverModel->assignedTo ? [
+                    'id' => $driverModel->assignedTo->id,
+                    'name' => $driverModel->assignedTo->name,
+                ] : null,
+                'lead_status' => $driverModel->leadStatus ? [
+                    'id' => $driverModel->leadStatus->id,
+                    'name' => $driverModel->leadStatus->name,
+                    'color' => $driverModel->leadStatus->color,
+                ] : null,
+                'notes' => $driverModel->notes,
+                'created_at' => $driverModel->created_at,
+                'updated_at' => $driverModel->updated_at,
+            ],
+            'activities' => $activities,
         ]);
     }
 
@@ -212,7 +383,21 @@ class DriverController extends Controller
         $users = User::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
 
         return Inertia::render('Drivers/Drivers/Edit', [
-            'driver' => $driverModel,
+            'driver' => [
+                'id' => $driverModel->id,
+                'company_id' => $driverModel->company_id,
+                'full_name' => $driverModel->full_name,
+                'phone' => $driverModel->phone,
+                'whatsapp_phone' => $driverModel->whatsapp_phone,
+                'email' => $driverModel->email,
+                'riding_company_id' => $driverModel->riding_company_id,
+                'campaign_id' => $driverModel->campaign_id,
+                'lead_source_id' => $driverModel->lead_source_id,
+                'assigned_to' => $driverModel->assigned_to,
+                'lead_status_id' => $driverModel->lead_status_id,
+                'current_stage_id' => $driverModel->current_stage_id,
+                'notes' => $driverModel->notes,
+            ],
             'companies' => $companies,
             'ridingCompanies' => $ridingCompanies,
             'campaigns' => $campaigns,
@@ -235,7 +420,7 @@ class DriverController extends Controller
             $this->driverService->updateDriver($driver, $data);
 
             return redirect()
-                ->route('drivers.drivers.index')
+                ->back()
                 ->with('success', 'Driver updated successfully.');
         } catch (\Exception $e) {
             return redirect()
@@ -279,7 +464,7 @@ class DriverController extends Controller
         }
     }
 
-    public function export(): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $user = Auth::user();
         $companyId = $user->isSuperAdmin() ? null : $user->company_id;
@@ -287,14 +472,19 @@ class DriverController extends Controller
 
         // Create CSV
         $filename = 'drivers_export_' . date('Y-m-d_His') . '.csv';
-        $file = fopen('php://temp', 'r+');
+        
+        // Add UTF-8 BOM for Excel compatibility
+        $content = "\xEF\xBB\xBF";
+        
+        // Open output stream
+        $output = fopen('php://temp', 'r+');
 
         // Headers
-        fputcsv($file, ['ID', 'Full Name', 'Phone', 'WhatsApp', 'Email', 'Riding Company', 'Campaign', 'Lead Source', 'Lead Status', 'Assigned To', 'Created At']);
+        fputcsv($output, ['ID', 'Full Name', 'Phone', 'WhatsApp', 'Email', 'Riding Company', 'Campaign', 'Lead Source', 'Lead Status', 'Assigned To', 'Created At']);
 
         // Data
         foreach ($drivers as $driver) {
-            fputcsv($file, [
+            fputcsv($output, [
                 $driver->id,
                 $driver->full_name,
                 $driver->phone,
@@ -309,38 +499,727 @@ class DriverController extends Controller
             ]);
         }
 
-        rewind($file);
-        $content = stream_get_contents($file);
-        fclose($file);
+        rewind($output);
+        $content .= stream_get_contents($output);
+        fclose($output);
 
-        return response()->streamDownload(function () use ($content) {
+        $response = response()->streamDownload(function () use ($content) {
             echo $content;
         }, $filename, [
-            'Content-Type' => 'text/csv',
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
+        
+        // Prevent Inertia from processing this response
+        $response->headers->remove('X-Inertia');
+        $response->headers->set('X-Inertia', 'false');
+        $response->headers->set('Cache-Control', 'no-cache, must-revalidate');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
+        
+        return $response;
     }
 
-    public function import(): Response
-    {
-        return Inertia::render('Drivers/Drivers/Import');
-    }
 
     public function importStore(Request $request): RedirectResponse
     {
         $request->validate([
             'file' => ['required', 'file', 'mimes:csv,txt', 'max:10240'],
+            'has_header' => ['nullable', 'boolean'],
+            'encoding' => ['nullable', 'string', 'in:UTF-8,ISO-8859-1,Windows-1252'],
+            'delimiter' => ['nullable', 'string', 'in:comma,semicolon,pipe,caret'],
+            'duplicate_handling' => ['nullable', 'string', 'in:skip,update,create'],
+            'matching_fields' => ['nullable', 'string'],
+            'field_mapping' => ['nullable', 'string'],
         ]);
 
         try {
-            // TODO: Implement CSV import logic
+            $file = $request->file('file');
+            $hasHeader = $request->boolean('has_header', true);
+            $encoding = $request->input('encoding', 'UTF-8');
+            $delimiter = $request->input('delimiter', 'comma');
+            $duplicateHandling = $request->input('duplicate_handling', 'skip');
+            $matchingFields = json_decode($request->input('matching_fields', '[]'), true) ?? [];
+            $fieldMapping = json_decode($request->input('field_mapping', '{}'), true) ?? [];
+            $headersOrder = json_decode($request->input('headers_order', '[]'), true) ?? [];
+            $defaultValues = json_decode($request->input('default_values', '{}'), true) ?? [];
+
+            $delimiterMap = [
+                'comma' => ',',
+                'semicolon' => ';',
+                'pipe' => '|',
+                'caret' => '^',
+            ];
+            $delimiterChar = $delimiterMap[$delimiter] ?? ',';
+
+            // Read CSV file
+            $content = file_get_contents($file->getRealPath());
+            if ($encoding !== 'UTF-8') {
+                $content = mb_convert_encoding($content, 'UTF-8', $encoding);
+            }
+
+            $lines = array_filter(array_map('trim', explode("\n", $content)));
+            if (empty($lines)) {
+                throw new \Exception('CSV file is empty');
+            }
+
+            // Get CSV headers
+            $csvHeaders = [];
+            if ($hasHeader && ! empty($lines)) {
+                $firstLine = str_getcsv(array_shift($lines), $delimiterChar);
+                $csvHeaders = array_map('trim', $firstLine);
+            } else {
+                // If no header, use headers_order or create default headers
+                if (! empty($headersOrder)) {
+                    $csvHeaders = $headersOrder;
+                } else {
+                    // Try to infer from first row
+                    if (! empty($lines)) {
+                        $firstRow = str_getcsv($lines[0], $delimiterChar);
+                        $csvHeaders = array_map(fn($i) => "Column " . ($i + 1), array_keys($firstRow));
+                    }
+                }
+            }
+
+            $imported = 0;
+            $skipped = 0;
+            $updated = 0;
+            $errors = [];
+            $createdRecords = [];
+            $skippedRecords = [];
+            $updatedRecords = [];
+            $totalScanned = 0;
+
+            $user = Auth::user();
+            // Get user's company_id - required for import
+            $companyId = $user->company_id;
+            
+            // If user doesn't have company_id and is not super admin, we can't proceed
+            if (empty($companyId) && ! $user->isSuperAdmin()) {
+                return redirect()
+                    ->back()
+                    ->with('error', 'Your user account must have a company assigned to import drivers. Please contact your administrator.');
+            }
+
+            foreach ($lines as $lineNumber => $line) {
+                try {
+                    $row = str_getcsv($line, $delimiterChar);
+                    if (empty(array_filter($row))) {
+                        continue;
+                    }
+
+                    // Map CSV columns to fields using headers order
+                    $data = [];
+                    foreach ($csvHeaders as $columnIndex => $csvHeader) {
+                        if (! isset($fieldMapping[$csvHeader])) {
+                            continue;
+                        }
+
+                        $field = $fieldMapping[$csvHeader];
+                        if (empty($field) || $field === '__skip__' || $field === '-- Skip --') {
+                            continue;
+                        }
+
+                        $value = isset($row[$columnIndex]) ? trim($row[$columnIndex]) : null;
+
+                        // Handle default values
+                        if ((empty($value) || $value === '') && isset($defaultValues[$csvHeader])) {
+                            $value = $defaultValues[$csvHeader];
+                        }
+
+                        if ($value !== null && $value !== '') {
+                            // Handle relationship fields - need to find IDs by name
+                            if (in_array($field, ['company_id', 'riding_company_id', 'campaign_id', 'lead_source_id', 'lead_status_id', 'assigned_to'])) {
+                                $originalValue = $value;
+                                $value = $this->resolveRelationshipId($field, $value, $companyId, $user);
+                                if ($value === null && ! empty(trim($row[$columnIndex]))) {
+                                    $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": Could not find {$field} for value: '" . trim($row[$columnIndex]) . "'. Please check that the value exists in the database.";
+                                }
+                            }
+                            
+                            if ($value !== null) {
+                                $data[$field] = $value;
+                            }
+                        }
+                    }
+
+                    // Reformat phone numbers
+                    if (isset($data['phone'])) {
+                        $data['phone'] = $this->reformatPhoneNumber($data['phone']);
+                    }
+                    if (isset($data['whatsapp_phone'])) {
+                        $data['whatsapp_phone'] = $this->reformatPhoneNumber($data['whatsapp_phone']);
+                    }
+
+                    // Ensure company_id is set - it's required in the database
+                    // Always use the current user's company_id automatically
+                    if (empty($data['company_id'])) {
+                        // Use user's company_id if available
+                        if ($user->company_id) {
+                            $data['company_id'] = $user->company_id;
+                        } elseif ($user->isSuperAdmin()) {
+                            // For super admin without company_id, try to get first company
+                            $firstCompany = Company::first();
+                            if ($firstCompany) {
+                                $data['company_id'] = $firstCompany->id;
+                            } else {
+                                $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": No company found in the system. Please create a company first.";
+                                continue;
+                            }
+                        } else {
+                            $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": Unable to determine company_id. Please ensure your user account has a company assigned.";
+                            continue;
+                        }
+                    }
+                    
+                    // Ensure assigned_to is set - if not provided, use current user
+                    if (empty($data['assigned_to'])) {
+                        $data['assigned_to'] = $user->id;
+                    }
+
+                    // Handle duplicates
+                    $existing = null;
+                    if ($duplicateHandling !== 'create' && ! empty($matchingFields)) {
+                        $query = Driver::query();
+                        foreach ($matchingFields as $field) {
+                            if (isset($data[$field])) {
+                                $query->where($field, $data[$field]);
+                            }
+                        }
+                        $existing = $query->first();
+                    }
+
+                    // Validate required fields
+                    if (empty($data['full_name']) || empty($data['phone'])) {
+                        $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": Missing required fields (full_name or phone)";
+                        continue;
+                    }
+
+                    // Ensure company_id is set
+                    if (empty($data['company_id'])) {
+                        if ($user->isSuperAdmin()) {
+                            $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": company_id is required";
+                            continue;
+                        } else {
+                            $data['company_id'] = $companyId;
+                        }
+                    }
+
+                    if ($existing) {
+                        if ($duplicateHandling === 'skip') {
+                            $skipped++;
+                            $skippedRecords[] = [
+                                'row' => $lineNumber + ($hasHeader ? 2 : 1),
+                                'data' => $data,
+                                'existing_id' => $existing->id,
+                                'reason' => 'Duplicate found based on matching fields',
+                            ];
+                            continue;
+                        } elseif ($duplicateHandling === 'update') {
+                            $existing->update($data);
+                            $updated++;
+                            $updatedRecords[] = [
+                                'row' => $lineNumber + ($hasHeader ? 2 : 1),
+                                'data' => $data,
+                                'driver_id' => $existing->id,
+                            ];
+                        }
+                    } else {
+                        $driver = $this->driverService->createDriver($data);
+                        $imported++;
+                        $createdRecords[] = [
+                            'row' => $lineNumber + ($hasHeader ? 2 : 1),
+                            'data' => $data,
+                            'driver_id' => $driver->id,
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": " . $e->getMessage();
+                }
+            }
+
+            // Store import results in session for the results page
+            $importResults = [
+                'total_scanned' => $totalScanned,
+                'imported' => $imported,
+                'updated' => $updated,
+                'skipped' => $skipped,
+                'errors_count' => count($errors),
+                'created_records' => $createdRecords,
+                'skipped_records' => $skippedRecords,
+                'updated_records' => $updatedRecords,
+                'errors' => $errors,
+            ];
+
+            // Redirect to import results page
             return redirect()
-                ->route('drivers.drivers.index')
-                ->with('success', 'Drivers imported successfully.');
+                ->route('drivers.drivers.import.results')
+                ->with('importResults', $importResults);
         } catch (\Exception $e) {
+            \Log::error('Import error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
             return redirect()
                 ->back()
-                ->with('error', $e->getMessage());
+                ->with('error', 'Import failed: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Resolve relationship ID from name/value
+     */
+    protected function resolveRelationshipId(string $field, string $value, ?int $companyId, $user): ?int
+    {
+        $value = trim($value);
+        if (empty($value) || $value === '-') {
+            return null;
+        }
+
+        try {
+            switch ($field) {
+                case 'company_id':
+                    // Try exact match first
+                    $model = Company::where('name', $value)->first();
+                    if ($model) {
+                        return $model->id;
+                    }
+                    // Try trimmed match
+                    $model = Company::where('name', trim($value))->first();
+                    if ($model) {
+                        return $model->id;
+                    }
+                    // Try case-insensitive match
+                    $model = Company::whereRaw('LOWER(name) = LOWER(?)', [trim($value)])->first();
+                    if ($model) {
+                        return $model->id;
+                    }
+                    // Try partial match (contains)
+                    $model = Company::where('name', 'LIKE', '%' . trim($value) . '%')->first();
+                    return $model?->id;
+
+                case 'riding_company_id':
+                    $query = RidingCompany::where('name', $value);
+                    if ($companyId && ! $user->isSuperAdmin()) {
+                        $query->where('company_id', $companyId);
+                    }
+                    $model = $query->first();
+                    return $model?->id;
+
+                case 'campaign_id':
+                    $query = Campaign::where('name', $value);
+                    if ($companyId && ! $user->isSuperAdmin()) {
+                        $query->where('company_id', $companyId);
+                    }
+                    $model = $query->first();
+                    return $model?->id;
+
+                case 'lead_source_id':
+                    $query = LeadSource::where('name', $value);
+                    if ($companyId && ! $user->isSuperAdmin()) {
+                        $query->where('company_id', $companyId);
+                    }
+                    $model = $query->first();
+                    return $model?->id;
+
+                case 'lead_status_id':
+                    $query = LeadStatus::where('name', $value);
+                    if ($companyId && ! $user->isSuperAdmin()) {
+                        $query->where('company_id', $companyId);
+                    }
+                    $model = $query->first();
+                    return $model?->id;
+
+                case 'assigned_to':
+                    $query = User::where('name', $value);
+                    if ($companyId && ! $user->isSuperAdmin()) {
+                        $query->where('company_id', $companyId);
+                    }
+                    $model = $query->first();
+                    return $model?->id;
+
+                default:
+                    // Try to parse as integer if it looks like an ID
+                    if (is_numeric($value)) {
+                        return (int) $value;
+                    }
+                    return null;
+            }
+        } catch (\Exception $e) {
+            \Log::error("Failed to resolve {$field} for value: {$value}", [
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Resolve relationship IDs to names in activity log properties
+     */
+    protected function resolveActivityPropertyNames(array $properties): array
+    {
+        $resolved = [];
+        
+        foreach ($properties as $key => $value) {
+            if ($value === null || $value === '') {
+                $resolved[$key] = $value;
+                continue;
+            }
+            
+            switch ($key) {
+                case 'assigned_to':
+                    if (is_numeric($value)) {
+                        $user = User::find($value);
+                        $resolved[$key] = $user ? $user->name : "User #{$value}";
+                    } else {
+                        $resolved[$key] = $value;
+                    }
+                    break;
+                    
+                case 'company_id':
+                    if (is_numeric($value)) {
+                        $company = Company::find($value);
+                        $resolved[$key] = $company ? $company->name : "Company #{$value}";
+                    } else {
+                        $resolved[$key] = $value;
+                    }
+                    break;
+                    
+                case 'riding_company_id':
+                    if (is_numeric($value)) {
+                        $ridingCompany = RidingCompany::find($value);
+                        $resolved[$key] = $ridingCompany ? $ridingCompany->name : "Riding Company #{$value}";
+                    } else {
+                        $resolved[$key] = $value;
+                    }
+                    break;
+                    
+                case 'campaign_id':
+                    if (is_numeric($value)) {
+                        $campaign = Campaign::find($value);
+                        $resolved[$key] = $campaign ? $campaign->name : "Campaign #{$value}";
+                    } else {
+                        $resolved[$key] = $value;
+                    }
+                    break;
+                    
+                case 'lead_source_id':
+                    if (is_numeric($value)) {
+                        $leadSource = LeadSource::find($value);
+                        $resolved[$key] = $leadSource ? $leadSource->name : "Lead Source #{$value}";
+                    } else {
+                        $resolved[$key] = $value;
+                    }
+                    break;
+                    
+                case 'lead_status_id':
+                    if (is_numeric($value)) {
+                        $leadStatus = LeadStatus::find($value);
+                        $resolved[$key] = $leadStatus ? $leadStatus->name : "Lead Status #{$value}";
+                    } else {
+                        $resolved[$key] = $value;
+                    }
+                    break;
+                    
+                default:
+                    $resolved[$key] = $value;
+                    break;
+            }
+        }
+        
+        return $resolved;
+    }
+
+    /**
+     * Helper function to reformat phone numbers
+     */
+    protected function reformatPhoneNumber($phoneNumber)
+    {
+        // تحويل الأرقام العربية إلى إنجليزية
+        $arabicNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+        $englishNumerals = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        $phoneNumber = str_replace($arabicNumerals, $englishNumerals, $phoneNumber);
+
+        // ✅ إزالة جميع الرموز غير الرقمية (بما فيها النقطة ".")
+        $cleanedNumber = preg_replace('/[^0-9+]/', '', $phoneNumber);
+
+        // تطبيق قواعد التنسيق
+        if (strpos($cleanedNumber, '0020') === 0 && strlen($cleanedNumber) === 14) {
+            return '0' . substr($cleanedNumber, 4);
+        } elseif (strpos($cleanedNumber, '+20') === 0 && strlen($cleanedNumber) === 13) {
+            return '0' . substr($cleanedNumber, 3);
+        } elseif (strpos($cleanedNumber, '20') === 0 && strlen($cleanedNumber) === 12) {
+            return '0' . substr($cleanedNumber, 2);
+        } elseif (preg_match('/^(10|11|12|15)/', $cleanedNumber) && strlen($cleanedNumber) === 10) {
+            return '0' . $cleanedNumber;
+        }
+
+        return $cleanedNumber;
+    }
+
+    public function importResults(): RedirectResponse|Response
+    {
+        $importResults = session('importResults');
+        
+        if (! $importResults) {
+            return redirect()
+                ->route('drivers.drivers.index');
+        }
+
+        return Inertia::render('Drivers/Drivers/ImportResults', [
+            'importResults' => $importResults,
+        ]);
+    }
+
+    public function downloadImportDetails(string $type): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        // Get import results from session
+        $importResults = session('importResults');
+        
+        // If not in session, try to get from request (in case session expired)
+        if (! $importResults && request()->has('results')) {
+            $importResults = json_decode(request()->input('results'), true);
+        }
+        
+        if (! $importResults) {
+            abort(404, 'Import results not found. Please run the import again.');
+        }
+
+        $filename = "import_{$type}_" . date('Y-m-d_His') . '.csv';
+        $records = [];
+        
+        switch ($type) {
+            case 'created':
+                $records = $importResults['created_records'] ?? [];
+                break;
+            case 'skipped':
+                $records = $importResults['skipped_records'] ?? [];
+                break;
+            case 'updated':
+                $records = $importResults['updated_records'] ?? [];
+                break;
+            default:
+                abort(404, 'Invalid type');
+        }
+
+        // Create CSV - same approach as export()
+        // Add UTF-8 BOM for Excel compatibility
+        $content = "\xEF\xBB\xBF";
+        
+        // Open output stream
+        $output = fopen('php://temp', 'r+');
+        
+        // Headers
+        fputcsv($output, ['Row', 'Full Name', 'Phone', 'Email', 'Riding Company', 'Campaign', 'Lead Source', 'Lead Status', 'Assigned To', 'Driver ID']);
+        
+        // Data
+        foreach ($records as $record) {
+            $data = $record['data'] ?? [];
+            fputcsv($output, [
+                $record['row'] ?? '',
+                $data['full_name'] ?? '',
+                $data['phone'] ?? '',
+                $data['email'] ?? '',
+                $data['riding_company_id'] ?? '',
+                $data['campaign_id'] ?? '',
+                $data['lead_source_id'] ?? '',
+                $data['lead_status_id'] ?? '',
+                $data['assigned_to'] ?? '',
+                $record['driver_id'] ?? $record['existing_id'] ?? '',
+            ]);
+        }
+        
+        rewind($output);
+        $content .= stream_get_contents($output);
+        fclose($output);
+        
+        $response = response()->streamDownload(function () use ($content) {
+            echo $content;
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+        
+        // Prevent Inertia from processing this response - same as export()
+        $response->headers->remove('X-Inertia');
+        $response->headers->set('X-Inertia', 'false');
+        $response->headers->set('Cache-Control', 'no-cache, must-revalidate');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
+        
+        return $response;
+    }
+
+    public function massDelete(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'ids' => ['required', 'array'],
+            'ids.*' => ['required', 'integer', 'exists:drivers,id'],
+        ]);
+
+        $user = Auth::user();
+        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+
+        $drivers = Driver::whereIn('id', $request->ids);
+        
+        if ($companyId) {
+            $drivers->where('company_id', $companyId);
+        }
+
+        $count = $drivers->count();
+        $drivers->delete();
+
+        return redirect()
+            ->route('drivers.drivers.index')
+            ->with('success', "{$count} driver(s) deleted successfully.");
+    }
+
+    public function massEdit(Request $request): Response
+    {
+        // Get ids from query string or request
+        $ids = $request->input('ids');
+        if (is_string($ids)) {
+            $ids = explode(',', $ids);
+        }
+        
+        $request->merge(['ids' => $ids]);
+        
+        $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'exists:drivers,id'],
+        ]);
+
+        $user = Auth::user();
+        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+
+        $drivers = Driver::whereIn('id', $ids);
+        
+        if ($companyId) {
+            $drivers->where('company_id', $companyId);
+        }
+
+        $drivers = $drivers->get();
+
+        // Get all available options for mass edit
+        $companies = $user->isSuperAdmin() 
+            ? Company::active()->orderBy('name')->get(['id', 'name'])
+            : collect([$user->company])->filter();
+
+        $ridingCompanies = $user->isSuperAdmin() 
+            ? RidingCompany::active()->orderBy('name')->get(['id', 'name'])
+            : RidingCompany::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get(['id', 'name']);
+
+        $campaigns = $user->isSuperAdmin()
+            ? Campaign::orderBy('name')->get(['id', 'name'])
+            : Campaign::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('name')->get(['id', 'name']);
+
+        $leadSources = $user->isSuperAdmin()
+            ? LeadSource::active()->orderBy('name')->get(['id', 'name'])
+            : LeadSource::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get(['id', 'name']);
+
+        $leadStatuses = $user->isSuperAdmin()
+            ? LeadStatus::active()->ordered()->get(['id', 'name', 'color'])
+            : LeadStatus::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->ordered()->get(['id', 'name', 'color']);
+
+        $users = $user->isSuperAdmin()
+            ? User::where('is_active', true)->orderBy('name')->get(['id', 'name'])
+            : User::when($companyId, fn($q) => $q->where('company_id', $companyId))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
+        return Inertia::render('Drivers/Drivers/MassEdit', [
+            'drivers' => $drivers,
+            'ids' => $ids,
+            'companies' => $companies,
+            'ridingCompanies' => $ridingCompanies,
+            'campaigns' => $campaigns,
+            'leadSources' => $leadSources,
+            'leadStatuses' => $leadStatuses,
+            'users' => $users,
+        ]);
+    }
+
+    public function massUpdate(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'exists:drivers,id'],
+            'company_id' => ['nullable', 'string'],
+            'riding_company_id' => ['nullable', 'string'],
+            'campaign_id' => ['nullable', 'string'],
+            'lead_source_id' => ['nullable', 'string'],
+            'lead_status_id' => ['nullable', 'string'],
+            'assigned_to' => ['nullable', 'string'],
+            'notes' => ['nullable', 'string'],
+            'clear_fields' => ['nullable', 'array'],
+        ]);
+
+        $user = Auth::user();
+        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+
+        $drivers = Driver::whereIn('id', $request->ids);
+        
+        if ($companyId) {
+            $drivers->where('company_id', $companyId);
+        }
+
+        $drivers = $drivers->get();
+
+        if ($drivers->isEmpty()) {
+            return redirect()
+                ->back()
+                ->with('error', 'No drivers found to update.');
+        }
+
+        $updateData = [];
+        $clearFields = $request->input('clear_fields', []);
+        
+        // Handle clear fields (set to null)
+        foreach ($clearFields as $field) {
+            $updateData[$field] = null;
+        }
+        
+        // Only include fields that have values (not empty) and are not in clear_fields
+        if ($request->filled('company_id') && ! in_array('company_id', $clearFields)) {
+            $updateData['company_id'] = $request->company_id ? (int) $request->company_id : null;
+        }
+        if ($request->filled('riding_company_id') && ! in_array('riding_company_id', $clearFields)) {
+            $updateData['riding_company_id'] = $request->riding_company_id ? (int) $request->riding_company_id : null;
+        }
+        if ($request->filled('campaign_id') && ! in_array('campaign_id', $clearFields)) {
+            $updateData['campaign_id'] = $request->campaign_id ? (int) $request->campaign_id : null;
+        }
+        if ($request->filled('lead_source_id') && ! in_array('lead_source_id', $clearFields)) {
+            $updateData['lead_source_id'] = $request->lead_source_id ? (int) $request->lead_source_id : null;
+        }
+        if ($request->filled('lead_status_id') && ! in_array('lead_status_id', $clearFields)) {
+            $updateData['lead_status_id'] = $request->lead_status_id ? (int) $request->lead_status_id : null;
+        }
+        if ($request->filled('assigned_to') && ! in_array('assigned_to', $clearFields)) {
+            $updateData['assigned_to'] = $request->assigned_to ? (int) $request->assigned_to : null;
+        }
+
+        // Handle notes separately (append to existing notes, or clear if in clear_fields)
+        if (in_array('notes', $clearFields)) {
+            $updateData['notes'] = null;
+        } elseif ($request->filled('notes')) {
+            $notes = $request->notes;
+            foreach ($drivers as $driver) {
+                $existingNotes = $driver->notes ?? '';
+                $newNotes = $existingNotes 
+                    ? $existingNotes . "\n\n" . date('Y-m-d H:i:s') . ': ' . $notes
+                    : date('Y-m-d H:i:s') . ': ' . $notes;
+                $driver->update(['notes' => $newNotes]);
+            }
+        }
+
+        // Update all drivers with the same data
+        if (! empty($updateData)) {
+            Driver::whereIn('id', $request->ids)->update($updateData);
+        }
+
+        $count = $drivers->count();
+        return redirect()
+            ->route('drivers.drivers.index')
+            ->with('success', "{$count} driver(s) updated successfully.");
     }
 }
 

@@ -56,11 +56,15 @@ export default function LeadStatusesIndex({ leadStatuses }: LeadStatusesIndexPro
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Link href="/drivers/lead-statuses/export">
-                            <Button type="button" variant="outline">
-                                Export
-                            </Button>
-                        </Link>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                window.location.href = '/drivers/lead-statuses/export';
+                            }}
+                        >
+                            Export
+                        </Button>
                         <Link href="/drivers/lead-statuses/import">
                             <Button type="button" variant="outline">
                                 Import

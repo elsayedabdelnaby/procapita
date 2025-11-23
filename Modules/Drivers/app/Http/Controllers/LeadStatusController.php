@@ -75,8 +75,29 @@ class LeadStatusController extends Controller
             abort(404, 'Lead status not found.');
         }
 
+        // Load activity logs
+        $activities = \Spatie\Activitylog\Models\Activity::forSubject($leadStatusModel)
+            ->with('causer:id,name,email')
+            ->latest()
+            ->get()
+            ->map(function ($activity) {
+                return [
+                    'id' => $activity->id,
+                    'description' => $activity->description,
+                    'event' => $activity->event,
+                    'properties' => $activity->properties,
+                    'causer' => $activity->causer ? [
+                        'id' => $activity->causer->id,
+                        'name' => $activity->causer->name,
+                        'email' => $activity->causer->email,
+                    ] : null,
+                    'created_at' => $activity->created_at->toISOString(),
+                ];
+            });
+
         return Inertia::render('Drivers/LeadStatuses/Show', [
             'leadStatus' => $leadStatusModel,
+            'activities' => $activities,
         ]);
     }
 
@@ -143,19 +164,24 @@ class LeadStatusController extends Controller
         }
     }
 
-    public function export(): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $user = Auth::user();
         $companyId = $user->isSuperAdmin() ? null : $user->company_id;
         $leadStatuses = $this->leadStatusService->getAllLeadStatuses($companyId);
 
         $filename = 'lead_statuses_export_' . date('Y-m-d_His') . '.csv';
-        $file = fopen('php://temp', 'r+');
+        
+        // Add UTF-8 BOM for Excel compatibility
+        $content = "\xEF\xBB\xBF";
+        
+        // Open output stream
+        $output = fopen('php://temp', 'r+');
 
-        fputcsv($file, ['ID', 'Name', 'Slug', 'Color', 'Order', 'Active', 'Created At']);
+        fputcsv($output, ['ID', 'Name', 'Slug', 'Color', 'Order', 'Active', 'Created At']);
 
         foreach ($leadStatuses as $status) {
-            fputcsv($file, [
+            fputcsv($output, [
                 $status->id,
                 $status->name,
                 $status->slug,
@@ -166,13 +192,25 @@ class LeadStatusController extends Controller
             ]);
         }
 
-        rewind($file);
-        $content = stream_get_contents($file);
-        fclose($file);
+        rewind($output);
+        $content .= stream_get_contents($output);
+        fclose($output);
 
-        return response()->streamDownload(function () use ($content) {
+        $response = response()->streamDownload(function () use ($content) {
             echo $content;
-        }, $filename, ['Content-Type' => 'text/csv']);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+        
+        // Prevent Inertia from processing this response
+        $response->headers->remove('X-Inertia');
+        $response->headers->set('X-Inertia', 'false');
+        $response->headers->set('Cache-Control', 'no-cache, must-revalidate');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
+        
+        return $response;
     }
 
     public function import(): Response
