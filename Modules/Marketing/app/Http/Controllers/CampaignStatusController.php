@@ -21,7 +21,7 @@ class CampaignStatusController extends Controller
     public function index(): Response
     {
         $user = auth()->user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
         
         $statuses = $this->campaignStatusService->getAllCampaignStatuses($companyId);
 

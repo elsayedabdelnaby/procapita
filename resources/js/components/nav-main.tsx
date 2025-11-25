@@ -17,7 +17,7 @@ import { resolveUrl } from '@/lib/utils';
 import { Link, usePage } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface NavigationItem {
     title: string;
@@ -30,9 +30,42 @@ interface NavMainProps {
     navigation: NavigationItem[];
 }
 
+const STORAGE_KEY = 'sidebar_open_groups';
+
 export function NavMain({ navigation }: NavMainProps) {
     const page = usePage();
-    const [openGroups, setOpenGroups] = useState<string[]>(['Core']); // Core open by default
+    
+    // Load saved state from localStorage or default to ['Core']
+    const getInitialOpenGroups = (): string[] => {
+        if (typeof window === 'undefined') {
+            return ['Core'];
+        }
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            }
+        } catch (e) {
+            console.error('Error loading sidebar state:', e);
+        }
+        return ['Core'];
+    };
+
+    const [openGroups, setOpenGroups] = useState<string[]>(getInitialOpenGroups);
+
+    // Save to localStorage whenever openGroups changes
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(openGroups));
+            } catch (e) {
+                console.error('Error saving sidebar state:', e);
+            }
+        }
+    }, [openGroups]);
 
     const getIcon = (iconName?: string) => {
         if (!iconName) return null;
@@ -41,9 +74,12 @@ export function NavMain({ navigation }: NavMainProps) {
     };
 
     const toggleGroup = (title: string) => {
-        setOpenGroups((prev) =>
-            prev.includes(title) ? prev.filter((g) => g !== title) : [...prev, title]
-        );
+        setOpenGroups((prev) => {
+            const newGroups = prev.includes(title)
+                ? prev.filter((g) => g !== title)
+                : [...prev, title];
+            return newGroups;
+        });
     };
 
     return (

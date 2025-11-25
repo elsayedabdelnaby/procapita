@@ -1,3 +1,4 @@
+import { ActivityLog } from '@/components/core/activity-log';
 import { DataTable } from '@/components/core/data-table';
 import { DeleteDialog } from '@/components/core/delete-dialog';
 import { RoleTree } from '@/components/core/role-tree';
@@ -7,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Company, CoreUser, Role } from '@/types/core';
 import { Head, Link, router } from '@inertiajs/react';
-import { Building2, Mail, MapPin, Network, Phone, ShieldCheck, Users as UsersIcon } from 'lucide-react';
+import { Activity, Building2, Mail, MapPin, Network, Phone, ShieldCheck, Users as UsersIcon } from 'lucide-react';
 import { useState } from 'react';
 
 interface CompanyShowProps {
@@ -22,11 +23,26 @@ interface CompanyShowProps {
     users?: CoreUser[];
     roles?: Role[];
     roleHierarchy?: Role[];
+    activities?: Array<{
+        id: number;
+        description: string;
+        event?: string;
+        properties?: {
+            old?: Record<string, any>;
+            attributes?: Record<string, any>;
+        };
+        causer?: {
+            id: number;
+            name: string;
+            email?: string;
+        } | null;
+        created_at: string;
+    }>;
 }
 
-export default function CompanyShow({ company, statistics, users, roles, roleHierarchy }: CompanyShowProps) {
+export default function CompanyShow({ company, statistics, users, roles, roleHierarchy, activities = [] }: CompanyShowProps) {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'roles' | 'hierarchy'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'roles' | 'hierarchy' | 'updates'>('overview');
     const [deleteUserDialog, setDeleteUserDialog] = useState<{ open: boolean; user: CoreUser | null }>({
         open: false,
         user: null,
@@ -156,6 +172,19 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
                             <div className="flex items-center gap-2">
                                 <Network className="h-4 w-4" />
                                 Hierarchy
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('updates')}
+                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                activeTab === 'updates'
+                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <Activity className="h-4 w-4" />
+                                Updates ({activities.length})
                             </div>
                         </button>
                     </nav>
@@ -460,6 +489,13 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
                                 </Link>
                             </div>
                         )}
+                    </Card>
+                )}
+
+                {activeTab === 'updates' && (
+                    <Card className="p-6">
+                        <h2 className="mb-4 text-lg font-semibold">Activity Log</h2>
+                        <ActivityLog activities={activities} />
                     </Card>
                 )}
             </div>

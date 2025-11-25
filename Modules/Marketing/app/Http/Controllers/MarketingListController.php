@@ -19,7 +19,7 @@ class MarketingListController extends Controller
     public function index(): Response
     {
         $user = auth()->user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
         
         $lists = $this->marketingListService->getAllMarketingLists($companyId);
 
