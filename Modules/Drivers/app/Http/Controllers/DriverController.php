@@ -18,6 +18,7 @@ use Modules\Drivers\app\Models\LeadStatus;
 use Modules\Marketing\app\Models\Campaign;
 use Modules\RidingCarCompanies\app\Models\RidingCompany;
 use App\Models\User;
+use Illuminate\Support\Facades\Schema;
 
 class DriverController extends Controller
 {
@@ -28,7 +29,7 @@ class DriverController extends Controller
     public function index(): Response
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
         $drivers = $this->driverService->getAllDrivers($companyId);
 
@@ -134,7 +135,7 @@ class DriverController extends Controller
     public function create(): Response
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
         $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get() : null;
         // Only load riding companies if not super admin (for super admin, they'll be loaded dynamically)
@@ -159,9 +160,15 @@ class DriverController extends Controller
         try {
             $data = $request->validated();
             $user = Auth::user();
+            $companyId = $this->getCompanyId();
 
             if (! $user->isSuperAdmin()) {
                 $data['company_id'] = $user->company_id;
+            } else {
+                // For super admin, use selected company from session
+                if ($companyId) {
+                    $data['company_id'] = $companyId;
+                }
             }
 
             $this->driverService->createDriver($data);
@@ -179,6 +186,7 @@ class DriverController extends Controller
 
     public function show(int $driver): Response
     {
+        try {
         $driverModel = $this->driverService->getDriverById($driver);
 
         if (! $driverModel) {
@@ -280,12 +288,20 @@ class DriverController extends Controller
                     ] : null,
                     'status' => $doc->status,
                     'uploaded_path' => $doc->uploaded_path,
+                    'original_filename' => Schema::hasColumn('driver_documents', 'original_filename') ? $doc->original_filename : null,
                 ]),
                 'created_at' => $driverModel->created_at,
                 'updated_at' => $driverModel->updated_at,
             ],
             'activities' => $activities,
         ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in DriverController::show: ' . $e->getMessage(), [
+                'driver_id' => $driver,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            abort(500, 'Error loading driver details: ' . $e->getMessage());
+        }
     }
 
     public function details(int $driver): \Illuminate\Http\JsonResponse
@@ -295,6 +311,10 @@ class DriverController extends Controller
         if (! $driverModel) {
             return response()->json(['error' => 'Driver not found.'], 404);
         }
+
+        $stagesProgress = $driverModel->getStagesProgress();
+        $stagesStatus = $driverModel->getStagesStatus();
+        $nextStage = $driverModel->getNextStage();
 
         // Load activity logs with relationship names
         $activities = \Spatie\Activitylog\Models\Activity::forSubject($driverModel)
@@ -356,7 +376,39 @@ class DriverController extends Controller
                     'name' => $driverModel->leadStatus->name,
                     'color' => $driverModel->leadStatus->color,
                 ] : null,
+                'current_stage' => $driverModel->currentStage ? [
+                    'id' => $driverModel->currentStage->id,
+                    'name' => $driverModel->currentStage->name,
+                ] : null,
                 'notes' => $driverModel->notes,
+                'stages_progress' => $stagesProgress,
+                'stages_status' => $stagesStatus,
+                'next_stage' => $nextStage ? [
+                    'id' => $nextStage->id,
+                    'name' => $nextStage->name,
+                    'order' => $nextStage->order,
+                ] : null,
+                'has_completed_all_stages' => $driverModel->hasCompletedAllStages(),
+                'stages' => $driverModel->stages->map(fn($stage) => [
+                    'id' => $stage->id,
+                    'stage_template' => $stage->stageTemplate ? [
+                        'id' => $stage->stageTemplate->id,
+                        'name' => $stage->stageTemplate->name,
+                    ] : null,
+                    'status' => $stage->status,
+                    'completed_at' => $stage->completed_at,
+                ]),
+                'documents' => $driverModel->documents->map(fn($doc) => [
+                    'id' => $doc->id,
+                    'document_template' => $doc->documentTemplate ? [
+                        'id' => $doc->documentTemplate->id,
+                        'name' => $doc->documentTemplate->name,
+                        'type' => $doc->documentTemplate->type,
+                    ] : null,
+                    'status' => $doc->status,
+                    'uploaded_path' => $doc->uploaded_path,
+                    'original_filename' => Schema::hasColumn('driver_documents', 'original_filename') ? $doc->original_filename : null,
+                ]),
                 'created_at' => $driverModel->created_at,
                 'updated_at' => $driverModel->updated_at,
             ],
@@ -373,7 +425,7 @@ class DriverController extends Controller
         }
 
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
         $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get() : null;
         $ridingCompanies = RidingCompany::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get();
@@ -412,9 +464,15 @@ class DriverController extends Controller
         try {
             $data = $request->validated();
             $user = Auth::user();
+            $companyId = $this->getCompanyId();
 
             if (! $user->isSuperAdmin()) {
                 $data['company_id'] = $user->company_id;
+            } else {
+                // For super admin, use selected company from session
+                if ($companyId) {
+                    $data['company_id'] = $companyId;
+                }
             }
 
             $this->driverService->updateDriver($driver, $data);
@@ -467,7 +525,7 @@ class DriverController extends Controller
     public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
         $drivers = $this->driverService->getAllDrivers($companyId);
 
         // Create CSV
@@ -591,14 +649,21 @@ class DriverController extends Controller
             $totalScanned = 0;
 
             $user = Auth::user();
-            // Get user's company_id - required for import
-            $companyId = $user->company_id;
+            // Get company_id - for super admin, use selected company from session, otherwise use user's company
+            $companyId = $this->getCompanyId();
             
             // If user doesn't have company_id and is not super admin, we can't proceed
             if (empty($companyId) && ! $user->isSuperAdmin()) {
                 return redirect()
                     ->back()
                     ->with('error', 'Your user account must have a company assigned to import drivers. Please contact your administrator.');
+            }
+            
+            // For super admin, if no company is selected, show error
+            if ($user->isSuperAdmin() && ! $companyId) {
+                return redirect()
+                    ->back()
+                    ->with('error', 'Please select a company from the sidebar to import drivers.');
             }
 
             foreach ($lines as $lineNumber => $line) {
@@ -800,7 +865,7 @@ class DriverController extends Controller
 
                 case 'riding_company_id':
                     $query = RidingCompany::where('name', $value);
-                    if ($companyId && ! $user->isSuperAdmin()) {
+                    if ($companyId) {
                         $query->where('company_id', $companyId);
                     }
                     $model = $query->first();
@@ -808,7 +873,7 @@ class DriverController extends Controller
 
                 case 'campaign_id':
                     $query = Campaign::where('name', $value);
-                    if ($companyId && ! $user->isSuperAdmin()) {
+                    if ($companyId) {
                         $query->where('company_id', $companyId);
                     }
                     $model = $query->first();
@@ -816,7 +881,7 @@ class DriverController extends Controller
 
                 case 'lead_source_id':
                     $query = LeadSource::where('name', $value);
-                    if ($companyId && ! $user->isSuperAdmin()) {
+                    if ($companyId) {
                         $query->where('company_id', $companyId);
                     }
                     $model = $query->first();
@@ -824,7 +889,7 @@ class DriverController extends Controller
 
                 case 'lead_status_id':
                     $query = LeadStatus::where('name', $value);
-                    if ($companyId && ! $user->isSuperAdmin()) {
+                    if ($companyId) {
                         $query->where('company_id', $companyId);
                     }
                     $model = $query->first();
@@ -832,7 +897,7 @@ class DriverController extends Controller
 
                 case 'assigned_to':
                     $query = User::where('name', $value);
-                    if ($companyId && ! $user->isSuperAdmin()) {
+                    if ($companyId) {
                         $query->where('company_id', $companyId);
                     }
                     $model = $query->first();
@@ -945,13 +1010,18 @@ class DriverController extends Controller
 
         // تطبيق قواعد التنسيق
         if (strpos($cleanedNumber, '0020') === 0 && strlen($cleanedNumber) === 14) {
-            return '0' . substr($cleanedNumber, 4);
+            $cleanedNumber = '0' . substr($cleanedNumber, 4);
         } elseif (strpos($cleanedNumber, '+20') === 0 && strlen($cleanedNumber) === 13) {
-            return '0' . substr($cleanedNumber, 3);
+            $cleanedNumber = '0' . substr($cleanedNumber, 3);
         } elseif (strpos($cleanedNumber, '20') === 0 && strlen($cleanedNumber) === 12) {
-            return '0' . substr($cleanedNumber, 2);
+            $cleanedNumber = '0' . substr($cleanedNumber, 2);
         } elseif (preg_match('/^(10|11|12|15)/', $cleanedNumber) && strlen($cleanedNumber) === 10) {
-            return '0' . $cleanedNumber;
+            $cleanedNumber = '0' . $cleanedNumber;
+        }
+
+        // حذف علامة + من البداية إذا كانت موجودة
+        if (strpos($cleanedNumber, '+') === 0) {
+            $cleanedNumber = substr($cleanedNumber, 1);
         }
 
         return $cleanedNumber;
@@ -1058,16 +1128,23 @@ class DriverController extends Controller
         ]);
 
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
-        $drivers = Driver::whereIn('id', $request->ids);
+        $query = Driver::whereIn('id', $request->ids);
         
         if ($companyId) {
-            $drivers->where('company_id', $companyId);
+            $query->where('company_id', $companyId);
         }
 
+        // Get all drivers first to trigger individual delete events
+        $drivers = $query->get();
         $count = $drivers->count();
-        $drivers->delete();
+
+        // Delete each driver individually to trigger event handlers
+        // This ensures all related data (stages, documents, files) are deleted
+        foreach ($drivers as $driver) {
+            $driver->delete();
+        }
 
         return redirect()
             ->route('drivers.drivers.index')
@@ -1090,7 +1167,7 @@ class DriverController extends Controller
         ]);
 
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
         $drivers = Driver::whereIn('id', $ids);
         
@@ -1153,7 +1230,7 @@ class DriverController extends Controller
         ]);
 
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
         $drivers = Driver::whereIn('id', $request->ids);
         

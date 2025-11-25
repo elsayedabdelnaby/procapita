@@ -22,7 +22,7 @@ class LeadStatusController extends Controller
     public function index(): Response
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
         $leadStatuses = $this->leadStatusService->getAllLeadStatuses($companyId);
 
@@ -167,7 +167,7 @@ class LeadStatusController extends Controller
     public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
         $leadStatuses = $this->leadStatusService->getAllLeadStatuses($companyId);
 
         $filename = 'lead_statuses_export_' . date('Y-m-d_His') . '.csv';
@@ -229,6 +229,56 @@ class LeadStatusController extends Controller
             return redirect()
                 ->route('drivers.leadstatuses.index')
                 ->with('success', 'Lead statuses imported successfully.');
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage());
+        }
+    }
+
+    public function moveUp(int $leadStatus): RedirectResponse
+    {
+        try {
+            $this->leadStatusService->moveUp($leadStatus);
+
+            return redirect()
+                ->back()
+                ->with('success', 'Lead status order updated successfully.');
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage());
+        }
+    }
+
+    public function moveDown(int $leadStatus): RedirectResponse
+    {
+        try {
+            $this->leadStatusService->moveDown($leadStatus);
+
+            return redirect()
+                ->back()
+                ->with('success', 'Lead status order updated successfully.');
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage());
+        }
+    }
+
+    public function reorder(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'ids' => ['required', 'array'],
+            'ids.*' => ['required', 'integer', 'exists:lead_statuses,id'],
+        ]);
+
+        try {
+            $this->leadStatusService->reorder($request->ids);
+
+            return redirect()
+                ->back()
+                ->with('success', 'Lead statuses reordered successfully.');
         } catch (\Exception $e) {
             return redirect()
                 ->back()

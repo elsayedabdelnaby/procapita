@@ -32,7 +32,7 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
     });
 
     // Mass edit route - must be before drivers/{driver} route to avoid route matching conflicts
-    Route::middleware(['permission:drivers.drivers.update'])->group(function () {
+    Route::middleware(['permission:drivers.drivers.mass-edit'])->group(function () {
         Route::get('drivers/mass-edit', [DriverController::class, 'massEdit'])->name('drivers.mass-edit');
         Route::post('drivers/mass-update', [DriverController::class, 'massUpdate'])->name('drivers.mass-update');
     });
@@ -49,6 +49,9 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.drivers.delete'])->group(function () {
         Route::delete('drivers/{driver}', [DriverController::class, 'destroy'])->name('drivers.destroy');
+    });
+
+    Route::middleware(['permission:drivers.drivers.mass-delete'])->group(function () {
         Route::post('drivers/mass-delete', [DriverController::class, 'massDelete'])->name('drivers.mass-delete');
     });
 
@@ -126,6 +129,9 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.leadstatuses.toggle-active'])->group(function () {
         Route::post('lead-statuses/{leadStatus}/toggle-active', [LeadStatusController::class, 'toggleActive'])->name('leadstatuses.toggle-active');
+        Route::post('lead-statuses/{leadStatus}/move-up', [LeadStatusController::class, 'moveUp'])->name('leadstatuses.move-up');
+        Route::post('lead-statuses/{leadStatus}/move-down', [LeadStatusController::class, 'moveDown'])->name('leadstatuses.move-down');
+        Route::post('lead-statuses/reorder', [LeadStatusController::class, 'reorder'])->name('leadstatuses.reorder');
     });
 
     // Driver Stages Management
@@ -177,6 +183,14 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
         Route::get('driver-documents/export', [DriverDocumentController::class, 'export'])->name('driverdocuments.export');
     });
 
+    Route::middleware(['permission:drivers.driverdocuments.view'])->group(function () {
+        Route::get('driver-documents/{driverDocument}/view', [DriverDocumentController::class, 'view'])->name('driverdocuments.view');
+    });
+
+    Route::middleware(['permission:drivers.driverdocuments.download'])->group(function () {
+        Route::get('driver-documents/{driverDocument}/download', [DriverDocumentController::class, 'download'])->name('driverdocuments.download');
+    });
+
     Route::middleware(['permission:drivers.driverdocuments.read'])->group(function () {
         Route::get('driver-documents/{driverDocument}', [DriverDocumentController::class, 'show'])->name('driverdocuments.show');
     });
@@ -188,10 +202,15 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.driverdocuments.delete'])->group(function () {
         Route::delete('driver-documents/{driverDocument}', [DriverDocumentController::class, 'destroy'])->name('driverdocuments.destroy');
+        Route::delete('driver-documents', [DriverDocumentController::class, 'destroyAll'])->name('driverdocuments.destroy-all');
     });
 
-    Route::middleware(['permission:drivers.driverdocuments.upload'])->group(function () {
+    Route::middleware(['permission:drivers.driverdocuments.replace'])->group(function () {
         Route::post('driver-documents/{driverDocument}/upload', [DriverDocumentController::class, 'upload'])->name('driverdocuments.upload');
+    });
+
+    Route::middleware(['permission:drivers.driverdocuments.delete-file'])->group(function () {
+        Route::delete('driver-documents/{driverDocument}/delete-file', [DriverDocumentController::class, 'deleteFile'])->name('driverdocuments.delete-file');
     });
 
     Route::middleware(['permission:drivers.driverdocuments.approve'])->group(function () {
@@ -202,7 +221,7 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
         Route::post('driver-documents/{driverDocument}/reject', [DriverDocumentController::class, 'reject'])->name('driverdocuments.reject');
     });
 
-    Route::middleware(['permission:drivers.driverdocuments.download'])->group(function () {
-        Route::get('driver-documents/{driverDocument}/download', [DriverDocumentController::class, 'download'])->name('driverdocuments.download');
+    Route::middleware(['permission:drivers.driverdocuments.set-pending,drivers.driverdocuments.set-approved,drivers.driverdocuments.set-rejected'])->group(function () {
+        Route::post('driver-documents/{driverDocument}/update-status', [DriverDocumentController::class, 'updateStatus'])->name('driverdocuments.update-status');
     });
 });

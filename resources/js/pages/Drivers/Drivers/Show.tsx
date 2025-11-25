@@ -3,10 +3,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, router } from '@inertiajs/react';
-import { Activity, CheckCircle2, Clock, FileText, Mail, Phone, User, XCircle } from 'lucide-react';
-import { useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Activity, CheckCircle2, Clock, FileText, Mail, Phone, User, XCircle, Upload, Eye, Trash2, Edit } from 'lucide-react';
+import { useState, useRef } from 'react';
+import axios from 'axios';
+import { type SharedData } from '@/types';
 
 interface Driver {
     id: number;
@@ -50,6 +53,7 @@ interface Driver {
         document_template?: { id: number; name: string; type: string };
         status: string;
         uploaded_path?: string;
+        original_filename?: string;
     }>;
     created_at: string;
     updated_at: string;
@@ -75,11 +79,36 @@ interface DriversShowProps {
 }
 
 export default function DriversShow({ driver, activities = [] }: DriversShowProps) {
+    const page = usePage<SharedData>();
     const [activeTab, setActiveTab] = useState<'overview' | 'updates'>('overview');
+    const [viewingDocument, setViewingDocument] = useState<{ id: number; url: string; extension?: string } | null>(null);
+    const [uploadingDocId, setUploadingDocId] = useState<number | null>(null);
+    const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+    if (!driver) {
+        return (
+            <AppLayout>
+                <Head title="Driver Not Found" />
+                <div className="p-6">
+                    <div className="text-center py-12">
+                        <p className="text-neutral-500">Driver not found.</p>
+                        <Link href="/drivers/drivers" className="mt-4 inline-block">
+                            <Button variant="outline">Back to List</Button>
+                        </Link>
+                    </div>
+                </div>
+            </AppLayout>
+        );
+    }
 
     const handleDelete = () => {
         if (confirm(`Are you sure you want to delete "${driver.full_name}"?`)) {
-            router.delete(`/drivers/drivers/${driver.id}`);
+            router.delete(`/drivers/drivers/${driver.id}`, {
+                onSuccess: () => {
+                    // Redirect to drivers list
+                    router.visit('/drivers/drivers');
+                },
+            });
         }
     };
 
@@ -97,6 +126,196 @@ export default function DriversShow({ driver, activities = [] }: DriversShowProp
                 {status.replace('_', ' ').toUpperCase()}
             </Badge>
         );
+    };
+
+    const hasPermission = (permission: string): boolean => {
+        const user = page.props.auth?.user;
+        if (user?.is_super_admin || user?.is_company_admin) {
+            return true;
+        }
+        const permissions = (user as any)?.permissions || [];
+        return permissions.some((p: any) => p.name === permission);
+    };
+
+    const canUploadDocument = () => {
+        return hasPermission('drivers.driverdocuments.upload');
+    };
+
+    const canDeleteDocument = () => {
+        return hasPermission('drivers.driverdocuments.delete-file');
+    };
+
+    const canViewDocument = () => {
+        return hasPermission('drivers.driverdocuments.view');
+    };
+
+    const canReplaceDocument = () => {
+        return hasPermission('drivers.driverdocuments.replace');
+    };
+
+    const canSetPending = () => {
+        return hasPermission('drivers.driverdocuments.set-pending');
+    };
+
+    const canSetApproved = () => {
+        return hasPermission('drivers.driverdocuments.set-approved');
+    };
+
+    const canSetRejected = () => {
+        return hasPermission('drivers.driverdocuments.set-rejected');
+    };
+
+    const handleFileSelect = (docId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('Please select a valid file (JPG, PNG, or PDF)');
+            return;
+        }
+
+        // Validate file size (10MB)
+        if (file.size > 10 * 1024 * 1024) {
+            alert('File size must be less than 10MB');
+            return;
+        }
+
+        setUploadingDocId(docId);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        axios
+            .post(`/drivers/driver-documents/${docId}/upload`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            })
+            .then(() => {
+                router.reload({ only: ['driver'] });
+            })
+            .catch((error) => {
+                alert(error.response?.data?.message || 'Failed to upload file');
+            })
+            .finally(() => {
+                setUploadingDocId(null);
+                if (fileInputRefs.current[docId]) {
+                    fileInputRefs.current[docId]!.value = '';
+                }
+            });
+    };
+
+    const handleDeleteFile = (docId: number) => {
+        if (!confirm('Are you sure you want to delete this file?')) return;
+
+        axios
+            .delete(`/drivers/driver-documents/${docId}/delete-file`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            })
+            .then((response) => {
+                // Always reload if we get a response (even if success is false, the file might be cleared)
+                router.reload({ 
+                    only: ['driver'],
+                    preserveScroll: true,
+                });
+            })
+            .catch((error) => {
+                const errorMessage = error.response?.data?.message || error.message || 'Failed to delete file';
+                alert(errorMessage);
+                console.error('Delete file error:', error);
+                // Still reload to sync state
+                router.reload({ 
+                    only: ['driver'],
+                    preserveScroll: true,
+                });
+            });
+    };
+
+    const handleViewFile = (docId: number) => {
+        const url = `/drivers/driver-documents/${docId}/view`;
+        const doc = driver.documents?.find(d => d.id === docId);
+        const extension = getFileExtension(doc?.original_filename, doc?.uploaded_path)?.toLowerCase();
+        setViewingDocument({ id: docId, url, extension });
+    };
+
+    const getFileExtension = (filename?: string, path?: string): string | null => {
+        const source = filename || path;
+        if (!source) return null;
+        
+        const parts = source.split('.');
+        if (parts.length > 1) {
+            return parts[parts.length - 1].toUpperCase();
+        }
+        return null;
+    };
+
+    const handleApproveDocument = (docId: number) => {
+        if (!confirm('Are you sure you want to approve this document?')) return;
+
+        axios
+            .post(`/drivers/driver-documents/${docId}/approve`, {}, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            })
+            .then(() => {
+                router.reload({ 
+                    only: ['driver'],
+                    preserveScroll: true,
+                });
+            })
+            .catch((error) => {
+                const errorMessage = error.response?.data?.message || error.message || 'Failed to approve document';
+                alert(errorMessage);
+                console.error('Approve document error:', error);
+            });
+    };
+
+    const handleRejectDocument = (docId: number) => {
+        const notes = prompt('Please enter rejection notes (optional):');
+        if (notes === null) return; // User cancelled
+
+        axios
+            .post(`/drivers/driver-documents/${docId}/reject`, { notes: notes || '' }, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            })
+            .then(() => {
+                router.reload({ 
+                    only: ['driver'],
+                    preserveScroll: true,
+                });
+            })
+            .catch((error) => {
+                const errorMessage = error.response?.data?.message || error.message || 'Failed to reject document';
+                alert(errorMessage);
+                console.error('Reject document error:', error);
+            });
+    };
+
+    const handleUpdateStatus = (docId: number, status: 'pending' | 'approved' | 'rejected') => {
+        axios
+            .post(`/drivers/driver-documents/${docId}/update-status`, { status }, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            })
+            .then(() => {
+                router.reload({ only: ['driver'] });
+            })
+            .catch((error) => {
+                const errorMessage = error.response?.data?.message || error.message || 'Failed to update document status';
+                alert(errorMessage);
+                console.error('Update status error:', error);
+            });
     };
 
     return (
@@ -345,25 +564,34 @@ export default function DriversShow({ driver, activities = [] }: DriversShowProp
                     </Card>
                 )}
 
-                {driver.documents && driver.documents.length > 0 && (
-                    <Card className="mt-6 p-6">
-                        <div className="mb-4 flex items-center justify-between">
-                            <h2 className="text-lg font-semibold">Documents</h2>
-                            <Link href={`/drivers/driver-documents?driver_id=${driver.id}`}>
-                                <Button variant="outline" size="sm">
-                                    View All Documents
-                                </Button>
-                            </Link>
-                        </div>
+                <Card className="mt-6 p-6">
+                    <div className="mb-4 flex items-center justify-between">
+                        <h2 className="text-lg font-semibold">Documents</h2>
+                        <Link href={`/drivers/driver-documents?driver_id=${driver.id}`}>
+                            <Button variant="outline" size="sm">
+                                View All Documents
+                            </Button>
+                        </Link>
+                    </div>
+                    {driver.documents && driver.documents.length > 0 ? (
                         <div className="space-y-3">
                             {driver.documents.map((doc) => (
                                 <div
                                     key={doc.id}
-                                    className="flex items-center justify-between rounded-lg border p-4"
+                                    className={`flex items-center justify-between rounded-lg border p-4 ${
+                                        canUploadDocument() && !doc.uploaded_path
+                                            ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                            : ''
+                                    }`}
+                                    onClick={() => {
+                                        if (canUploadDocument() && !doc.uploaded_path && !uploadingDocId) {
+                                            fileInputRefs.current[doc.id]?.click();
+                                        }
+                                    }}
                                 >
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-3 flex-1">
                                         <FileText className="h-5 w-5 text-neutral-500" />
-                                        <div>
+                                        <div className="flex-1">
                                             <p className="font-medium">
                                                 {doc.document_template?.name || 'Unknown Document'}
                                             </p>
@@ -372,21 +600,200 @@ export default function DriversShow({ driver, activities = [] }: DriversShowProp
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        {getStatusBadge(doc.status)}
-                                        {doc.uploaded_path && (
-                                            <Link href={`/drivers/driver-documents/${doc.id}/download`}>
-                                                <Button variant="outline" size="sm">
-                                                    Download
-                                                </Button>
-                                            </Link>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        {doc.uploaded_path ? (
+                                            <>
+                                                {/* Status buttons - only show if file is uploaded */}
+                                                {(canSetPending() || canSetApproved() || canSetRejected()) && (
+                                                    <div className="flex items-center gap-1 border rounded-md p-1">
+                                                        {canSetPending() && (
+                                                            <Button
+                                                                variant={doc.status === 'pending' ? 'default' : 'ghost'}
+                                                                size="sm"
+                                                                className={`h-7 px-3 text-xs ${
+                                                                    doc.status === 'pending'
+                                                                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                }`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateStatus(doc.id, 'pending');
+                                                                }}
+                                                            >
+                                                                PENDING
+                                                            </Button>
+                                                        )}
+                                                        {canSetApproved() && (
+                                                            <Button
+                                                                variant={doc.status === 'approved' ? 'default' : 'ghost'}
+                                                                size="sm"
+                                                                className={`h-7 px-3 text-xs ${
+                                                                    doc.status === 'approved'
+                                                                        ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                }`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateStatus(doc.id, 'approved');
+                                                                }}
+                                                            >
+                                                                APPROVED
+                                                            </Button>
+                                                        )}
+                                                        {canSetRejected() && (
+                                                            <Button
+                                                                variant={doc.status === 'rejected' ? 'default' : 'ghost'}
+                                                                size="sm"
+                                                                className={`h-7 px-3 text-xs ${
+                                                                    doc.status === 'rejected'
+                                                                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                }`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateStatus(doc.id, 'rejected');
+                                                                }}
+                                                            >
+                                                                REJECT
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <>
+                                                {getStatusBadge(doc.status)}
+                                            </>
+                                        )}
+                                        {doc.uploaded_path ? (
+                                            <>
+                                                {canViewDocument() && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleViewFile(doc.id);
+                                                        }}
+                                                    >
+                                                        <Eye className="h-4 w-4 mr-1" />
+                                                        View
+                                                        {getFileExtension(doc.original_filename, doc.uploaded_path) && (
+                                                            <span className="ml-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                                                .{getFileExtension(doc.original_filename, doc.uploaded_path)}
+                                                            </span>
+                                                        )}
+                                                    </Button>
+                                                )}
+                                                {canReplaceDocument() && (
+                                                    <>
+                                                        <input
+                                                            ref={(el) => (fileInputRefs.current[doc.id] = el)}
+                                                            type="file"
+                                                            accept="image/jpeg,image/jpg,image/png,application/pdf"
+                                                            className="hidden"
+                                                            onChange={(e) => {
+                                                                e.stopPropagation();
+                                                                handleFileSelect(doc.id, e);
+                                                            }}
+                                                        />
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                fileInputRefs.current[doc.id]?.click();
+                                                            }}
+                                                            disabled={uploadingDocId === doc.id}
+                                                        >
+                                                            <Edit className="h-4 w-4 mr-1" />
+                                                            {uploadingDocId === doc.id ? 'Uploading...' : 'Replace'}
+                                                        </Button>
+                                                    </>
+                                                )}
+                                                {canDeleteDocument() && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteFile(doc.id);
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                            </>
+                                        ) : (
+                                            canUploadDocument() && (
+                                                <>
+                                                    <input
+                                                        ref={(el) => (fileInputRefs.current[doc.id] = el)}
+                                                        type="file"
+                                                        accept="image/jpeg,image/jpg,image/png,application/pdf"
+                                                        className="hidden"
+                                                        onChange={(e) => {
+                                                            e.stopPropagation();
+                                                            handleFileSelect(doc.id, e);
+                                                        }}
+                                                    />
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            fileInputRefs.current[doc.id]?.click();
+                                                        }}
+                                                        disabled={uploadingDocId === doc.id}
+                                                    >
+                                                        <Upload className="h-4 w-4 mr-1" />
+                                                        {uploadingDocId === doc.id ? 'Uploading...' : 'Upload'}
+                                                    </Button>
+                                                </>
+                                            )
                                         )}
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    </Card>
-                )}
+                    ) : (
+                        <div className="py-8 text-center text-neutral-500">
+                            <FileText className="mx-auto h-12 w-12 text-neutral-400 mb-2" />
+                            <p>No documents available</p>
+                        </div>
+                    )}
+                </Card>
+
+                {/* File View Dialog */}
+                <Dialog open={!!viewingDocument} onOpenChange={(open) => !open && setViewingDocument(null)}>
+                    <DialogContent className="!max-w-6xl max-h-[90vh] overflow-hidden">
+                        <DialogHeader>
+                            <DialogTitle>View Document</DialogTitle>
+                        </DialogHeader>
+                        {viewingDocument && (() => {
+                            const isImage = viewingDocument.extension && ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(viewingDocument.extension);
+                            
+                            return (
+                                <div className="flex-1 overflow-auto flex items-center justify-center p-4">
+                                    {isImage ? (
+                                        <img
+                                            src={viewingDocument.url}
+                                            alt="Document"
+                                            className="max-w-full max-h-[80vh] object-contain border rounded"
+                                            style={{ objectFit: 'contain' }}
+                                        />
+                                    ) : (
+                                        <iframe
+                                            src={viewingDocument.url}
+                                            className="w-full h-[80vh] border rounded"
+                                            title="Document Viewer"
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })()}
+                    </DialogContent>
+                </Dialog>
 
                 {driver.notes && (
                     <Card className="mt-6 p-6">

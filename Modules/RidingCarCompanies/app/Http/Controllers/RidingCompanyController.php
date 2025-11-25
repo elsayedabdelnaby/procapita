@@ -23,7 +23,7 @@ class RidingCompanyController extends Controller
     public function index(): Response
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
         $ridingCompanies = $this->ridingCompanyService->getAllRidingCompanies($companyId);
 

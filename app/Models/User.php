@@ -105,13 +105,43 @@ class User extends Authenticatable
             return $this->company?->hasModule($moduleName) ?? false;
         }
 
-        return $this->hasPermissionTo("{$moduleName}.*") ||
-               $this->hasAnyPermission([
-                   "{$moduleName}.*.create",
-                   "{$moduleName}.*.read",
-                   "{$moduleName}.*.update",
-                   "{$moduleName}.*.delete",
-               ]);
+        // Check if user has any permission for this module
+        // Use try-catch to handle non-existent permissions gracefully
+        try {
+            if ($this->hasPermissionTo("{$moduleName}.*")) {
+                return true;
+            }
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            // Permission doesn't exist, continue checking
+        }
+
+        // Check for specific module permissions
+        $modulePermissions = [
+            "{$moduleName}.*.create",
+            "{$moduleName}.*.read",
+            "{$moduleName}.*.update",
+            "{$moduleName}.*.delete",
+        ];
+
+        foreach ($modulePermissions as $permission) {
+            try {
+                if ($this->hasPermissionTo($permission)) {
+                    return true;
+                }
+            } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+                // Permission doesn't exist, continue checking
+            }
+        }
+
+        // Check if user has any permission that starts with the module name
+        $userPermissions = $this->getAllPermissions();
+        foreach ($userPermissions as $permission) {
+            if (str_starts_with($permission->name, "{$moduleName}.")) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function scopeSuperAdmins($query)

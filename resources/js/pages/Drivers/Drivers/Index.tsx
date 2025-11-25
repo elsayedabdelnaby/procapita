@@ -5,14 +5,16 @@ import { ImportModal } from '@/components/core/import-modal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, router } from '@inertiajs/react';
-import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown, User, Mail, CheckCircle2, FileText, Activity } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { type SharedData } from '@/types';
 
 interface Company {
     id: number;
@@ -86,10 +88,36 @@ interface DriversIndexProps {
 }
 
 export default function DriversIndex({ drivers, importAvailableFields, filterOptions = {} }: DriversIndexProps) {
+    const page = usePage<SharedData>();
     const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; driver: Driver | null }>({
         open: false,
         driver: null,
     });
+
+    const hasPermission = (permission: string): boolean => {
+        const user = page.props.auth?.user;
+        if (user?.is_super_admin || user?.is_company_admin) {
+            return true;
+        }
+        const permissions = (user as any)?.permissions || [];
+        return permissions.some((p: any) => p.name === permission);
+    };
+
+    const canMassEdit = () => {
+        return hasPermission('drivers.drivers.mass-edit');
+    };
+
+    const canMassDelete = () => {
+        return hasPermission('drivers.drivers.mass-delete');
+    };
+
+    const canDeleteDriver = () => {
+        return hasPermission('drivers.drivers.delete');
+    };
+
+    const canDeleteAllDrivers = () => {
+        return hasPermission('drivers.drivers.delete-all');
+    };
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [selectedDrivers, setSelectedDrivers] = useState<Set<number>>(new Set());
     const [massDeleteDialog, setMassDeleteDialog] = useState(false);
@@ -105,6 +133,11 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
     const [driverActivities, setDriverActivities] = useState<any[]>([]);
     const [loadingDetails, setLoadingDetails] = useState(false);
     const [hoveredPhone, setHoveredPhone] = useState<string | null>(null);
+    const [hoveredEmail, setHoveredEmail] = useState<string | null>(null);
+    const [viewDialogTab, setViewDialogTab] = useState<'overview' | 'updates'>('overview');
+    const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const emailHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [viewingDocument, setViewingDocument] = useState<{ id: number; url: string; extension?: string } | null>(null);
 
     // Sort states
     const [sortField, setSortField] = useState<string | null>(null);
@@ -145,7 +178,12 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
 
     const confirmDelete = () => {
         if (deleteDialog.driver) {
-            router.delete(`/drivers/drivers/${deleteDialog.driver.id}`);
+            router.delete(`/drivers/drivers/${deleteDialog.driver.id}`, {
+                onSuccess: () => {
+                    // Reload current page and related pages
+                    router.reload({ only: ['drivers'] });
+                },
+            });
         }
     };
 
@@ -413,6 +451,8 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                 onSuccess: () => {
                     setSelectedDrivers(new Set());
                     setMassDeleteDialog(false);
+                    // Reload current page
+                    router.reload({ only: ['drivers'] });
                 },
             });
         }
@@ -553,6 +593,7 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
     const handleViewDetails = async (driver: Driver) => {
         setViewingDriver(driver);
         setViewDialogOpen(true);
+        setViewDialogTab('overview');
         setLoadingDetails(true);
         
         try {
@@ -590,6 +631,40 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
         }
     };
 
+    const getStatusBadge = (status: string) => {
+        const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+            completed: 'default',
+            pending: 'secondary',
+            in_progress: 'outline',
+            rejected: 'destructive',
+            approved: 'default',
+        };
+
+        return (
+            <Badge variant={variants[status] || 'secondary'}>
+                {status.replace('_', ' ').toUpperCase()}
+            </Badge>
+        );
+    };
+
+    const handleViewFile = (docId: number) => {
+        const url = `/drivers/driver-documents/${docId}/view`;
+        const doc = driverDetails?.documents?.find((d: any) => d.id === docId);
+        const extension = getFileExtension(doc?.original_filename, doc?.uploaded_path)?.toLowerCase();
+        setViewingDocument({ id: docId, url, extension: extension || undefined });
+    };
+
+    const getFileExtension = (filename?: string, path?: string): string | null => {
+        const source = filename || path;
+        if (!source) return null;
+        
+        const parts = source.split('.');
+        if (parts.length > 1) {
+            return parts[parts.length - 1].toUpperCase();
+        }
+        return null;
+    };
+
     return (
         <AppLayout>
             <Head title="Drivers" />
@@ -619,6 +694,26 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                         >
                                 Import
                             </Button>
+                        {canDeleteAllDrivers() && drivers.length > 0 && (
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                onClick={() => {
+                                    if (confirm(`Are you sure you want to delete ALL ${drivers.length} driver(s)? This action cannot be undone.`)) {
+                                        const allIds = drivers.map(d => d.id);
+                                        router.post('/drivers/drivers/mass-delete', {
+                                            ids: allIds,
+                                        }, {
+                                            onSuccess: () => {
+                                                router.reload({ only: ['drivers'] });
+                                            },
+                                        });
+                                    }
+                                }}
+                            >
+                                Delete All
+                            </Button>
+                        )}
                         <Link href="/drivers/drivers/create">
                             <Button>Create Driver</Button>
                         </Link>
@@ -635,22 +730,26 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                         {selectedDrivers.size} driver(s) selected
                                     </span>
                                     <div className="flex gap-2">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handleMassEdit}
-                                        >
-                                            Mass Edit
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={handleMassDelete}
-                                        >
-                                            Delete Selected
-                                        </Button>
+                                        {canMassEdit() && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleMassEdit}
+                                            >
+                                                Mass Edit
+                                            </Button>
+                                        )}
+                                        {canMassDelete() && (
+                                            <Button
+                                                type="button"
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={handleMassDelete}
+                                            >
+                                                Delete Selected
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -665,7 +764,9 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                                     onCheckedChange={handleSelectAll}
                                                 />
                                             </th>
-                                            <th className="px-4 py-3 text-center w-12"></th>
+                                            <th className="px-4 py-3 text-center text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                                Actions
+                                            </th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
                                                 <button
                                                     type="button"
@@ -944,9 +1045,6 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                                         <div className="h-3 w-3" />
                                                     )}
                                                 </button>
-                                            </th>
-                                            <th className="px-4 py-3 text-right text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                Actions
                                             </th>
                                         </tr>
                                         {/* Filter Row */}
@@ -1307,14 +1405,62 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3 text-center">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleViewDetails(row)}
-                                                        className="flex items-center justify-center h-8 w-8 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                                                        title="View Details"
-                                                    >
-                                                        <Eye className="h-4 w-4 text-neutral-600 dark:text-neutral-400" />
-                                                    </button>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleViewDetails(row)}
+                                                            className="flex items-center justify-center h-8 w-8 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                                                            title="View Details"
+                                                        >
+                                                            <Eye className="h-4 w-4 text-neutral-600 dark:text-neutral-400" />
+                                                        </button>
+                                                        {editingRowId === row.id ? (
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleQuickSave(row.id)}
+                                                                    className="flex items-center justify-center h-8 w-8 rounded-md bg-green-500 text-white hover:bg-green-600 transition-colors"
+                                                                    title="Save"
+                                                                >
+                                                                    <Check className="h-4 w-4" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleQuickCancel}
+                                                                    className="flex items-center justify-center h-8 w-8 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
+                                                                    title="Cancel"
+                                                                >
+                                                                    <X className="h-4 w-4" />
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleQuickEdit(row)}
+                                                                    className="flex items-center justify-center h-8 w-8 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                                                                    title="Quick Edit"
+                                                                >
+                                                                    <Pencil className="h-4 w-4 text-neutral-600 dark:text-neutral-400" />
+                                                                </button>
+                                                                <Link href={`/drivers/drivers/${row.id}/edit`}>
+                                                                    <Button type="button" variant="outline" size="sm">
+                                                                        Edit
+                                                                    </Button>
+                                                                </Link>
+                                                                {canDeleteDriver() && (
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="destructive"
+                                                                        size="sm"
+                                                                        onClick={() => handleDelete(row)}
+                                                                    >
+                                                                        Delete
+                                                                    </Button>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-3 text-sm">
                                                     {editingRowId === row.id ? (
@@ -1345,29 +1491,55 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                                     ) : (
                                                         <div 
                                                             className="relative inline-block group"
-                                                            onMouseEnter={() => row.phone && setHoveredPhone(`phone-${row.id}`)}
-                                                            onMouseLeave={() => setHoveredPhone(null)}
+                                                            onMouseEnter={() => {
+                                                                if (hoverTimeoutRef.current) {
+                                                                    clearTimeout(hoverTimeoutRef.current);
+                                                                    hoverTimeoutRef.current = null;
+                                                                }
+                                                                if (row.phone) {
+                                                                    setHoveredPhone(`phone-${row.id}`);
+                                                                }
+                                                            }}
+                                                            onMouseLeave={() => {
+                                                                hoverTimeoutRef.current = setTimeout(() => {
+                                                                    setHoveredPhone(null);
+                                                                }, 200);
+                                                            }}
                                                         >
                                                             <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                                                                 {row.phone}
                                                             </span>
                                                             {hoveredPhone === `phone-${row.id}` && row.phone && (
-                                                                <div className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-2 flex gap-2">
+                                                                <div 
+                                                                    className="absolute left-0 bottom-full mb-3 z-[9999] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-3 flex gap-3 pointer-events-auto"
+                                                                    onMouseEnter={() => {
+                                                                        if (hoverTimeoutRef.current) {
+                                                                            clearTimeout(hoverTimeoutRef.current);
+                                                                            hoverTimeoutRef.current = null;
+                                                                        }
+                                                                        setHoveredPhone(`phone-${row.id}`);
+                                                                    }}
+                                                                    onMouseLeave={() => {
+                                                                        hoverTimeoutRef.current = setTimeout(() => {
+                                                                            setHoveredPhone(null);
+                                                                        }, 200);
+                                                                    }}
+                                                                >
                                                                     <a
                                                                         href={`tel:${row.phone}`}
-                                                                        className="flex items-center justify-center w-8 h-8 rounded-md bg-green-500 hover:bg-green-600 text-white transition-colors"
+                                                                        className="flex items-center justify-center w-10 h-10 rounded-md bg-green-500 hover:bg-green-600 text-white transition-colors"
                                                                         title="Call"
                                                                     >
-                                                                        <Phone className="h-4 w-4" />
+                                                                        <Phone className="h-5 w-5" />
                                                                     </a>
                                                                     <a
                                                                         href={`https://api.whatsapp.com/send/?phone=${formatPhoneForWhatsApp(row.phone)}&text&type=phone_number&app_absent=0`}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
-                                                                        className="flex items-center justify-center w-8 h-8 rounded-md bg-green-600 hover:bg-green-700 text-white transition-colors"
+                                                                        className="flex items-center justify-center w-10 h-10 rounded-md bg-green-600 hover:bg-green-700 text-white transition-colors"
                                                                         title="WhatsApp"
                                                                     >
-                                                                        <MessageCircle className="h-4 w-4" />
+                                                                        <MessageCircle className="h-5 w-5" />
                                                                     </a>
                                                                 </div>
                                                             )}
@@ -1386,29 +1558,55 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                                         row.whatsapp_phone ? (
                                                             <div 
                                                                 className="relative inline-block group"
-                                                                onMouseEnter={() => row.whatsapp_phone && setHoveredPhone(`whatsapp-${row.id}`)}
-                                                                onMouseLeave={() => setHoveredPhone(null)}
+                                                                onMouseEnter={() => {
+                                                                    if (hoverTimeoutRef.current) {
+                                                                        clearTimeout(hoverTimeoutRef.current);
+                                                                        hoverTimeoutRef.current = null;
+                                                                    }
+                                                                    if (row.whatsapp_phone) {
+                                                                        setHoveredPhone(`whatsapp-${row.id}`);
+                                                                    }
+                                                                }}
+                                                                onMouseLeave={() => {
+                                                                    hoverTimeoutRef.current = setTimeout(() => {
+                                                                        setHoveredPhone(null);
+                                                                    }, 200);
+                                                                }}
                                                             >
                                                                 <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                                                                     {row.whatsapp_phone}
                                                                 </span>
                                                                 {hoveredPhone === `whatsapp-${row.id}` && row.whatsapp_phone && (
-                                                                    <div className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-2 flex gap-2">
+                                                                    <div 
+                                                                        className="absolute left-0 bottom-full mb-3 z-[9999] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-3 flex gap-3 pointer-events-auto"
+                                                                        onMouseEnter={() => {
+                                                                            if (hoverTimeoutRef.current) {
+                                                                                clearTimeout(hoverTimeoutRef.current);
+                                                                                hoverTimeoutRef.current = null;
+                                                                            }
+                                                                            setHoveredPhone(`whatsapp-${row.id}`);
+                                                                        }}
+                                                                        onMouseLeave={() => {
+                                                                            hoverTimeoutRef.current = setTimeout(() => {
+                                                                                setHoveredPhone(null);
+                                                                            }, 200);
+                                                                        }}
+                                                                    >
                                                                         <a
                                                                             href={`tel:${row.whatsapp_phone}`}
-                                                                            className="flex items-center justify-center w-8 h-8 rounded-md bg-green-500 hover:bg-green-600 text-white transition-colors"
+                                                                            className="flex items-center justify-center w-10 h-10 rounded-md bg-green-500 hover:bg-green-600 text-white transition-colors"
                                                                             title="Call"
                                                                         >
-                                                                            <Phone className="h-4 w-4" />
+                                                                            <Phone className="h-5 w-5" />
                                                                         </a>
                                                                         <a
                                                                             href={`https://api.whatsapp.com/send/?phone=${formatPhoneForWhatsApp(row.whatsapp_phone)}&text&type=phone_number&app_absent=0`}
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
-                                                                            className="flex items-center justify-center w-8 h-8 rounded-md bg-green-600 hover:bg-green-700 text-white transition-colors"
+                                                                            className="flex items-center justify-center w-10 h-10 rounded-md bg-green-600 hover:bg-green-700 text-white transition-colors"
                                                                             title="WhatsApp"
                                                                         >
-                                                                            <MessageCircle className="h-4 w-4" />
+                                                                            <MessageCircle className="h-5 w-5" />
                                                                         </a>
                                                                     </div>
                                                                 )}
@@ -1425,7 +1623,54 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                                             className="h-8 text-sm"
                                                         />
                                                     ) : (
-                                                        row.email || '-'
+                                                        row.email ? (
+                                                            <div 
+                                                                className="relative inline-block group"
+                                                                onMouseEnter={() => {
+                                                                    if (emailHoverTimeoutRef.current) {
+                                                                        clearTimeout(emailHoverTimeoutRef.current);
+                                                                        emailHoverTimeoutRef.current = null;
+                                                                    }
+                                                                    if (row.email) {
+                                                                        setHoveredEmail(`email-${row.id}`);
+                                                                    }
+                                                                }}
+                                                                onMouseLeave={() => {
+                                                                    emailHoverTimeoutRef.current = setTimeout(() => {
+                                                                        setHoveredEmail(null);
+                                                                    }, 200);
+                                                                }}
+                                                            >
+                                                                <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                                                                    {row.email}
+                                                                </span>
+                                                                {hoveredEmail === `email-${row.id}` && row.email && (
+                                                                    <div 
+                                                                        className="absolute left-0 bottom-full mb-3 z-[9999] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-3 flex gap-3 pointer-events-auto"
+                                                                        onMouseEnter={() => {
+                                                                            if (emailHoverTimeoutRef.current) {
+                                                                                clearTimeout(emailHoverTimeoutRef.current);
+                                                                                emailHoverTimeoutRef.current = null;
+                                                                            }
+                                                                            setHoveredEmail(`email-${row.id}`);
+                                                                        }}
+                                                                        onMouseLeave={() => {
+                                                                            emailHoverTimeoutRef.current = setTimeout(() => {
+                                                                                setHoveredEmail(null);
+                                                                            }, 200);
+                                                                        }}
+                                                                    >
+                                                                        <a
+                                                                            href={`mailto:${row.email}`}
+                                                                            className="flex items-center justify-center w-10 h-10 rounded-md bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+                                                                            title="Send Email"
+                                                                        >
+                                                                            <Mail className="h-5 w-5" />
+                                                                        </a>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : '-'
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-3 text-sm">
@@ -1555,54 +1800,6 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                                         row.assigned_to?.name || '-'
                                                     )}
                                                 </td>
-                                                <td className="px-4 py-3 text-right text-sm">
-                                                    <div className="flex justify-end gap-2">
-                                                        {editingRowId === row.id ? (
-                                                            <>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleQuickSave(row.id)}
-                                                                    className="flex items-center justify-center h-8 w-8 rounded-md bg-green-500 text-white hover:bg-green-600 transition-colors"
-                                                                    title="Save"
-                                                                >
-                                                                    <Check className="h-4 w-4" />
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={handleQuickCancel}
-                                                                    className="flex items-center justify-center h-8 w-8 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
-                                                                    title="Cancel"
-                                                                >
-                                                                    <X className="h-4 w-4" />
-                                                                </button>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleQuickEdit(row)}
-                                                                    className="flex items-center justify-center h-8 w-8 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                                                                    title="Quick Edit"
-                                                                >
-                                                                    <Pencil className="h-4 w-4 text-neutral-600 dark:text-neutral-400" />
-                                                                </button>
-                                            <Link href={`/drivers/drivers/${row.id}/edit`}>
-                                                <Button type="button" variant="outline" size="sm">
-                                                    Edit
-                                                </Button>
-                                            </Link>
-                                            <Button
-                                                type="button"
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={() => handleDelete(row)}
-                                            >
-                                                Delete
-                                            </Button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -1646,13 +1843,13 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                 {/* View Details Dialog */}
                 <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
                     <DialogContent 
-                        className="!max-w-6xl max-h-[90vh] overflow-y-auto"
+                        className="!max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
                         overlayClassName="bg-black/40"
                     >
                         <DialogHeader>
-                            <DialogTitle>Driver Details</DialogTitle>
+                            <DialogTitle>{viewingDriver?.full_name || 'Driver Details'}</DialogTitle>
                             <DialogDescription>
-                                {viewingDriver?.full_name}
+                                Driver Details & Onboarding Progress
                             </DialogDescription>
                         </DialogHeader>
                         
@@ -1661,86 +1858,349 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                 <p className="text-muted-foreground">Loading...</p>
                             </div>
                         ) : driverDetails ? (
-                            <div className="space-y-4">
-                                {/* Basic Information */}
-                                <Card className="p-4">
-                                    <h3 className="font-semibold mb-3">Basic Information</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Full Name</p>
-                                            <p className="font-medium">{driverDetails.full_name}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Phone</p>
-                                            <p className="font-medium">{driverDetails.phone}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">WhatsApp Phone</p>
-                                            <p className="font-medium">{driverDetails.whatsapp_phone || '-'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Email</p>
-                                            <p className="font-medium">{driverDetails.email || '-'}</p>
-                                        </div>
-                                    </div>
-                                </Card>
-
-                                {/* Additional Information */}
-                                <Card className="p-4">
-                                    <h3 className="font-semibold mb-3">Additional Information</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Riding Company</p>
-                                            <p className="font-medium">{driverDetails.riding_company?.name || '-'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Campaign</p>
-                                            <p className="font-medium">{driverDetails.campaign?.name || '-'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Lead Source</p>
-                                            <p className="font-medium">{driverDetails.lead_source?.name || '-'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Lead Status</p>
-                                            {driverDetails.lead_status ? (
-                                                <Badge
-                                                    variant="outline"
-                                                    style={{
-                                                        borderColor: driverDetails.lead_status.color || 'gray',
-                                                        color: driverDetails.lead_status.color || 'gray',
-                                                    }}
-                                                >
-                                                    {driverDetails.lead_status.name}
-                                                </Badge>
-                                            ) : (
-                                                <p className="font-medium">-</p>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Assigned To</p>
-                                            <p className="font-medium">{driverDetails.assigned_to?.name || '-'}</p>
-                                        </div>
-                                        {driverDetails.notes && (
-                                            <div className="col-span-2">
-                                                <p className="text-sm text-muted-foreground">Notes</p>
-                                                <p className="font-medium">{driverDetails.notes}</p>
+                            <div className="flex-1 overflow-y-auto">
+                                {/* Tabs */}
+                                <div className="mb-6 border-b">
+                                    <nav className="flex gap-6">
+                                        <button
+                                            onClick={() => setViewDialogTab('overview')}
+                                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                                viewDialogTab === 'overview'
+                                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                                            }`}
+                                        >
+                                            Overview
+                                        </button>
+                                        <button
+                                            onClick={() => setViewDialogTab('updates')}
+                                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                                viewDialogTab === 'updates'
+                                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <Activity className="h-4 w-4" />
+                                                Updates ({driverActivities.length})
                                             </div>
+                                        </button>
+                                    </nav>
+                                </div>
+
+                                {/* Tab Content */}
+                                {viewDialogTab === 'overview' && (
+                                    <div className="space-y-6">
+                                        {/* Personal Information & CRM Information */}
+                                        <div className="grid gap-6 md:grid-cols-2">
+                                            <Card className="p-6">
+                                                <h2 className="mb-4 text-lg font-semibold">Personal Information</h2>
+                                                <div className="space-y-4">
+                                                    <div className="flex items-start gap-2">
+                                                        <User className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                                        <div className="flex-1">
+                                                            <p className="text-sm text-neutral-500">Full Name</p>
+                                                            <p className="font-medium">{driverDetails.full_name}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-start gap-2">
+                                                        <Phone className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                                        <div className="flex-1">
+                                                            <p className="text-sm text-neutral-500">Phone</p>
+                                                            <p className="font-medium">{driverDetails.phone}</p>
+                                                        </div>
+                                                    </div>
+                                                    {driverDetails.whatsapp_phone && (
+                                                        <div className="flex items-start gap-2">
+                                                            <Phone className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                                            <div className="flex-1">
+                                                                <p className="text-sm text-neutral-500">WhatsApp</p>
+                                                                <p className="font-medium">{driverDetails.whatsapp_phone}</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.email && (
+                                                        <div className="flex items-start gap-2">
+                                                            <Mail className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                                            <div className="flex-1">
+                                                                <p className="text-sm text-neutral-500">Email</p>
+                                                                <p className="font-medium">{driverDetails.email}</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.uuid && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">UUID</p>
+                                                            <p className="font-mono text-xs">{driverDetails.uuid}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </Card>
+
+                                            <Card className="p-6">
+                                                <h2 className="mb-4 text-lg font-semibold">CRM Information</h2>
+                                                <div className="space-y-4">
+                                                    {driverDetails.riding_company && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Riding Company</p>
+                                                            <p className="font-medium">{driverDetails.riding_company.name}</p>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.campaign && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Campaign</p>
+                                                            <p className="font-medium">{driverDetails.campaign.name}</p>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.lead_source && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Lead Source</p>
+                                                            <p className="font-medium">{driverDetails.lead_source.name}</p>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.lead_status && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Lead Status</p>
+                                                            <Badge
+                                                                variant="outline"
+                                                                style={{
+                                                                    borderColor: driverDetails.lead_status.color || 'gray',
+                                                                    color: driverDetails.lead_status.color || 'gray',
+                                                                }}
+                                                            >
+                                                                {driverDetails.lead_status.name}
+                                                            </Badge>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.assigned_to && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Assigned To</p>
+                                                            <p className="font-medium">{driverDetails.assigned_to.name}</p>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.current_stage && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Current Stage</p>
+                                                            <p className="font-medium">{driverDetails.current_stage.name}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </Card>
+                                        </div>
+
+                                        {/* Stages Progress */}
+                                        {driverDetails.stages_progress && (
+                                            <Card className="p-6">
+                                                <div className="mb-4 flex items-center justify-between">
+                                                    <h2 className="text-lg font-semibold">Stages Progress</h2>
+                                                    {driverDetails.has_completed_all_stages && (
+                                                        <Badge variant="default" className="gap-2">
+                                                            <CheckCircle2 className="h-4 w-4" />
+                                                            All Stages Completed
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                <div className="space-y-4">
+                                                    <div>
+                                                        <div className="mb-2 flex items-center justify-between text-sm">
+                                                            <span>Progress</span>
+                                                            <span className="font-medium">
+                                                                {driverDetails.stages_progress.completed} / {driverDetails.stages_progress.total} (
+                                                                {driverDetails.stages_progress.percentage}%)
+                                                            </span>
+                                                        </div>
+                                                        <Progress value={driverDetails.stages_progress.percentage} />
+                                                    </div>
+                                                    <div className="grid grid-cols-4 gap-4 text-center">
+                                                        <div>
+                                                            <p className="text-2xl font-bold text-green-600">
+                                                                {driverDetails.stages_progress.completed}
+                                                            </p>
+                                                            <p className="text-xs text-neutral-500">Completed</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-2xl font-bold text-yellow-600">
+                                                                {driverDetails.stages_progress.in_progress}
+                                                            </p>
+                                                            <p className="text-xs text-neutral-500">In Progress</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-2xl font-bold text-gray-600">
+                                                                {driverDetails.stages_progress.pending}
+                                                            </p>
+                                                            <p className="text-xs text-neutral-500">Pending</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-2xl font-bold text-red-600">
+                                                                {driverDetails.stages_progress.rejected}
+                                                            </p>
+                                                            <p className="text-xs text-neutral-500">Rejected</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </Card>
+                                        )}
+
+                                        {/* Stages Details */}
+                                        {driverDetails.stages_status && driverDetails.stages_status.length > 0 && (
+                                            <Card className="p-6">
+                                                <div className="mb-4 flex items-center justify-between">
+                                                    <h2 className="text-lg font-semibold">Stages Details</h2>
+                                                    <Link href={`/drivers/driver-stages?driver_id=${driverDetails.id}`}>
+                                                        <Button variant="outline" size="sm">
+                                                            View All Stages
+                                                        </Button>
+                                                    </Link>
+                                                </div>
+                                                <div className="space-y-3">
+                                                    {driverDetails.stages_status.map((stage: any, index: number) => (
+                                                        <div
+                                                            key={stage.stage_template?.id || index}
+                                                            className="flex items-center justify-between rounded-lg border p-4"
+                                                        >
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800">
+                                                                    <span className="text-sm font-medium">
+                                                                        {stage.stage_template?.order || index + 1}
+                                                                    </span>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-medium">{stage.stage_template?.name || 'Unknown Stage'}</p>
+                                                                    {stage.completed_at && (
+                                                                        <p className="text-xs text-neutral-500">
+                                                                            Completed: {new Date(stage.completed_at).toLocaleDateString()}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                {getStatusBadge(stage.status)}
+                                                                {stage.is_completed && (
+                                                                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </Card>
+                                        )}
+
+                                        {/* Documents */}
+                                        <Card className="p-6">
+                                            <div className="mb-4 flex items-center justify-between">
+                                                <h2 className="text-lg font-semibold">Documents</h2>
+                                                <Link href={`/drivers/driver-documents?driver_id=${driverDetails.id}`}>
+                                                    <Button variant="outline" size="sm">
+                                                        View All Documents
+                                                    </Button>
+                                                </Link>
+                                            </div>
+                                            {driverDetails.documents && driverDetails.documents.length > 0 ? (
+                                                <div className="space-y-3">
+                                                    {driverDetails.documents.map((doc: any) => (
+                                                        <div
+                                                            key={doc.id}
+                                                            className="flex items-center justify-between rounded-lg border p-4"
+                                                        >
+                                                            <div className="flex items-center gap-3 flex-1">
+                                                                <FileText className="h-5 w-5 text-neutral-500" />
+                                                                <div className="flex-1">
+                                                                    <p className="font-medium">
+                                                                        {doc.document_template?.name || 'Unknown Document'}
+                                                                    </p>
+                                                                    <p className="text-xs text-neutral-500">
+                                                                        Type: {doc.document_template?.type || 'N/A'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                {doc.uploaded_path ? (
+                                                                    <>
+                                                                        {getStatusBadge(doc.status)}
+                                                                        <Button 
+                                                                            variant="outline" 
+                                                                            size="sm"
+                                                                            onClick={() => handleViewFile(doc.id)}
+                                                                        >
+                                                                            <Eye className="h-4 w-4 mr-1" />
+                                                                            View
+                                                                            {doc.original_filename && (
+                                                                                <span className="ml-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                                                                    .{doc.original_filename.split('.').pop()?.toUpperCase()}
+                                                                                </span>
+                                                                            )}
+                                                                        </Button>
+                                                                    </>
+                                                                ) : (
+                                                                    getStatusBadge(doc.status)
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="py-8 text-center text-neutral-500">
+                                                    <FileText className="mx-auto h-12 w-12 text-neutral-400 mb-2" />
+                                                    <p>No documents available</p>
+                                                </div>
+                                            )}
+                                        </Card>
+
+                                        {/* Notes */}
+                                        {driverDetails.notes && (
+                                            <Card className="p-6">
+                                                <h2 className="mb-4 text-lg font-semibold">Notes</h2>
+                                                <p className="whitespace-pre-wrap text-neutral-700 dark:text-neutral-300">
+                                                    {driverDetails.notes}
+                                                </p>
+                                            </Card>
                                         )}
                                     </div>
-                                </Card>
+                                )}
 
-                                {/* Updates */}
-                                <Card className="p-4">
-                                    <h3 className="font-semibold mb-3">Updates</h3>
-                                    <ActivityLog activities={driverActivities} />
-                                </Card>
+                                {viewDialogTab === 'updates' && (
+                                    <Card className="p-6">
+                                        <h2 className="mb-4 text-lg font-semibold">Activity Log</h2>
+                                        <ActivityLog activities={driverActivities} />
+                                    </Card>
+                                )}
                             </div>
                         ) : (
                             <div className="py-8 text-center">
                                 <p className="text-muted-foreground">No details available</p>
                             </div>
                         )}
+                    </DialogContent>
+                </Dialog>
+
+                {/* Document View Dialog */}
+                <Dialog open={!!viewingDocument} onOpenChange={(open) => !open && setViewingDocument(null)}>
+                    <DialogContent className="!max-w-6xl max-h-[90vh] overflow-hidden">
+                        <DialogHeader>
+                            <DialogTitle>View Document</DialogTitle>
+                        </DialogHeader>
+                        {viewingDocument && (() => {
+                            const isImage = viewingDocument.extension && ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(viewingDocument.extension);
+                            
+                            return (
+                                <div className="flex-1 overflow-auto flex items-center justify-center p-4">
+                                    {isImage ? (
+                                        <img
+                                            src={viewingDocument.url}
+                                            alt="Document"
+                                            className="max-w-full max-h-[80vh] object-contain border rounded"
+                                            style={{ objectFit: 'contain' }}
+                                        />
+                                    ) : (
+                                        <iframe
+                                            src={viewingDocument.url}
+                                            className="w-full h-[80vh] border rounded"
+                                            title="Document Viewer"
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </DialogContent>
                 </Dialog>
             </div>

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement;
 use Spatie\Activitylog\LogOptions;
@@ -21,6 +22,7 @@ class DriverDocument extends Model
         'driver_id',
         'document_template_id',
         'uploaded_path',
+        'original_filename',
         'status',
         'reviewer_id',
         'notes',
@@ -109,13 +111,14 @@ class DriverDocument extends Model
     public function uploadFile(UploadedFile $file, int $driverId, int $companyId): string
     {
         // Delete old file if exists
-        if ($this->uploaded_path && Storage::exists($this->uploaded_path)) {
-            Storage::delete($this->uploaded_path);
+        if ($this->uploaded_path && Storage::disk('public')->exists($this->uploaded_path)) {
+            Storage::disk('public')->delete($this->uploaded_path);
         }
 
         // Determine file type from document template
         $documentType = $this->documentTemplate?->type ?? 'file';
         $extension = $file->getClientOriginalExtension();
+        $originalFilename = $file->getClientOriginalName();
 
         // Store file with organized path: drivers/{company_id}/{driver_id}/{document_type}/{filename}
         $path = $file->storeAs(
@@ -124,26 +127,45 @@ class DriverDocument extends Model
             'public'
         );
 
-        $this->update([
+        $updateData = [
             'uploaded_path' => $path,
             'status' => 'pending', // Reset to pending when new file is uploaded
             'reviewer_id' => null,
             'notes' => null,
-        ]);
+        ];
+        
+        // Only include original_filename if column exists
+        if (Schema::hasColumn('driver_documents', 'original_filename')) {
+            $updateData['original_filename'] = $originalFilename;
+        }
+        
+        $this->update($updateData);
 
         return $path;
     }
 
     public function deleteFile(): bool
     {
-        if ($this->uploaded_path && Storage::exists($this->uploaded_path)) {
-            Storage::delete($this->uploaded_path);
-            $this->update([
+        if ($this->uploaded_path) {
+            // Try to delete file from storage if it exists
+            if (Storage::disk('public')->exists($this->uploaded_path)) {
+                Storage::disk('public')->delete($this->uploaded_path);
+            }
+            
+            // Always update the database to clear the file reference
+            $updateData = [
                 'uploaded_path' => null,
                 'status' => 'pending',
                 'reviewer_id' => null,
                 'notes' => null,
-            ]);
+            ];
+            
+            // Only include original_filename if column exists
+            if (Schema::hasColumn('driver_documents', 'original_filename')) {
+                $updateData['original_filename'] = null;
+            }
+            
+            $this->update($updateData);
 
             return true;
         }
@@ -157,12 +179,12 @@ class DriverDocument extends Model
             return null;
         }
 
-        return Storage::url($this->uploaded_path);
+        return Storage::disk('public')->url($this->uploaded_path);
     }
 
     public function hasFile(): bool
     {
-        return ! empty($this->uploaded_path) && Storage::exists($this->uploaded_path);
+        return ! empty($this->uploaded_path) && Storage::disk('public')->exists($this->uploaded_path);
     }
 
     protected static function boot(): void
@@ -171,8 +193,8 @@ class DriverDocument extends Model
 
         // Delete file when document is deleted
         static::deleting(function ($document) {
-            if ($document->uploaded_path && Storage::exists($document->uploaded_path)) {
-                Storage::delete($document->uploaded_path);
+            if ($document->uploaded_path && Storage::disk('public')->exists($document->uploaded_path)) {
+                Storage::disk('public')->delete($document->uploaded_path);
             }
         });
     }

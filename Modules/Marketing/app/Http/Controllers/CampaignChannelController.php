@@ -23,7 +23,7 @@ class CampaignChannelController extends Controller
     public function index(): Response
     {
         $user = auth()->user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
         
         $channels = $this->campaignChannelService->getAllCampaignChannels($companyId);
 
@@ -36,7 +36,7 @@ class CampaignChannelController extends Controller
     {
         $user = Auth::user();
         $companies = null;
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
         
         $campaignTypes = $this->campaignTypeService->getActiveCampaignTypes($companyId);
 
@@ -83,7 +83,7 @@ class CampaignChannelController extends Controller
         }
 
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
         
         $campaignTypes = $this->campaignTypeService->getActiveCampaignTypes($companyId);
 

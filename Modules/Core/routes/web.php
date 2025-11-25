@@ -8,6 +8,8 @@ use Modules\Core\app\Http\Controllers\UserController;
 Route::middleware(['auth', 'verified'])->prefix('core')->name('core.')->group(function () {
     // Companies Management (Super Admin Only)
     Route::middleware(['super.admin'])->group(function () {
+        Route::post('companies/select', [CompanyController::class, 'select'])->name('companies.select');
+        Route::post('companies/clear-selection', [CompanyController::class, 'clearSelection'])->name('companies.clear-selection');
         Route::resource('companies', CompanyController::class);
         Route::post('companies/{company}/activate', [CompanyController::class, 'activate'])->name('companies.activate');
         Route::post('companies/{company}/deactivate', [CompanyController::class, 'deactivate'])->name('companies.deactivate');

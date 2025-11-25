@@ -9,13 +9,31 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { dashboard } from '@/routes';
 import { type SharedData } from '@/types';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
+import { Building2, X } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
-    const { navigation } = usePage<SharedData>().props;
+    const page = usePage<SharedData>();
+    const { navigation, selectedCompany, companies, auth } = page.props;
+    const isSuperAdmin = auth?.user?.is_super_admin;
+
+    const handleCompanySelect = (companyId: string) => {
+        if (companyId === 'clear') {
+            router.post('/core/companies/clear-selection', {}, {
+                preserveScroll: true,
+            });
+        } else {
+            router.post('/core/companies/select', {
+                company_id: parseInt(companyId),
+            }, {
+                preserveScroll: true,
+            });
+        }
+    };
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -29,6 +47,44 @@ export function AppSidebar() {
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>
+                {isSuperAdmin && companies && companies.length > 0 && (
+                    <div className="px-2 py-2">
+                        <div className="text-xs font-medium text-muted-foreground mb-1 px-2">
+                            Select Company
+                        </div>
+                        <Select
+                            value={selectedCompany ? String(selectedCompany.id) : 'all'}
+                            onValueChange={handleCompanySelect}
+                        >
+                            <SelectTrigger className="h-9">
+                                <Building2 className="h-4 w-4 mr-2" />
+                                <SelectValue placeholder="All Companies">
+                                    {selectedCompany ? selectedCompany.name : 'All Companies'}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Companies</SelectItem>
+                                {companies.map((company) => (
+                                    <SelectItem key={company.id} value={String(company.id)}>
+                                        {company.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {selectedCompany && (
+                            <div className="mt-2 px-2 flex items-center justify-between text-xs text-muted-foreground">
+                                <span>Viewing: {selectedCompany.name}</span>
+                                <button
+                                    onClick={() => handleCompanySelect('clear')}
+                                    className="text-red-500 hover:text-red-700 transition-colors"
+                                    title="Clear selection"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
             </SidebarHeader>
 
             <SidebarContent>

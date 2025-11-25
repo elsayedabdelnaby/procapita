@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
+import { type SharedData } from '@/types';
 
 interface CampaignType {
     id: number;
@@ -44,6 +45,9 @@ export default function CampaignCreate({
     campaignTypes: initialCampaignTypes,
     campaignStatuses: initialCampaignStatuses,
 }: CampaignCreateProps) {
+    const page = usePage<SharedData>();
+    const { selectedCompany } = page.props;
+    
     const [campaignTypes, setCampaignTypes] = useState<CampaignType[]>(initialCampaignTypes || []);
     const [campaignStatuses, setCampaignStatuses] = useState<CampaignStatus[]>(initialCampaignStatuses || []);
     const [availableChannels, setAvailableChannels] = useState<CampaignChannel[]>([]);
@@ -53,7 +57,7 @@ export default function CampaignCreate({
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         description: '',
-        company_id: company?.id || '',
+        company_id: selectedCompany ? String(selectedCompany.id) : (company?.id || ''),
         campaign_type_id: '',
         campaign_status_id: initialCampaignStatuses[0]?.id || '',
         campaign_channel_id: '',
@@ -70,6 +74,13 @@ export default function CampaignCreate({
         expected_ctr: '',
         expected_revenue: '',
     });
+
+    // Set selected company on mount if available
+    useEffect(() => {
+        if (selectedCompany && !data.company_id) {
+            setData('company_id', String(selectedCompany.id));
+        }
+    }, [selectedCompany]);
 
     // Fetch types and statuses when company changes (for super admin)
     useEffect(() => {

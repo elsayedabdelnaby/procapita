@@ -177,13 +177,18 @@ class DriverService
 
         // تطبيق قواعد التنسيق
         if (strpos($cleanedNumber, '0020') === 0 && strlen($cleanedNumber) === 14) {
-            return '0' . substr($cleanedNumber, 4);
+            $cleanedNumber = '0' . substr($cleanedNumber, 4);
         } elseif (strpos($cleanedNumber, '+20') === 0 && strlen($cleanedNumber) === 13) {
-            return '0' . substr($cleanedNumber, 3);
+            $cleanedNumber = '0' . substr($cleanedNumber, 3);
         } elseif (strpos($cleanedNumber, '20') === 0 && strlen($cleanedNumber) === 12) {
-            return '0' . substr($cleanedNumber, 2);
+            $cleanedNumber = '0' . substr($cleanedNumber, 2);
         } elseif (preg_match('/^(10|11|12|15)/', $cleanedNumber) && strlen($cleanedNumber) === 10) {
-            return '0' . $cleanedNumber;
+            $cleanedNumber = '0' . $cleanedNumber;
+        }
+
+        // حذف علامة + من البداية إذا كانت موجودة
+        if (strpos($cleanedNumber, '+') === 0) {
+            $cleanedNumber = substr($cleanedNumber, 1);
         }
 
         return $cleanedNumber;
