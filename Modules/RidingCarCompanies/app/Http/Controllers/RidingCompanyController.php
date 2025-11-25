@@ -23,7 +23,7 @@ class RidingCompanyController extends Controller
     public function index(): Response
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
         $ridingCompanies = $this->ridingCompanyService->getAllRidingCompanies($companyId);
 
@@ -102,6 +102,26 @@ class RidingCompanyController extends Controller
 
         $ridingCompany->load(['company', 'creator', 'stageTemplates', 'documentRequirements', 'integrations', 'integrationSettings']);
 
+        // Load activity logs
+        $activities = \Spatie\Activitylog\Models\Activity::forSubject($ridingCompany)
+            ->with('causer:id,name,email')
+            ->latest()
+            ->get()
+            ->map(function ($activity) {
+                return [
+                    'id' => $activity->id,
+                    'description' => $activity->description,
+                    'event' => $activity->event,
+                    'properties' => $activity->properties,
+                    'causer' => $activity->causer ? [
+                        'id' => $activity->causer->id,
+                        'name' => $activity->causer->name,
+                        'email' => $activity->causer->email,
+                    ] : null,
+                    'created_at' => $activity->created_at->toISOString(),
+                ];
+            });
+
         return Inertia::render('RidingCarCompanies/RidingCompanies/Show', [
             'ridingCompany' => [
                 'id' => $ridingCompany->id,
@@ -155,6 +175,7 @@ class RidingCompanyController extends Controller
                     'active' => $setting->active,
                 ])->toArray(),
             ],
+            'activities' => $activities,
         ]);
     }
 

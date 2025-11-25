@@ -87,10 +87,31 @@ class UserController extends Controller
 
         $permissions = $this->userService->getUserPermissions($user);
 
+        // Load activity logs
+        $activities = \Spatie\Activitylog\Models\Activity::forSubject($userModel)
+            ->with('causer:id,name,email')
+            ->latest()
+            ->get()
+            ->map(function ($activity) {
+                return [
+                    'id' => $activity->id,
+                    'description' => $activity->description,
+                    'event' => $activity->event,
+                    'properties' => $activity->properties,
+                    'causer' => $activity->causer ? [
+                        'id' => $activity->causer->id,
+                        'name' => $activity->causer->name,
+                        'email' => $activity->causer->email,
+                    ] : null,
+                    'created_at' => $activity->created_at->toISOString(),
+                ];
+            });
+
         return Inertia::render('Core/Users/Show', [
             'company' => $userModel->company,
             'user' => $userModel,
             'userPermissions' => $permissions,
+            'activities' => $activities,
         ]);
     }
 

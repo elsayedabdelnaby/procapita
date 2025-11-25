@@ -24,7 +24,7 @@ class CampaignController extends Controller
     public function index(): Response
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
         
         $campaigns = $this->campaignService->getAllCampaigns($companyId);
         
@@ -125,6 +125,26 @@ class CampaignController extends Controller
             abort(404, 'Campaign not found.');
         }
 
+        // Load activity logs
+        $activities = \Spatie\Activitylog\Models\Activity::forSubject($campaign)
+            ->with('causer:id,name,email')
+            ->latest()
+            ->get()
+            ->map(function ($activity) {
+                return [
+                    'id' => $activity->id,
+                    'description' => $activity->description,
+                    'event' => $activity->event,
+                    'properties' => $activity->properties,
+                    'causer' => $activity->causer ? [
+                        'id' => $activity->causer->id,
+                        'name' => $activity->causer->name,
+                        'email' => $activity->causer->email,
+                    ] : null,
+                    'created_at' => $activity->created_at->toISOString(),
+                ];
+            });
+
         return Inertia::render('Marketing/Campaigns/Show', [
             'campaign' => [
                 'id' => $campaign->id,
@@ -158,6 +178,7 @@ class CampaignController extends Controller
                 'created_at' => $campaign->created_at,
                 'updated_at' => $campaign->updated_at,
             ],
+            'activities' => $activities,
         ]);
     }
 
