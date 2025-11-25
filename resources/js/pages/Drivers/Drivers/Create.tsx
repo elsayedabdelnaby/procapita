@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
+import { type SharedData } from '@/types';
 
 interface Company {
     id: number;
@@ -54,6 +55,9 @@ export default function DriversCreate({
     leadStatuses: initialLeadStatuses,
     users: initialUsers,
 }: DriversCreateProps) {
+    const page = usePage<SharedData>();
+    const { selectedCompany } = page.props;
+    
     const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies || []);
     const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns || []);
     const [leadSources, setLeadSources] = useState<LeadSource[]>(initialLeadSources || []);
@@ -67,7 +71,7 @@ export default function DriversCreate({
     const [loadingUsers, setLoadingUsers] = useState(false);
 
     const { data, setData, post, processing, errors } = useForm({
-        company_id: '',
+        company_id: selectedCompany ? String(selectedCompany.id) : '',
         full_name: '',
         phone: '',
         whatsapp_phone: '',
@@ -80,6 +84,13 @@ export default function DriversCreate({
         current_stage_id: '',
         notes: '',
     });
+
+    // Set selected company on mount if available
+    useEffect(() => {
+        if (selectedCompany && !data.company_id) {
+            setData('company_id', String(selectedCompany.id));
+        }
+    }, [selectedCompany]);
 
     // Fetch data when company changes (for super admin)
     useEffect(() => {
@@ -299,7 +310,9 @@ export default function DriversCreate({
                         <h2 className="mb-4 text-lg font-semibold">Additional Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
                             <div>
-                                <Label htmlFor="riding_company_id">Riding Company</Label>
+                                <Label htmlFor="riding_company_id">
+                                    Riding Company <span className="text-red-500">*</span>
+                                </Label>
                                 <select
                                     id="riding_company_id"
                                     name="riding_company_id"
@@ -307,6 +320,7 @@ export default function DriversCreate({
                                     onChange={(e) => setData('riding_company_id', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
                                     disabled={loadingRidingCompanies || (companies && !data.company_id)}
+                                    required
                                 >
                                     <option value="">
                                         {loadingRidingCompanies
@@ -355,7 +369,9 @@ export default function DriversCreate({
                             </div>
 
                             <div>
-                                <Label htmlFor="lead_source_id">Lead Source</Label>
+                                <Label htmlFor="lead_source_id">
+                                    Lead Source <span className="text-red-500">*</span>
+                                </Label>
                                 <select
                                     id="lead_source_id"
                                     name="lead_source_id"
@@ -363,6 +379,7 @@ export default function DriversCreate({
                                     onChange={(e) => setData('lead_source_id', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
                                     disabled={loadingLeadSources || (companies && !data.company_id)}
+                                    required
                                 >
                                     <option value="">
                                         {loadingLeadSources
@@ -383,7 +400,9 @@ export default function DriversCreate({
                             </div>
 
                             <div>
-                                <Label htmlFor="lead_status_id">Lead Status</Label>
+                                <Label htmlFor="lead_status_id">
+                                    Lead Status <span className="text-red-500">*</span>
+                                </Label>
                                 <select
                                     id="lead_status_id"
                                     name="lead_status_id"
@@ -391,6 +410,7 @@ export default function DriversCreate({
                                     onChange={(e) => setData('lead_status_id', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
                                     disabled={loadingLeadStatuses || (companies && !data.company_id)}
+                                    required
                                 >
                                     <option value="">
                                         {loadingLeadStatuses
@@ -411,7 +431,9 @@ export default function DriversCreate({
                             </div>
 
                             <div>
-                                <Label htmlFor="assigned_to">Assigned To</Label>
+                                <Label htmlFor="assigned_to">
+                                    Assigned To <span className="text-red-500">*</span>
+                                </Label>
                                 <select
                                     id="assigned_to"
                                     name="assigned_to"
@@ -419,6 +441,7 @@ export default function DriversCreate({
                                     onChange={(e) => setData('assigned_to', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
                                     disabled={loadingUsers || (companies && !data.company_id)}
+                                    required
                                 >
                                     <option value="">
                                         {loadingUsers

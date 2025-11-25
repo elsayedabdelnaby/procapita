@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
+import { ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
 
 interface LeadStatus {
     id: number;
@@ -43,6 +44,24 @@ export default function LeadStatusesIndex({ leadStatuses }: LeadStatusesIndexPro
         router.post(`/drivers/lead-statuses/${id}/toggle-active`);
     };
 
+    const handleMoveUp = (id: number) => {
+        router.post(`/drivers/lead-statuses/${id}/move-up`, {}, {
+            preserveScroll: true,
+            onSuccess: () => {
+                router.reload({ only: ['leadStatuses'] });
+            },
+        });
+    };
+
+    const handleMoveDown = (id: number) => {
+        router.post(`/drivers/lead-statuses/${id}/move-down`, {}, {
+            preserveScroll: true,
+            onSuccess: () => {
+                router.reload({ only: ['leadStatuses'] });
+            },
+        });
+    };
+
     return (
         <AppLayout>
             <Head title="Lead Statuses" />
@@ -63,8 +82,8 @@ export default function LeadStatusesIndex({ leadStatuses }: LeadStatusesIndexPro
                                 window.location.href = '/drivers/lead-statuses/export';
                             }}
                         >
-                            Export
-                        </Button>
+                                Export
+                            </Button>
                         <Link href="/drivers/lead-statuses/import">
                             <Button type="button" variant="outline">
                                 Import
@@ -83,7 +102,40 @@ export default function LeadStatusesIndex({ leadStatuses }: LeadStatusesIndexPro
                             columns={[
                                 {
                                     header: 'Order',
-                                    accessor: (row) => row.order,
+                                    accessor: (row) => {
+                                        const index = leadStatuses.findIndex((s) => s.id === row.id);
+                                        return (
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-semibold text-neutral-700 dark:text-neutral-300 min-w-[2rem]">
+                                                    {row.order}
+                                                </span>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0"
+                                                        onClick={() => handleMoveUp(row.id)}
+                                                        disabled={index === 0}
+                                                        title="Move Up"
+                                                    >
+                                                        <ArrowUp className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0"
+                                                        onClick={() => handleMoveDown(row.id)}
+                                                        disabled={index === leadStatuses.length - 1}
+                                                        title="Move Down"
+                                                    >
+                                                        <ArrowDown className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    },
                                 },
                                 {
                                     header: 'Name',

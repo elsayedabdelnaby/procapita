@@ -10,7 +10,11 @@ class DriverDocumentService
 {
     public function getAllDriverDocuments(?int $driverId = null): Collection
     {
-        $query = DriverDocument::with(['driver', 'documentTemplate', 'reviewer']);
+        $query = DriverDocument::with(['driver', 'documentTemplate', 'reviewer'])
+            ->whereHas('driver', function ($q) {
+                // Only show documents for non-deleted drivers
+                $q->whereNull('deleted_at');
+            });
 
         if ($driverId) {
             $query->where('driver_id', $driverId);
@@ -61,6 +65,25 @@ class DriverDocumentService
     {
         $driverDocument = DriverDocument::findOrFail($id);
         $driverDocument->reject($reviewerId, $notes);
+
+        return $driverDocument->fresh();
+    }
+
+    public function updateStatus(int $id, string $status, ?int $reviewerId = null, ?string $notes = null): DriverDocument
+    {
+        $driverDocument = DriverDocument::findOrFail($id);
+        
+        $updateData = ['status' => $status];
+        
+        if ($reviewerId) {
+            $updateData['reviewer_id'] = $reviewerId;
+        }
+        
+        if ($notes !== null) {
+            $updateData['notes'] = $notes;
+        }
+        
+        $driverDocument->update($updateData);
 
         return $driverDocument->fresh();
     }

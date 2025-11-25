@@ -22,7 +22,7 @@ class LeadSourceController extends Controller
     public function index(): Response
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
         $leadSources = $this->leadSourceService->getAllLeadSources($companyId);
 
@@ -166,7 +166,7 @@ class LeadSourceController extends Controller
     public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
         $leadSources = $this->leadSourceService->getAllLeadSources($companyId);
 
         $filename = 'lead_sources_export_' . date('Y-m-d_His') . '.csv';

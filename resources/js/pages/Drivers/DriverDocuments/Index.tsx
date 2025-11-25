@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface Driver {
     id: number;
@@ -40,6 +40,18 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
         document: null,
     });
 
+    const [deleteAllDialog, setDeleteAllDialog] = useState(false);
+
+    // Reload page when window gains focus to check for deleted drivers
+    useEffect(() => {
+        const handleFocus = () => {
+            router.reload({ only: ['driverDocuments'], preserveState: true, preserveScroll: true });
+        };
+
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
+    }, []);
+
     const handleDelete = (document: DriverDocument) => {
         setDeleteDialog({ open: true, document });
     };
@@ -48,6 +60,18 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
         if (deleteDialog.document) {
             router.delete(`/drivers/driver-documents/${deleteDialog.document.id}`);
         }
+    };
+
+    const handleDeleteAll = () => {
+        setDeleteAllDialog(true);
+    };
+
+    const confirmDeleteAll = () => {
+        router.delete('/drivers/driver-documents', {
+            onSuccess: () => {
+                setDeleteAllDialog(false);
+            },
+        });
     };
 
     const handleApprove = (id: number) => {
@@ -85,6 +109,15 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                         </p>
                     </div>
                     <div className="flex gap-2">
+                        {driverDocuments.length > 0 && (
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                onClick={handleDeleteAll}
+                            >
+                                Delete All
+                            </Button>
+                        )}
                         <Button
                             type="button"
                             variant="outline"
@@ -92,8 +125,8 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                                 window.location.href = '/drivers/driver-documents/export';
                             }}
                         >
-                                Export
-                            </Button>
+                            Export
+                        </Button>
                         <Link href="/drivers/driver-documents/create">
                             <Button>Create Driver Document</Button>
                         </Link>
@@ -196,6 +229,14 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                     onConfirm={confirmDelete}
                     title="Delete Driver Document"
                     description={`Are you sure you want to delete this document? This action cannot be undone.`}
+                />
+
+                <DeleteDialog
+                    open={deleteAllDialog}
+                    onOpenChange={(open) => setDeleteAllDialog(open)}
+                    onConfirm={confirmDeleteAll}
+                    title="Delete All Driver Documents"
+                    description={`Are you sure you want to delete all ${driverDocuments.length} driver document(s)? This action cannot be undone and will also delete all associated files.`}
                 />
             </div>
         </AppLayout>

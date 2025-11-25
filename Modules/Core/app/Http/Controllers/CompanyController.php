@@ -4,6 +4,7 @@ namespace Modules\Core\app\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Core\app\Http\Requests\CompanyStoreRequest;
@@ -170,6 +171,36 @@ class CompanyController extends Controller
                 ->back()
                 ->with('error', $e->getMessage());
         }
+    }
+
+    public function select(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'company_id' => ['required', 'integer', 'exists:companies,id'],
+        ]);
+
+        $company = $this->companyService->getCompanyById($request->company_id);
+        
+        if (! $company) {
+            return redirect()
+                ->back()
+                ->with('error', 'Company not found.');
+        }
+
+        session(['selected_company_id' => $request->company_id]);
+
+        return redirect()
+            ->back()
+            ->with('success', "Now viewing data for: {$company->name}");
+    }
+
+    public function clearSelection(): RedirectResponse
+    {
+        session()->forget('selected_company_id');
+
+        return redirect()
+            ->back()
+            ->with('success', 'Company filter cleared. Showing all companies.');
     }
 }
 

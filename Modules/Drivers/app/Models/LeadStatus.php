@@ -45,13 +45,16 @@ class LeadStatus extends Model
         });
 
         static::updating(function ($model) {
-            if ($model->isDirty('name') && empty($model->slug)) {
-                $model->slug = static::generateUniqueSlug($model->name, $model->company_id);
+            if ($model->isDirty('name')) {
+                // If slug is empty or name changed, regenerate slug
+                if (empty($model->slug) || $model->isDirty('name')) {
+                    $model->slug = static::generateUniqueSlug($model->name, $model->company_id, $model->id);
+                }
             }
         });
     }
 
-    public static function generateUniqueSlug(string $name, ?int $companyId = null): string
+    public static function generateUniqueSlug(string $name, ?int $companyId = null, ?int $excludeId = null): string
     {
         $slug = Str::slug($name);
         $originalSlug = $slug;
@@ -61,12 +64,18 @@ class LeadStatus extends Model
         if ($companyId) {
             $query->where('company_id', $companyId);
         }
+        if ($excludeId) {
+            $query->where('id', '!=', $excludeId);
+        }
 
         while ($query->exists()) {
             $slug = $originalSlug . '-' . $counter;
             $query = static::where('slug', $slug);
             if ($companyId) {
                 $query->where('company_id', $companyId);
+            }
+            if ($excludeId) {
+                $query->where('id', '!=', $excludeId);
             }
             $counter++;
         }

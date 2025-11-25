@@ -25,6 +25,17 @@ class LeadStatusService
 
     public function createLeadStatus(array $data): LeadStatus
     {
+        // If order is not set, assign the next available order number
+        if (! isset($data['order']) || $data['order'] === 0) {
+            $companyId = $data['company_id'] ?? null;
+            $query = LeadStatus::query();
+            if ($companyId) {
+                $query->where('company_id', $companyId);
+            }
+            $maxOrder = $query->max('order') ?? 0;
+            $data['order'] = $maxOrder + 1;
+        }
+
         return LeadStatus::create($data);
     }
 
@@ -48,6 +59,55 @@ class LeadStatusService
         $leadStatus->update(['active' => ! $leadStatus->active]);
 
         return $leadStatus->fresh();
+    }
+
+    public function moveUp(int $id): LeadStatus
+    {
+        $leadStatus = LeadStatus::findOrFail($id);
+        $companyId = $leadStatus->company_id;
+
+        // Find the previous status with lower order
+        $previousStatus = LeadStatus::where('company_id', $companyId)
+            ->where('order', '<', $leadStatus->order)
+            ->orderBy('order', 'desc')
+            ->first();
+
+        if ($previousStatus) {
+            // Swap orders
+            $tempOrder = $leadStatus->order;
+            $leadStatus->update(['order' => $previousStatus->order]);
+            $previousStatus->update(['order' => $tempOrder]);
+        }
+
+        return $leadStatus->fresh();
+    }
+
+    public function moveDown(int $id): LeadStatus
+    {
+        $leadStatus = LeadStatus::findOrFail($id);
+        $companyId = $leadStatus->company_id;
+
+        // Find the next status with higher order
+        $nextStatus = LeadStatus::where('company_id', $companyId)
+            ->where('order', '>', $leadStatus->order)
+            ->orderBy('order', 'asc')
+            ->first();
+
+        if ($nextStatus) {
+            // Swap orders
+            $tempOrder = $leadStatus->order;
+            $leadStatus->update(['order' => $nextStatus->order]);
+            $nextStatus->update(['order' => $tempOrder]);
+        }
+
+        return $leadStatus->fresh();
+    }
+
+    public function reorder(array $ids): void
+    {
+        foreach ($ids as $index => $id) {
+            LeadStatus::where('id', $id)->update(['order' => $index + 1]);
+        }
     }
 }
 

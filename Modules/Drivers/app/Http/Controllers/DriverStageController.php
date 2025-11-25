@@ -31,7 +31,7 @@ class DriverStageController extends Controller
     public function create(): Response
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
         $drivers = Driver::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('full_name')->get();
         $stageTemplates = RidingCompanyStageTemplate::active()->ordered()->get();
@@ -108,7 +108,7 @@ class DriverStageController extends Controller
         }
 
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
 
         $drivers = Driver::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('full_name')->get();
         $stageTemplates = RidingCompanyStageTemplate::active()->ordered()->get();

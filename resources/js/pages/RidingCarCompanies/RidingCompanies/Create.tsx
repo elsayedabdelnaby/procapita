@@ -3,7 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { type SharedData } from '@/types';
+import { useEffect } from 'react';
 
 interface Company {
     id: number;
@@ -15,8 +17,11 @@ interface RidingCompaniesCreateProps {
 }
 
 export default function RidingCompaniesCreate({ companies }: RidingCompaniesCreateProps) {
+    const page = usePage<SharedData>();
+    const { selectedCompany } = page.props;
+    
     const { data, setData, post, processing, errors } = useForm({
-        company_id: '',
+        company_id: selectedCompany ? String(selectedCompany.id) : '',
         name: '',
         slug: '',
         description: '',
@@ -27,6 +32,13 @@ export default function RidingCompaniesCreate({ companies }: RidingCompaniesCrea
         api_settings: null,
         active: true,
     });
+
+    // Set selected company on mount if available
+    useEffect(() => {
+        if (selectedCompany && !data.company_id) {
+            setData('company_id', String(selectedCompany.id));
+        }
+    }, [selectedCompany]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

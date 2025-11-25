@@ -129,12 +129,43 @@ class HandleInertiaRequests extends Middleware
 
         $user = $request->user();
 
+        // Get selected company for super admin
+        $selectedCompany = null;
+        $companies = collect([]);
+        if ($user && $user->isSuperAdmin()) {
+            $selectedCompanyId = $request->session()->get('selected_company_id');
+            if ($selectedCompanyId) {
+                $selectedCompany = \Modules\Core\app\Models\Company::find($selectedCompanyId);
+            }
+            $companies = \Modules\Core\app\Models\Company::active()->orderBy('name')->get(['id', 'name']);
+        }
+
+        // Load user permissions if user exists
+        if ($user) {
+            $user->load('permissions');
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
-                'user' => $user,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'avatar' => $user->avatar,
+                    'is_super_admin' => $user->is_super_admin ?? false,
+                    'is_company_admin' => $user->is_company_admin ?? false,
+                    'company_id' => $user->company_id,
+                    'permissions' => $user->permissions->map(fn($p) => [
+                        'id' => $p->id,
+                        'name' => $p->name,
+                        'module_name' => $p->module_name,
+                        'entity_name' => $p->entity_name,
+                        'action' => $p->action,
+                    ])->toArray(),
+                ] : null,
             ],
             'navigation' => $user ? $this->getNavigationItems($user) : [],
             'flash' => [
@@ -143,6 +174,11 @@ class HandleInertiaRequests extends Middleware
                 'info' => $request->session()->get('info'),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'selectedCompany' => $selectedCompany ? [
+                'id' => $selectedCompany->id,
+                'name' => $selectedCompany->name,
+            ] : null,
+            'companies' => $companies->map(fn($c) => ['id' => $c->id, 'name' => $c->name])->toArray(),
         ];
     }
 
@@ -157,14 +193,52 @@ class HandleInertiaRequests extends Middleware
             'icon' => 'LayoutGrid',
         ];
 
-        // Core Module - Only show Companies for Super Admin
+        // Core Module - Companies group for Super Admin
         // Roles, Users, and Hierarchy are now accessed from the Company view
         if ($user->isSuperAdmin()) {
-            $navigation[] = [
+            $coreItems = [];
+            
+            $coreItems[] = [
                 'title' => 'Companies',
                 'href' => '/core/companies',
                 'icon' => 'Building2',
             ];
+            
+            // Lead Sources - accessible to super admin
+            if ($user->hasPermissionTo('drivers.leadsources.read') || $user->isSuperAdmin()) {
+                $coreItems[] = [
+                    'title' => 'Lead Sources',
+                    'href' => '/drivers/lead-sources',
+                    'icon' => 'Target',
+                ];
+            }
+            
+            // Lead Statuses - accessible to super admin
+            if ($user->hasPermissionTo('drivers.leadstatuses.read') || $user->isSuperAdmin()) {
+                $coreItems[] = [
+                    'title' => 'Lead Statuses',
+                    'href' => '/drivers/lead-statuses',
+                    'icon' => 'Flag',
+                ];
+            }
+            
+            // Riding Companies - accessible to super admin
+            if ($user->hasPermissionTo('ridingcarcompanies.ridingcompanies.read') || $user->isSuperAdmin()) {
+                $coreItems[] = [
+                    'title' => 'Riding Companies',
+                    'href' => '/ridingcarcompanies/riding-companies',
+                    'icon' => 'Car',
+                ];
+            }
+            
+            // Only add Core group if there are items
+            if (! empty($coreItems)) {
+                $navigation[] = [
+                    'title' => 'Core',
+                    'icon' => 'Building2',
+                    'items' => $coreItems,
+                ];
+            }
         }
 
         // Marketing Module
@@ -233,8 +307,9 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
-        // Riding Car Companies Module
-        if ($user->canAccessModule('ridingcarcompanies') || $user->isSuperAdmin()) {
+        // Riding Car Companies Module - Only for non-super admin users
+        // Super admin sees Riding Companies under Core group
+        if (! $user->isSuperAdmin() && ($user->canAccessModule('ridingcarcompanies') || $user->isSuperAdmin())) {
             $ridingCarItems = [];
 
             // Riding Companies
@@ -249,7 +324,7 @@ class HandleInertiaRequests extends Middleware
             // Only add Riding Car Companies group if there are items
             if (! empty($ridingCarItems)) {
                 $navigation[] = [
-                    'title' => 'Riding Car Companies',
+                    'title' => 'Riding Companies',
                     'icon' => 'Car',
                     'items' => $ridingCarItems,
                 ];
@@ -269,17 +344,17 @@ class HandleInertiaRequests extends Middleware
                 ];
             }
 
-            // Lead Sources
-            if ($user->hasPermissionTo('drivers.leadsources.read') || $user->isSuperAdmin()) {
+            // Lead Sources - only show for non-super admin (super admin sees it under Core)
+            if (! $user->isSuperAdmin() && ($user->hasPermissionTo('drivers.leadsources.read') || $user->isSuperAdmin())) {
                 $driversItems[] = [
                     'title' => 'Lead Sources',
                     'href' => '/drivers/lead-sources',
-                    'icon' => 'Source',
+                    'icon' => 'Target',
                 ];
             }
 
-            // Lead Statuses
-            if ($user->hasPermissionTo('drivers.leadstatuses.read') || $user->isSuperAdmin()) {
+            // Lead Statuses - only show for non-super admin (super admin sees it under Core)
+            if (! $user->isSuperAdmin() && ($user->hasPermissionTo('drivers.leadstatuses.read') || $user->isSuperAdmin())) {
                 $driversItems[] = [
                     'title' => 'Lead Statuses',
                     'href' => '/drivers/lead-statuses',

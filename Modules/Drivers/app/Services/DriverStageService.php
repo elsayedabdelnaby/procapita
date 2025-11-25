@@ -9,7 +9,11 @@ class DriverStageService
 {
     public function getAllDriverStages(?int $driverId = null): Collection
     {
-        $query = DriverStage::with(['driver', 'stageTemplate']);
+        $query = DriverStage::with(['driver', 'stageTemplate'])
+            ->whereHas('driver', function ($q) {
+                // Only show stages for non-deleted drivers
+                $q->whereNull('deleted_at');
+            });
 
         if ($driverId) {
             $query->where('driver_id', $driverId);

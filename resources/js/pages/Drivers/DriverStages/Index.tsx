@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface Driver {
     id: number;
@@ -36,6 +36,16 @@ export default function DriverStagesIndex({ driverStages }: DriverStagesIndexPro
         open: false,
         stage: null,
     });
+
+    // Reload page when window gains focus to check for deleted drivers
+    useEffect(() => {
+        const handleFocus = () => {
+            router.reload({ only: ['driverStages'], preserveState: true, preserveScroll: true });
+        };
+
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
+    }, []);
 
     const handleDelete = (stage: DriverStage) => {
         setDeleteDialog({ open: true, stage });

@@ -24,7 +24,7 @@ class CampaignController extends Controller
     public function index(): Response
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+        $companyId = $this->getCompanyId();
         
         $campaigns = $this->campaignService->getAllCampaigns($companyId);
         
