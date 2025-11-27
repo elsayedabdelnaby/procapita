@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Modules\Core\app\Models\Company;
+use Modules\Core\app\Models\Permission;
 use Modules\Core\app\Models\Role;
 
 class DemoCompaniesSeeder extends Seeder
@@ -37,34 +38,25 @@ class DemoCompaniesSeeder extends Seeder
      * 
      * Hierarchy:
      * H1 (CEO)
-     * ├── H1:H2 (HR Manager)
-     * │   ├── H1:H2:H3 (HR Specialist)
-     * │   └── H1:H2:H4 (Recruiter)
-     * ├── H1:H5 (CTO)
-     * │   ├── H1:H5:H6 (Tech Lead)
-     * │   └── H1:H5:H7 (Senior Developer)
-     * └── H1:H8 (Sales Manager)
-     *     ├── H1:H8:H9 (Team Lead)
-     *     └── H1:H8:H10 (Sales Agent)
      */
     private function seedCompany1(): void
     {
         $company = Company::firstOrCreate(
-            ['email' => 'info@techcorp.local'],
+            ['email' => 'tradeway@tradeway.local'],
             [
-                'name' => 'Tech Corp',
-                'slug' => 'tech-corp',
+                'name' => 'Tradeway',
+                'slug' => 'tradeway',
                 'phone' => '+1-555-0100',
-                'address' => '123 Tech Street, Silicon Valley, CA 94000',
+                'address' => '123 Tradeway Street, Silicon Valley, CA 94000',
                 'is_active' => true,
             ]
         );
 
         // Create Company Admin
         $admin = User::firstOrCreate(
-            ['email' => 'admin@techcorp.local'],
+            ['email' => 'admin@tradeway.local'],
             [
-                'name' => 'Tech Corp Admin',
+                'name' => 'Tradeway Admin',
                 'password' => Hash::make('password'),
                 'company_id' => $company->id,
                 'is_super_admin' => false,
@@ -75,6 +67,9 @@ class DemoCompaniesSeeder extends Seeder
 
         // Enable all modules for this company
         $company->activateModule('Core');
+        $company->activateModule('Marketing');
+        $company->activateModule('RidingCarCompanies');
+        $company->activateModule('Drivers');
 
         // Create roles with CORRECT hierarchy numbering
         // Numbers are sequential across the ENTIRE company (H1, H2, H3...)
@@ -90,104 +85,8 @@ class DemoCompaniesSeeder extends Seeder
             ]
         );
 
-        // Level 2: HR Manager (H2)
-        $hrManager = Role::firstOrCreate(
-            ['name' => 'HR Manager', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $ceo->id,
-                'module_name' => 'core',
-                'entity_name' => 'users',
-            ]
-        );
-
-        // Level 3: HR Specialist (H3)
-        Role::firstOrCreate(
-            ['name' => 'HR Specialist', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $hrManager->id,
-                'module_name' => 'core',
-                'entity_name' => 'users',
-            ]
-        );
-
-        // Level 3: Recruiter (H4)
-        Role::firstOrCreate(
-            ['name' => 'Recruiter', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $hrManager->id,
-                'module_name' => 'core',
-                'entity_name' => 'users',
-            ]
-        );
-
-        // Level 2: CTO (H5)
-        $cto = Role::firstOrCreate(
-            ['name' => 'CTO', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $ceo->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 3: Tech Lead (H6)
-        Role::firstOrCreate(
-            ['name' => 'Tech Lead', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $cto->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 3: Senior Developer (H7)
-        Role::firstOrCreate(
-            ['name' => 'Senior Developer', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $cto->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 2: Sales Manager (H8)
-        $salesManager = Role::firstOrCreate(
-            ['name' => 'Sales Manager', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $ceo->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 3: Team Lead (H9)
-        Role::firstOrCreate(
-            ['name' => 'Team Lead', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $salesManager->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 3: Sales Agent (H10)
-        Role::firstOrCreate(
-            ['name' => 'Sales Agent', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $salesManager->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
+        // Assign all module permissions to CEO role
+        $this->assignAllModulePermissionsToRole($ceo, $company);
 
         // Assign CEO role to admin
         if (! $admin->hasRole($ceo->name, 'web')) {
@@ -204,22 +103,14 @@ class DemoCompaniesSeeder extends Seeder
      * 
      * Hierarchy:
      * H1 (CEO)
-     * ├── H2 (CFO)
-     * │   ├── H2:H3 (Accountant)
-     * │   └── H2:H4 (Financial Analyst)
-     * ├── H5 (COO)
-     * │   └── H5:H6 (Operations Manager)
-     * └── H7 (Sales Director)
-     *     ├── H7:H8 (Regional Manager)
-     *     └── H7:H9 (Sales Representative)
      */
     private function seedCompany2(): void
     {
         $company = Company::firstOrCreate(
-            ['email' => 'info@retailsolutions.local'],
+            ['email' => 'info@captianmasr.local'],
             [
-                'name' => 'Retail Solutions',
-                'slug' => 'retail-solutions',
+                'name' => 'Captain Masr',
+                'slug' => 'captain-masr',
                 'phone' => '+1-555-0200',
                 'address' => '456 Retail Avenue, New York, NY 10001',
                 'is_active' => true,
@@ -228,9 +119,9 @@ class DemoCompaniesSeeder extends Seeder
 
         // Create Company Admin
         $admin = User::firstOrCreate(
-            ['email' => 'admin@retailsolutions.local'],
+            ['email' => 'admin@captainmasr.local'],
             [
-                'name' => 'Retail Solutions Admin',
+                'name' => 'Captain Masr Admin',
                 'password' => Hash::make('password'),
                 'company_id' => $company->id,
                 'is_super_admin' => false,
@@ -241,6 +132,9 @@ class DemoCompaniesSeeder extends Seeder
 
         // Enable all modules for this company
         $company->activateModule('Core');
+        $company->activateModule('Marketing');
+        $company->activateModule('RidingCarCompanies');
+        $company->activateModule('Drivers');
 
         // Create roles with CORRECT hierarchy numbering
         // Company 2 starts at H1 (independent of Company 1)
@@ -256,93 +150,8 @@ class DemoCompaniesSeeder extends Seeder
             ]
         );
 
-        // Level 2: CFO (H2)
-        $cfo = Role::firstOrCreate(
-            ['name' => 'CFO', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $ceo->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 3: Accountant (H3)
-        Role::firstOrCreate(
-            ['name' => 'Accountant', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $cfo->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 3: Financial Analyst (H4)
-        Role::firstOrCreate(
-            ['name' => 'Financial Analyst', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $cfo->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 2: COO (H5)
-        $coo = Role::firstOrCreate(
-            ['name' => 'COO', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $ceo->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 3: Operations Manager (H6)
-        Role::firstOrCreate(
-            ['name' => 'Operations Manager', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $coo->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 2: Sales Director (H7)
-        $salesDirector = Role::firstOrCreate(
-            ['name' => 'Sales Director', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $ceo->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 3: Regional Manager (H8)
-        Role::firstOrCreate(
-            ['name' => 'Regional Manager', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $salesDirector->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
-
-        // Level 3: Sales Representative (H9)
-        Role::firstOrCreate(
-            ['name' => 'Sales Representative', 'team_id' => $company->id],
-            [
-                'guard_name' => 'web',
-                'parent_id' => $salesDirector->id,
-                'module_name' => 'core',
-                'entity_name' => null,
-            ]
-        );
+        // Assign all module permissions to CEO role
+        $this->assignAllModulePermissionsToRole($ceo, $company);
 
         // Assign CEO role to admin
         if (! $admin->hasRole($ceo->name, 'web')) {
@@ -352,6 +161,26 @@ class DemoCompaniesSeeder extends Seeder
 
         $this->command->info("✅ Company 2 (Retail Solutions) seeded with roles:");
         $this->showRoleHierarchy($company);
+    }
+
+    /**
+     * Assign all module permissions to a role
+     */
+    private function assignAllModulePermissionsToRole(Role $role, Company $company): void
+    {
+        setPermissionsTeamId($company->id);
+
+        // Get permissions from all modules
+        $modules = ['core', 'marketing', 'ridingcarcompanies', 'drivers'];
+        $allPermissions = collect();
+
+        foreach ($modules as $module) {
+            $permissions = Permission::forModule($module)->get();
+            $allPermissions = $allPermissions->merge($permissions);
+        }
+
+        // Sync all permissions to the role
+        $role->syncPermissions($allPermissions);
     }
 
     /**
