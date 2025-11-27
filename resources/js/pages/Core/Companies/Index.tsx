@@ -47,9 +47,9 @@ export default function CompaniesIndex({ companies }: CompaniesIndexProps) {
                     </div>
                     {/* Only show create button if user has create permission */}
                     {can('core', 'companies', 'create') && (
-                        <Link href="/core/companies/create">
-                            <Button>Create Company</Button>
-                        </Link>
+                    <Link href="/core/companies/create">
+                        <Button>Create Company</Button>
+                    </Link>
                     )}
                 </div>
 
@@ -88,42 +88,42 @@ export default function CompaniesIndex({ companies }: CompaniesIndexProps) {
                         <>
                             {/* Show view button if user has read permission */}
                             {can('core', 'companies', 'read') && (
-                                <Link href={`/core/companies/${row.id}`}>
-                                    <Button variant="ghost" size="sm">
-                                        View
-                                    </Button>
-                                </Link>
+                            <Link href={`/core/companies/${row.id}`}>
+                                <Button variant="ghost" size="sm">
+                                    View
+                                </Button>
+                            </Link>
                             )}
                             
                             {/* Show edit button if user has update permission */}
                             {can('core', 'companies', 'update') && (
-                                <Link href={`/core/companies/${row.id}/edit`}>
-                                    <Button variant="ghost" size="sm">
-                                        Edit
-                                    </Button>
-                                </Link>
+                            <Link href={`/core/companies/${row.id}/edit`}>
+                                <Button variant="ghost" size="sm">
+                                    Edit
+                                </Button>
+                            </Link>
                             )}
                             
                             {/* Show activate/deactivate button if user has update permission */}
                             {can('core', 'companies', 'update') && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleToggleStatus(row.id, row.is_active)}
-                                >
-                                    {row.is_active ? 'Deactivate' : 'Activate'}
-                                </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleToggleStatus(row.id, row.is_active)}
+                            >
+                                {row.is_active ? 'Deactivate' : 'Activate'}
+                            </Button>
                             )}
                             
                             {/* Show delete button if user has delete permission */}
                             {can('core', 'companies', 'delete') && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDelete(row)}
-                                >
-                                    Delete
-                                </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(row)}
+                            >
+                                Delete
+                            </Button>
                             )}
                         </>
                     )}

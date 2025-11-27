@@ -33,6 +33,7 @@ class Driver extends Model
         'lead_source_id',
         'assigned_to',
         'lead_status_id',
+        'lead_stage_id',
         'current_stage_id',
         'notes',
     ];
@@ -164,6 +165,11 @@ class Driver extends Model
     public function leadStatus(): BelongsTo
     {
         return $this->belongsTo(LeadStatus::class);
+    }
+
+    public function leadStage(): BelongsTo
+    {
+        return $this->belongsTo(LeadStage::class);
     }
 
     public function currentStage(): BelongsTo
