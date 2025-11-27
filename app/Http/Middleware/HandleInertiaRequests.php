@@ -381,6 +381,15 @@ class HandleInertiaRequests extends Middleware
                 ];
             }
 
+            // Lead Stages
+            $driversItems[] = [
+                'title' => 'Lead Stages',
+                'href' => '/drivers/lead-stages',
+                'icon' => 'ArrowRightCircle',
+                'permission_module' => 'drivers',
+                'permission_entity' => 'leadstages',
+            ];
+
             // Driver Stages
                 $driversItems[] = [
                     'title' => 'Driver Stages',

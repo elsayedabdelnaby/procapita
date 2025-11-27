@@ -6,6 +6,7 @@ use Modules\Drivers\app\Http\Controllers\DriverDocumentController;
 use Modules\Drivers\app\Http\Controllers\DriverStageController;
 use Modules\Drivers\app\Http\Controllers\LeadSourceController;
 use Modules\Drivers\app\Http\Controllers\LeadStatusController;
+use Modules\Drivers\app\Http\Controllers\LeadStageController;
 
 Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->group(function () {
     // Drivers Management
@@ -132,6 +133,45 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
         Route::post('lead-statuses/{leadStatus}/move-up', [LeadStatusController::class, 'moveUp'])->name('leadstatuses.move-up');
         Route::post('lead-statuses/{leadStatus}/move-down', [LeadStatusController::class, 'moveDown'])->name('leadstatuses.move-down');
         Route::post('lead-statuses/reorder', [LeadStatusController::class, 'reorder'])->name('leadstatuses.reorder');
+    });
+
+    // Lead Stages Management
+    Route::middleware(['permission:drivers.leadstages.create'])->group(function () {
+        Route::get('lead-stages/create', [LeadStageController::class, 'create'])->name('leadstages.create');
+        Route::post('lead-stages', [LeadStageController::class, 'store'])->name('leadstages.store');
+    });
+
+    Route::middleware(['permission:drivers.leadstages.read'])->group(function () {
+        Route::get('lead-stages', [LeadStageController::class, 'index'])->name('leadstages.index');
+    });
+
+    Route::middleware(['permission:drivers.leadstages.export'])->group(function () {
+        Route::get('lead-stages/export', [LeadStageController::class, 'export'])->name('leadstages.export');
+    });
+
+    Route::middleware(['permission:drivers.leadstages.import'])->group(function () {
+        Route::get('lead-stages/import', [LeadStageController::class, 'import'])->name('leadstages.import');
+        Route::post('lead-stages/import', [LeadStageController::class, 'importStore'])->name('leadstages.import.store');
+    });
+
+    Route::middleware(['permission:drivers.leadstages.read'])->group(function () {
+        Route::get('lead-stages/{leadStage}', [LeadStageController::class, 'show'])->name('leadstages.show');
+    });
+
+    Route::middleware(['permission:drivers.leadstages.update'])->group(function () {
+        Route::get('lead-stages/{leadStage}/edit', [LeadStageController::class, 'edit'])->name('leadstages.edit');
+        Route::put('lead-stages/{leadStage}', [LeadStageController::class, 'update'])->name('leadstages.update');
+    });
+
+    Route::middleware(['permission:drivers.leadstages.delete'])->group(function () {
+        Route::delete('lead-stages/{leadStage}', [LeadStageController::class, 'destroy'])->name('leadstages.destroy');
+    });
+
+    Route::middleware(['permission:drivers.leadstages.toggle-active'])->group(function () {
+        Route::post('lead-stages/{leadStage}/toggle-active', [LeadStageController::class, 'toggleActive'])->name('leadstages.toggle-active');
+        Route::post('lead-stages/{leadStage}/move-up', [LeadStageController::class, 'moveUp'])->name('leadstages.move-up');
+        Route::post('lead-stages/{leadStage}/move-down', [LeadStageController::class, 'moveDown'])->name('leadstages.move-down');
+        Route::post('lead-stages/reorder', [LeadStageController::class, 'reorder'])->name('leadstages.reorder');
     });
 
     // Driver Stages Management

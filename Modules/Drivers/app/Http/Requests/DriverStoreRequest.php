@@ -24,6 +24,7 @@ class DriverStoreRequest extends FormRequest
             'lead_source_id' => ['required', 'exists:lead_sources,id'],
             'assigned_to' => ['required', 'exists:users,id'],
             'lead_status_id' => ['required', 'exists:lead_statuses,id'],
+            'lead_stage_id' => ['nullable', 'exists:lead_stages,id'],
             'current_stage_id' => ['nullable', 'exists:riding_company_stage_templates,id'],
             'notes' => ['nullable', 'string'],
         ];
