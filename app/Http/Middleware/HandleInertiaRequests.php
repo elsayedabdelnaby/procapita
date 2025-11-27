@@ -69,7 +69,8 @@ class HandleInertiaRequests extends Middleware
             return false;
         }
 
-        return parent::shouldHandle($request);
+        // Default to true - parent class handles Inertia detection
+        return true;
     }
 
     /**
@@ -140,9 +141,19 @@ class HandleInertiaRequests extends Middleware
             $companies = \Modules\Core\app\Models\Company::active()->orderBy('name')->get(['id', 'name']);
         }
 
-        // Load user permissions if user exists
+        // Load user permissions if user exists (both direct and through roles)
+        $allPermissions = collect([]);
         if ($user) {
-            $user->load('permissions');
+            // Set team context for proper permission loading
+            if ($user->company_id) {
+                setPermissionsTeamId($user->company_id);
+            }
+            
+            // Load permissions through roles and direct permissions
+            $user->load(['roles.permissions', 'permissions']);
+            
+            // Get all permissions (from roles + direct)
+            $allPermissions = $user->getAllPermissions();
         }
 
         return [
@@ -158,13 +169,13 @@ class HandleInertiaRequests extends Middleware
                     'is_super_admin' => $user->is_super_admin ?? false,
                     'is_company_admin' => $user->is_company_admin ?? false,
                     'company_id' => $user->company_id,
-                    'permissions' => $user->permissions->map(fn($p) => [
+                    'permissions' => $allPermissions->map(fn($p) => [
                         'id' => $p->id,
                         'name' => $p->name,
                         'module_name' => $p->module_name,
                         'entity_name' => $p->entity_name,
                         'action' => $p->action,
-                    ])->toArray(),
+                    ])->unique('id')->values()->toArray(),
                 ] : null,
             ],
             'navigation' => $user ? $this->getNavigationItems($user) : [],
@@ -191,6 +202,8 @@ class HandleInertiaRequests extends Middleware
             'title' => 'Dashboard',
             'href' => '/dashboard',
             'icon' => 'LayoutGrid',
+            'permission_module' => null,
+            'permission_entity' => null,
         ];
 
         // Core Module - Companies group for Super Admin
@@ -202,34 +215,36 @@ class HandleInertiaRequests extends Middleware
                 'title' => 'Companies',
                 'href' => '/core/companies',
                 'icon' => 'Building2',
+                'permission_module' => 'core',
+                'permission_entity' => 'companies',
             ];
             
             // Lead Sources - accessible to super admin
-            if ($user->hasPermissionTo('drivers.leadsources.read') || $user->isSuperAdmin()) {
                 $coreItems[] = [
                     'title' => 'Lead Sources',
                     'href' => '/drivers/lead-sources',
                     'icon' => 'Target',
+                'permission_module' => 'drivers',
+                'permission_entity' => 'leadsources',
                 ];
-            }
             
             // Lead Statuses - accessible to super admin
-            if ($user->hasPermissionTo('drivers.leadstatuses.read') || $user->isSuperAdmin()) {
                 $coreItems[] = [
                     'title' => 'Lead Statuses',
                     'href' => '/drivers/lead-statuses',
                     'icon' => 'Flag',
+                'permission_module' => 'drivers',
+                'permission_entity' => 'leadstatuses',
                 ];
-            }
             
             // Riding Companies - accessible to super admin
-            if ($user->hasPermissionTo('ridingcarcompanies.ridingcompanies.read') || $user->isSuperAdmin()) {
                 $coreItems[] = [
                     'title' => 'Riding Companies',
                     'href' => '/ridingcarcompanies/riding-companies',
                     'icon' => 'Car',
+                'permission_module' => 'ridingcarcompanies',
+                'permission_entity' => 'ridingcompanies',
                 ];
-            }
             
             // Only add Core group if there are items
             if (! empty($coreItems)) {
@@ -246,56 +261,56 @@ class HandleInertiaRequests extends Middleware
             $marketingItems = [];
 
             // Campaigns
-            if ($user->hasPermissionTo('marketing.campaigns.read') || $user->isSuperAdmin()) {
                 $marketingItems[] = [
                     'title' => 'Campaigns',
                     'href' => '/marketing/campaigns',
                     'icon' => 'Megaphone',
+                'permission_module' => 'marketing',
+                'permission_entity' => 'campaigns',
                 ];
-            }
 
             // Marketing Lists
-            // if ($user->hasPermissionTo('marketing.marketing_lists.read') || $user->isSuperAdmin()) {
-            //     $marketingItems[] = [
-            //         'title' => 'Marketing Lists',
-            //         'href' => '/marketing/marketing-lists',
-            //         'icon' => 'Users',
-            //     ];
-            // }
+            // $marketingItems[] = [
+            //     'title' => 'Marketing Lists',
+            //     'href' => '/marketing/marketing-lists',
+            //     'icon' => 'Users',
+            //     'permission_module' => 'marketing',
+            //     'permission_entity' => 'marketing_lists',
+            // ];
 
             // Templates
-            // if ($user->hasPermissionTo('marketing.marketing_templates.read') || $user->isSuperAdmin()) {
-            //     $marketingItems[] = [
-            //         'title' => 'Templates',
-            //         'href' => '/marketing/templates',
-            //         'icon' => 'FileText',
-            //     ];
-            // }
+            // $marketingItems[] = [
+            //     'title' => 'Templates',
+            //     'href' => '/marketing/templates',
+            //     'icon' => 'FileText',
+            //     'permission_module' => 'marketing',
+            //     'permission_entity' => 'marketing_templates',
+            // ];
 
-            // Settings submenu (with permission checks)
-            if ($user->hasPermissionTo('marketing.campaign_types.read') || $user->isSuperAdmin()) {
+            // Settings submenu
                 $marketingItems[] = [
                     'title' => 'Campaign Types',
                     'href' => '/marketing/campaign-types',
                     'icon' => 'Tag',
+                'permission_module' => 'marketing',
+                'permission_entity' => 'campaign_types',
                 ];
-            }
             
-            if ($user->hasPermissionTo('marketing.campaign_statuses.read') || $user->isSuperAdmin()) {
                 $marketingItems[] = [
                     'title' => 'Campaign Statuses',
                     'href' => '/marketing/campaign-statuses',
                     'icon' => 'Flag',
+                'permission_module' => 'marketing',
+                'permission_entity' => 'campaign_statuses',
                 ];
-            }
             
-            if ($user->hasPermissionTo('marketing.campaign_channels.read') || $user->isSuperAdmin()) {
                 $marketingItems[] = [
                     'title' => 'Campaign Channels',
                     'href' => '/marketing/campaign-channels',
                     'icon' => 'Radio',
+                'permission_module' => 'marketing',
+                'permission_entity' => 'campaign_channels',
                 ];
-            }
 
             // Only add Marketing group if there are items
             if (! empty($marketingItems)) {
@@ -313,13 +328,13 @@ class HandleInertiaRequests extends Middleware
             $ridingCarItems = [];
 
             // Riding Companies
-            if ($user->hasPermissionTo('ridingcarcompanies.ridingcompanies.read') || $user->isSuperAdmin()) {
                 $ridingCarItems[] = [
                     'title' => 'Riding Companies',
                     'href' => '/ridingcarcompanies/riding-companies',
                     'icon' => 'Car',
+                'permission_module' => 'ridingcarcompanies',
+                'permission_entity' => 'ridingcompanies',
                 ];
-            }
 
             // Only add Riding Car Companies group if there are items
             if (! empty($ridingCarItems)) {
@@ -336,49 +351,53 @@ class HandleInertiaRequests extends Middleware
             $driversItems = [];
 
             // Drivers
-            if ($user->hasPermissionTo('drivers.drivers.read') || $user->isSuperAdmin()) {
                 $driversItems[] = [
                     'title' => 'Drivers',
                     'href' => '/drivers/drivers',
                     'icon' => 'User',
+                'permission_module' => 'drivers',
+                'permission_entity' => 'drivers',
                 ];
-            }
 
             // Lead Sources - only show for non-super admin (super admin sees it under Core)
-            if (! $user->isSuperAdmin() && ($user->hasPermissionTo('drivers.leadsources.read') || $user->isSuperAdmin())) {
+            if (! $user->isSuperAdmin()) {
                 $driversItems[] = [
                     'title' => 'Lead Sources',
                     'href' => '/drivers/lead-sources',
                     'icon' => 'Target',
+                    'permission_module' => 'drivers',
+                    'permission_entity' => 'leadsources',
                 ];
             }
 
             // Lead Statuses - only show for non-super admin (super admin sees it under Core)
-            if (! $user->isSuperAdmin() && ($user->hasPermissionTo('drivers.leadstatuses.read') || $user->isSuperAdmin())) {
+            if (! $user->isSuperAdmin()) {
                 $driversItems[] = [
                     'title' => 'Lead Statuses',
                     'href' => '/drivers/lead-statuses',
                     'icon' => 'Flag',
+                    'permission_module' => 'drivers',
+                    'permission_entity' => 'leadstatuses',
                 ];
             }
 
             // Driver Stages
-            if ($user->hasPermissionTo('drivers.driverstages.read') || $user->isSuperAdmin()) {
                 $driversItems[] = [
                     'title' => 'Driver Stages',
                     'href' => '/drivers/driver-stages',
                     'icon' => 'ListChecks',
+                'permission_module' => 'drivers',
+                'permission_entity' => 'driverstages',
                 ];
-            }
 
             // Driver Documents
-            if ($user->hasPermissionTo('drivers.driverdocuments.read') || $user->isSuperAdmin()) {
                 $driversItems[] = [
                     'title' => 'Driver Documents',
                     'href' => '/drivers/driver-documents',
                     'icon' => 'FileText',
+                'permission_module' => 'drivers',
+                'permission_entity' => 'driverdocuments',
                 ];
-            }
 
             // Only add Drivers group if there are items
             if (! empty($driversItems)) {
