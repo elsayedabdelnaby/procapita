@@ -23,6 +23,7 @@ interface Driver {
     lead_source?: { id: number; name: string };
     assigned_to?: { id: number; name: string };
     lead_status?: { id: number; name: string; color?: string };
+    lead_stage?: { id: number; name: string; color?: string };
     current_stage?: { id: number; name: string };
     notes?: string;
     stages_progress?: {
@@ -470,6 +471,20 @@ export default function DriversShow({ driver, activities = [], next_driver_id, p
                                         }}
                                     >
                                         {driver.lead_status.name}
+                                    </Badge>
+                                </div>
+                            )}
+                            {driver.lead_stage && (
+                                <div>
+                                    <p className="text-sm text-neutral-500">Lead Stage</p>
+                                    <Badge
+                                        variant="outline"
+                                        style={{
+                                            borderColor: driver.lead_stage.color || 'gray',
+                                            color: driver.lead_stage.color || 'gray',
+                                        }}
+                                    >
+                                        {driver.lead_stage.name}
                                     </Badge>
                                 </div>
                             )}

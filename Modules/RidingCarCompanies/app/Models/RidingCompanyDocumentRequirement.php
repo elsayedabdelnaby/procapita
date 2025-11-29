@@ -150,7 +150,8 @@ class RidingCompanyDocumentRequirement extends Model
         };
 
         // When a new document requirement is created, create driver documents for all existing drivers
-        static::created($createDriverDocuments);
+        // Note: This is now controlled by the add_to_existing_drivers flag in the controller
+        // static::created($createDriverDocuments);
 
         // When a document requirement is updated and becomes active, create documents for drivers who don't have it
         static::updated(function ($documentRequirement) use ($createDriverDocuments) {

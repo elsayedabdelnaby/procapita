@@ -81,8 +81,18 @@ class RidingCompanyDocumentRequirementController extends Controller
             $data['riding_company_id'] = $ridingCompany->id;
             $data['active'] = $data['active'] ?? true;
             $data['required'] = $data['required'] ?? false;
+            
+            // Extract add_to_existing_drivers flag before creating
+            $addToExistingDrivers = $data['add_to_existing_drivers'] ?? false;
+            unset($data['add_to_existing_drivers']);
 
-            $this->documentRequirementService->createDocumentRequirement($data);
+            // Temporarily disable the boot event listener
+            $documentRequirement = $this->documentRequirementService->createDocumentRequirement($data, false);
+
+            // If user wants to add to existing drivers, do it manually
+            if ($addToExistingDrivers && $documentRequirement->active) {
+                $this->documentRequirementService->addDocumentRequirementToExistingDrivers($documentRequirement->id);
+            }
 
             return redirect()
                 ->route('ridingcarcompanies.documentrequirements.index', $ridingCompany->id)

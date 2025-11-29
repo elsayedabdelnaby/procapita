@@ -20,7 +20,6 @@ interface LeadStage {
     order: number;
     active: boolean;
     requires_all_documents_approved: boolean;
-    commission_value?: number | string;
 }
 
 interface LeadStagesEditProps {
@@ -38,7 +37,6 @@ export default function LeadStagesEdit({ leadStage, ridingCompanies = [] }: Lead
         order: leadStage.order || 0,
         active: leadStage.active ?? true,
         requires_all_documents_approved: leadStage.requires_all_documents_approved ?? false,
-        commission_value: leadStage.commission_value || '',
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -211,17 +209,6 @@ export default function LeadStagesEdit({ leadStage, ridingCompanies = [] }: Lead
                                 )}
                             </div>
 
-                            <FormField
-                                label="Commission Value ($)"
-                                name="commission_value"
-                                type="number"
-                                value={data.commission_value}
-                                onChange={(e) => setData('commission_value', e.target.value)}
-                                error={errors.commission_value}
-                                step="0.01"
-                                min="0"
-                                placeholder="0.00"
-                            />
                         </div>
                     </Card>
 

@@ -23,6 +23,7 @@ interface StageTemplate {
     allow_cumulative: boolean;
     description?: string;
     active: boolean;
+    commission_value?: number | string;
 }
 
 interface StageTemplatesEditProps {
@@ -42,6 +43,7 @@ export default function StageTemplatesEdit({ stageTemplate }: StageTemplatesEdit
         allow_cumulative: stageTemplate.allow_cumulative ?? false,
         description: stageTemplate.description || '',
         active: stageTemplate.active ?? true,
+        commission_value: stageTemplate.commission_value || '',
     });
 
     const handleSubmit = (e: React.FormEvent) => {

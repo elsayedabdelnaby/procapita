@@ -25,6 +25,7 @@ class RidingCompanyStageTemplate extends Model
         'allow_cumulative',
         'description',
         'active',
+        'commission_value',
     ];
 
     protected function casts(): array
@@ -36,6 +37,7 @@ class RidingCompanyStageTemplate extends Model
             'strict_sequence' => 'boolean',
             'allow_cumulative' => 'boolean',
             'active' => 'boolean',
+            'commission_value' => 'decimal:2',
         ];
     }
 

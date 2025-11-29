@@ -23,7 +23,6 @@ class LeadStageStoreRequest extends FormRequest
             'order' => ['nullable', 'integer', 'min:0'],
             'active' => ['nullable', 'boolean'],
             'requires_all_documents_approved' => ['nullable', 'boolean'],
-            'commission_value' => ['nullable', 'numeric', 'min:0'],
         ];
 
         if ($user->isSuperAdmin()) {

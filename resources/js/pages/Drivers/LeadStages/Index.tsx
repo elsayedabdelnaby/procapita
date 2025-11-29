@@ -23,7 +23,6 @@ interface LeadStage {
     order: number;
     active: boolean;
     requires_all_documents_approved: boolean;
-    commission_value?: number | string;
     riding_company?: RidingCompany;
     created_at: string;
     updated_at: string;
@@ -189,14 +188,6 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
                                         <Badge variant={row.requires_all_documents_approved ? 'default' : 'secondary'}>
                                             {row.requires_all_documents_approved ? 'Yes' : 'No'}
                                         </Badge>
-                                    ),
-                                },
-                                {
-                                    header: 'Commission Value',
-                                    accessor: (row) => (
-                                        row.commission_value 
-                                            ? `$${parseFloat(String(row.commission_value)).toFixed(2)}`
-                                            : '-'
                                     ),
                                 },
                                 {

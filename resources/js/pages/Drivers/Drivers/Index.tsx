@@ -2308,6 +2308,8 @@ interface QuickEditDialogProps {
 function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEditDialogProps) {
     const page = usePage<SharedData>();
     const isSuperAdmin = page.props.auth?.user?.is_super_admin;
+    const [leadStages, setLeadStages] = useState<FilterOption[]>([]);
+    const [loadingLeadStages, setLoadingLeadStages] = useState(false);
     
     const { data, setData, put, processing, errors, transform } = useForm({
         company_id: driver.company_id ? String(driver.company_id) : '',
@@ -2349,6 +2351,54 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         
         return transformed;
     });
+
+    // Load lead stages when riding company changes
+    useEffect(() => {
+        if (data.riding_company_id) {
+            setLoadingLeadStages(true);
+            axios
+                .get(`/api/drivers/riding-companies/${data.riding_company_id}/lead-stages`)
+                .then((response) => {
+                    setLeadStages(response.data || []);
+                    // Reset lead_stage_id if current selection is not in the new list
+                    if (data.lead_stage_id) {
+                        const exists = response.data?.some((stage: FilterOption) => String(stage.id) === data.lead_stage_id);
+                        if (!exists) {
+                            setData('lead_stage_id', '');
+                        }
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error fetching lead stages:', error);
+                    setLeadStages([]);
+                })
+                .finally(() => {
+                    setLoadingLeadStages(false);
+                });
+        } else {
+            setLeadStages([]);
+            setData('lead_stage_id', '');
+        }
+    }, [data.riding_company_id]);
+
+    // Load lead stages when dialog opens
+    useEffect(() => {
+        if (open && driver.riding_company?.id) {
+            setLoadingLeadStages(true);
+            axios
+                .get(`/api/drivers/riding-companies/${driver.riding_company.id}/lead-stages`)
+                .then((response) => {
+                    setLeadStages(response.data || []);
+                })
+                .catch((error) => {
+                    console.error('Error fetching lead stages:', error);
+                    setLeadStages([]);
+                })
+                .finally(() => {
+                    setLoadingLeadStages(false);
+                });
+        }
+    }, [open, driver.riding_company?.id]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -2491,6 +2541,34 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                     ))}
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Lead Stage</label>
+                            <Select
+                                value={data.lead_stage_id}
+                                onValueChange={(value) => setData('lead_stage_id', value)}
+                                disabled={loadingLeadStages || !data.riding_company_id}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder={
+                                        loadingLeadStages
+                                            ? 'Loading...'
+                                            : !data.riding_company_id
+                                              ? 'Select a riding company first'
+                                              : 'Select Lead Stage'
+                                    } />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {leadStages.map((stage) => (
+                                        <SelectItem key={stage.id} value={String(stage.id)}>
+                                            {stage.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {errors.lead_stage_id && (
+                                <p className="text-sm text-red-500 mt-1">{errors.lead_stage_id}</p>
+                            )}
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-1">Assigned To</label>

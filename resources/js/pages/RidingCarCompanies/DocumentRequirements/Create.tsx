@@ -2,8 +2,10 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface RidingCompany {
     id: number;
@@ -15,17 +17,34 @@ interface DocumentRequirementsCreateProps {
 }
 
 export default function DocumentRequirementsCreate({ ridingCompany }: DocumentRequirementsCreateProps) {
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+    const [formData, setFormData] = useState<any>(null);
+
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         type: 'file',
         required: false,
         instructions: '',
         active: true,
+        add_to_existing_drivers: false,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/document-requirements`);
+        // Store form data and show confirmation dialog
+        setFormData({ ...data });
+        setShowConfirmDialog(true);
+    };
+
+    const handleConfirm = (addToDrivers: boolean) => {
+        setShowConfirmDialog(false);
+        // Update form data with the flag and submit
+        const submitData = {
+            ...formData,
+            add_to_existing_drivers: addToDrivers,
+        };
+        // Use router.post directly to send the data
+        router.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/document-requirements`, submitData);
     };
 
     return (
@@ -172,6 +191,34 @@ export default function DocumentRequirementsCreate({ ridingCompany }: DocumentRe
                         </Button>
                     </div>
                 </form>
+
+                <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Add to Existing Drivers?</DialogTitle>
+                            <DialogDescription>
+                                Do you want to add this document requirement to all existing drivers for <strong>{ridingCompany.name}</strong>?
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => handleConfirm(false)}
+                                disabled={processing}
+                            >
+                                No, Create Only
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={() => handleConfirm(true)}
+                                disabled={processing}
+                            >
+                                Yes, Add to Drivers
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

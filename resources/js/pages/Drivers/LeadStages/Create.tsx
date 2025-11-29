@@ -33,7 +33,6 @@ export default function LeadStagesCreate({ ridingCompanies: initialRidingCompani
         order: 0,
         active: true,
         requires_all_documents_approved: false,
-        commission_value: '',
     });
 
     // Load riding companies when selectedCompany changes
@@ -259,17 +258,6 @@ export default function LeadStagesCreate({ ridingCompanies: initialRidingCompani
                                 )}
                             </div>
 
-                            <FormField
-                                label="Commission Value ($)"
-                                name="commission_value"
-                                type="number"
-                                value={data.commission_value}
-                                onChange={(e) => setData('commission_value', e.target.value)}
-                                error={errors.commission_value}
-                                step="0.01"
-                                min="0"
-                                placeholder="0.00"
-                            />
                         </div>
                     </Card>
 

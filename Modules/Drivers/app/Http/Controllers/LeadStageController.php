@@ -205,7 +205,7 @@ class LeadStageController extends Controller
         // Open output stream
         $output = fopen('php://temp', 'r+');
 
-        fputcsv($output, ['ID', 'Name', 'Slug', 'Riding Company', 'Color', 'Order', 'Requires Documents Approved', 'Commission Value', 'Active', 'Created At']);
+        fputcsv($output, ['ID', 'Name', 'Slug', 'Riding Company', 'Color', 'Order', 'Requires Documents Approved', 'Active', 'Created At']);
 
         foreach ($leadStages as $stage) {
             fputcsv($output, [
@@ -216,7 +216,6 @@ class LeadStageController extends Controller
                 $stage->color ?? '',
                 $stage->order,
                 $stage->requires_all_documents_approved ? 'Yes' : 'No',
-                $stage->commission_value ?? '0.00',
                 $stage->active ? 'Yes' : 'No',
                 $stage->created_at,
             ]);
