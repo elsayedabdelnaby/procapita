@@ -1,0 +1,127 @@
+<?php
+
+namespace Modules\RecycleBin\app\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
+use Inertia\Response;
+use Modules\RecycleBin\app\Services\RecycleBinService;
+
+class RecycleBinController extends Controller
+{
+    public function __construct(
+        protected RecycleBinService $recycleBinService
+    ) {}
+
+    /**
+     * Display a listing of all deleted records grouped by model type
+     */
+    public function index(Request $request): Response
+    {
+        $user = Auth::user();
+        $companyId = $user->isSuperAdmin() ? null : $user->company_id;
+
+        $modelType = $request->get('type');
+        
+        if ($modelType) {
+            // Show records for a specific model type
+            $records = $this->recycleBinService->getDeletedRecords($modelType, $companyId);
+            $models = $this->recycleBinService->getAvailableModels();
+            $config = $models[$modelType] ?? null;
+
+            return Inertia::render('RecycleBin/Index', [
+                'modelType' => $modelType,
+                'modelName' => $config['name'] ?? $modelType,
+                'records' => $records->map(function ($record) use ($config) {
+                    return [
+                        'id' => $record->id,
+                        'display_name' => $record->{$config['display_field']} ?? 'N/A',
+                        'deleted_at' => $record->deleted_at?->format('Y-m-d H:i:s'),
+                        'deleted_at_human' => $record->deleted_at?->diffForHumans(),
+                        'deleted_by' => $this->recycleBinService->getDeletedBy($record),
+                    ];
+                }),
+                'availableModels' => collect($this->recycleBinService->getAvailableModels())->map(function ($config, $key) {
+                    return [
+                        'key' => $key,
+                        'name' => $config['name'],
+                        'module' => $config['module'],
+                    ];
+                })->values(),
+            ]);
+        }
+
+        // Show overview of all deleted records
+        $allDeleted = $this->recycleBinService->getAllDeletedRecords($companyId);
+
+        return Inertia::render('RecycleBin/Overview', [
+            'deletedRecords' => $allDeleted,
+            'availableModels' => collect($this->recycleBinService->getAvailableModels())->map(function ($config, $key) {
+                return [
+                    'key' => $key,
+                    'name' => $config['name'],
+                    'module' => $config['module'],
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Restore a deleted record
+     */
+    public function restore(Request $request, string $modelType, int $id): RedirectResponse
+    {
+        $user = Auth::user();
+        
+        $success = $this->recycleBinService->restoreRecord($modelType, $id, $user->id);
+
+        if ($success) {
+            return redirect()
+                ->back()
+                ->with('success', 'Record restored successfully.');
+        }
+
+        return redirect()
+            ->back()
+            ->with('error', 'Failed to restore record.');
+    }
+
+    /**
+     * Permanently delete a record
+     */
+    public function forceDelete(Request $request, string $modelType, int $id): RedirectResponse
+    {
+        $user = Auth::user();
+        
+        $success = $this->recycleBinService->forceDeleteRecord($modelType, $id, $user->id);
+
+        if ($success) {
+            return redirect()
+                ->back()
+                ->with('success', 'Record permanently deleted.');
+        }
+
+        return redirect()
+            ->back()
+            ->with('error', 'Failed to permanently delete record.');
+    }
+
+    /**
+     * Get record details
+     */
+    public function show(string $modelType, int $id): Response
+    {
+        $details = $this->recycleBinService->getRecordDetails($modelType, $id);
+
+        if (!$details) {
+            abort(404, 'Record not found.');
+        }
+
+        return Inertia::render('RecycleBin/Show', [
+            'record' => $details,
+        ]);
+    }
+}

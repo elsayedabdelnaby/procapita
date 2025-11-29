@@ -1,0 +1,11 @@
+{
+    "name": "RecycleBin",
+    "alias": "recyclebin",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\RecycleBin\\app\\Providers\\RecycleBinServiceProvider"
+    ],
+    "files": []
+}
