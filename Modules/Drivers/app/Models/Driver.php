@@ -14,6 +14,7 @@ use Modules\Core\app\Models\Company;
 use Modules\Marketing\app\Models\Campaign;
 use Modules\RidingCarCompanies\app\Models\RidingCompany;
 use Modules\RidingCarCompanies\app\Models\RidingCompanyStageTemplate;
+use Modules\Drivers\app\Models\LeadStage;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -33,6 +34,7 @@ class Driver extends Model
         'lead_source_id',
         'assigned_to',
         'lead_status_id',
+        'lead_stage_id',
         'current_stage_id',
         'notes',
     ];
@@ -164,6 +166,11 @@ class Driver extends Model
     public function leadStatus(): BelongsTo
     {
         return $this->belongsTo(LeadStatus::class);
+    }
+
+    public function leadStage(): BelongsTo
+    {
+        return $this->belongsTo(LeadStage::class);
     }
 
     public function currentStage(): BelongsTo

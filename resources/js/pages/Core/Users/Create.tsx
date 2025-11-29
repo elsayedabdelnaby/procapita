@@ -5,25 +5,94 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Company, Role } from '@/types/core';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { type SharedData } from '@/types';
+import axios from 'axios';
+import { useEffect, useState } from 'react';
+
+interface RidingCompany {
+    id: number;
+    name: string;
+}
 
 interface UserCreateProps {
     companies?: Company[];
     roles: Role[];
     company?: Company;
+    ridingCompanies?: RidingCompany[];
 }
 
-export default function UserCreate({ companies, roles, company }: UserCreateProps) {
+export default function UserCreate({ companies, roles, company, ridingCompanies: initialRidingCompanies = [] }: UserCreateProps) {
+    const page = usePage<SharedData>();
+    const { selectedCompany } = page.props;
+    
+    const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies);
+    const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
+
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         email: '',
         password: '',
         password_confirmation: '',
-        company_id: company?.id || '',
+        company_id: selectedCompany ? String(selectedCompany.id) : (company?.id || ''),
+        riding_company_id: '',
         roles: [] as number[],
         is_company_admin: false,
         is_active: true,
     });
+
+    // Update company_id when selectedCompany changes
+    useEffect(() => {
+        if (selectedCompany) {
+            setData('company_id', String(selectedCompany.id));
+        } else if (company) {
+            setData('company_id', String(company.id));
+        }
+    }, [selectedCompany, company]);
+
+    // Load riding companies when company/selectedCompany changes
+    useEffect(() => {
+        setLoadingRidingCompanies(true);
+        
+        // If "All Companies" is selected (selectedCompany is null) and user is super admin, load all riding companies
+        if (!selectedCompany && !company) {
+            axios
+                .get('/api/drivers/riding-companies/all')
+                .then((response) => {
+                    setRidingCompanies(response.data);
+                    setData('riding_company_id', '');
+                })
+                .catch((error) => {
+                    console.error('Error fetching all riding companies:', error);
+                    setRidingCompanies([]);
+                })
+                .finally(() => {
+                    setLoadingRidingCompanies(false);
+                });
+        } else {
+            const companyId = selectedCompany ? selectedCompany.id : company?.id;
+            
+            if (companyId) {
+                axios
+                    .get(`/api/drivers/companies/${companyId}/riding-companies`)
+                    .then((response) => {
+                        setRidingCompanies(response.data);
+                        setData('riding_company_id', '');
+                    })
+                    .catch((error) => {
+                        console.error('Error fetching riding companies:', error);
+                        setRidingCompanies([]);
+                    })
+                    .finally(() => {
+                        setLoadingRidingCompanies(false);
+                    });
+            } else {
+                setRidingCompanies([]);
+                setData('riding_company_id', '');
+                setLoadingRidingCompanies(false);
+            }
+        }
+    }, [selectedCompany?.id, company?.id]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -49,7 +118,7 @@ export default function UserCreate({ companies, roles, company }: UserCreateProp
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold">Create New User</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Add a new user to {company ? company.name : 'the system'}
+                        Add a new user to {selectedCompany ? selectedCompany.name : (company ? company.name : 'the system')}
                     </p>
                 </div>
 
@@ -97,7 +166,11 @@ export default function UserCreate({ companies, roles, company }: UserCreateProp
                                 required
                             />
 
-                            {companies && companies.length > 0 && (
+                            {selectedCompany && (
+                                <input type="hidden" name="company_id" value={selectedCompany.id} />
+                            )}
+
+                            {companies && companies.length > 0 && !selectedCompany && (
                                 <div className="space-y-2">
                                     <Label htmlFor="company_id">Company</Label>
                                     <select
@@ -121,9 +194,42 @@ export default function UserCreate({ companies, roles, company }: UserCreateProp
                                 </div>
                             )}
 
-                            {company && (
+                            {company && !selectedCompany && (
                                 <input type="hidden" name="company_id" value={company.id} />
                             )}
+
+                            <div className="space-y-2">
+                                <Label htmlFor="riding_company_id">Riding Company</Label>
+                                <select
+                                    id="riding_company_id"
+                                    name="riding_company_id"
+                                    value={data.riding_company_id}
+                                    onChange={(e) => setData('riding_company_id', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    disabled={loadingRidingCompanies || !data.company_id}
+                                >
+                                    <option value="">
+                                        {loadingRidingCompanies
+                                            ? 'Loading...'
+                                            : !data.company_id
+                                              ? 'اختر company أولاً'
+                                              : 'Select a riding company (optional)'}
+                                    </option>
+                                    {ridingCompanies.map((ridingCompany) => (
+                                        <option key={ridingCompany.id} value={ridingCompany.id}>
+                                            {ridingCompany.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.riding_company_id && (
+                                    <p className="text-sm text-red-500">{errors.riding_company_id}</p>
+                                )}
+                                {!loadingRidingCompanies && data.company_id && ridingCompanies.length === 0 && (
+                                    <p className="text-xs text-neutral-500">
+                                        No riding companies available for this company
+                                    </p>
+                                )}
+                            </div>
                         </div>
 
                         <div className="space-y-4">

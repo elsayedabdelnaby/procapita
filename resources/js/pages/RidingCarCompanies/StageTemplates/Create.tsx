@@ -25,6 +25,7 @@ export default function StageTemplatesCreate({ ridingCompany }: StageTemplatesCr
         allow_cumulative: false,
         description: '',
         active: true,
+        commission_value: '',
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -212,6 +213,18 @@ export default function StageTemplatesCreate({ ridingCompany }: StageTemplatesCr
                                     <p className="text-sm text-red-500">{errors.active}</p>
                                 )}
                             </div>
+
+                            <FormField
+                                label="Commission Value ($)"
+                                name="commission_value"
+                                type="number"
+                                value={data.commission_value}
+                                onChange={(e) => setData('commission_value', e.target.value)}
+                                error={errors.commission_value}
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                            />
                         </div>
                     </Card>
 

@@ -49,23 +49,18 @@ export function AppSidebar() {
                 </SidebarMenu>
                 {isSuperAdmin && companies && companies.length > 0 && (
                     <div className="px-2 py-2">
-                        <div className="text-xs font-medium text-muted-foreground mb-1 px-2">
-                            Select Company
-                        </div>
                         <Select
-                            value={selectedCompany ? String(selectedCompany.id) : 'all'}
+                            value={selectedCompany?.id?.toString() || ''}
                             onValueChange={handleCompanySelect}
                         >
-                            <SelectTrigger className="h-9">
-                                <Building2 className="h-4 w-4 mr-2" />
-                                <SelectValue placeholder="All Companies">
-                                    {selectedCompany ? selectedCompany.name : 'All Companies'}
-                                </SelectValue>
+                            <SelectTrigger className="w-full">
+                                <Building2 className="mr-2 h-4 w-4" />
+                                <SelectValue placeholder="Select Company" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Companies</SelectItem>
+                                <SelectItem value="clear">All Companies</SelectItem>
                                 {companies.map((company) => (
-                                    <SelectItem key={company.id} value={String(company.id)}>
+                                    <SelectItem key={company.id} value={company.id.toString()}>
                                         {company.name}
                                     </SelectItem>
                                 ))}
@@ -97,3 +92,4 @@ export function AppSidebar() {
         </Sidebar>
     );
 }
+

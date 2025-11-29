@@ -14,17 +14,13 @@ import {
     SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { resolveUrl } from '@/lib/utils';
+import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
-import { useState, useEffect } from 'react';
-
-interface NavigationItem {
-    title: string;
-    href?: string;
-    icon?: string;
-    items?: NavigationItem[];
-}
+import { useState, useEffect, useMemo } from 'react';
+import { type NavigationItem } from '@/types';
+import { usePermissions } from '@/hooks/use-permissions';
 
 interface NavMainProps {
     navigation: NavigationItem[];
@@ -33,7 +29,51 @@ interface NavMainProps {
 const STORAGE_KEY = 'sidebar_open_groups';
 
 export function NavMain({ navigation }: NavMainProps) {
-    const page = usePage();
+    const page = usePage<SharedData>();
+    const { hasEntityPermission } = usePermissions();
+
+    // Filter navigation items based on permissions
+    const filteredNavigation = useMemo(() => {
+        return navigation
+            .map((group) => {
+                // If it's a single item (has href), check permission
+                if (group.href) {
+                    // If no permission metadata, show the item (for backward compatibility)
+                    if (!group.permission_module || !group.permission_entity) {
+                        return group;
+                    }
+                    
+                    if (!hasEntityPermission(group.permission_module, group.permission_entity)) {
+                        return null;
+                    }
+                    return group;
+                }
+
+                // If it's a group with items, filter the items
+                if (group.items && group.items.length > 0) {
+                    const filteredItems = group.items.filter((item) => {
+                        // If no permission metadata, show the item (for backward compatibility)
+                        if (!item.permission_module || !item.permission_entity) {
+                            return true;
+                        }
+                        return hasEntityPermission(item.permission_module, item.permission_entity);
+                    });
+
+                    // Only return the group if it has visible items
+                    if (filteredItems.length === 0) {
+                        return null;
+                    }
+
+                    return {
+                        ...group,
+                        items: filteredItems,
+                    };
+                }
+
+                return group;
+            })
+            .filter((item): item is NavigationItem => item !== null);
+    }, [navigation, hasEntityPermission]);
     
     // Load saved state from localStorage or default to ['Core']
     const getInitialOpenGroups = (): string[] => {
@@ -84,7 +124,7 @@ export function NavMain({ navigation }: NavMainProps) {
 
     return (
         <>
-            {navigation.map((group) => {
+            {filteredNavigation.map((group) => {
                 // If item has href, it's a single item
                 if (group.href) {
                     return (
@@ -140,9 +180,11 @@ export function NavMain({ navigation }: NavMainProps) {
                                                         <SidebarMenuSubButton
                                                             asChild
                                                             isActive={
+                                                                !!(
                                                                 item.href &&
                                                                 page.url.startsWith(
                                                                     resolveUrl(item.href)
+                                                                    )
                                                                 )
                                                             }
                                                         >

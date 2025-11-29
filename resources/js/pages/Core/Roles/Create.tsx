@@ -5,9 +5,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Company, Role } from '@/types/core';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { type SharedData } from '@/types';
+import axios from 'axios';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface Permission {
     id: number;
@@ -17,28 +19,88 @@ interface Permission {
     action?: string;
 }
 
+interface RidingCompany {
+    id: number;
+    name: string;
+}
+
 interface RoleCreateProps {
     company: Company;
     availableRoles: Role[];
     permissions?: Record<string, Record<string, Permission[]>>;
+    ridingCompanies?: RidingCompany[];
 }
 
 export default function RoleCreate({
     company,
     availableRoles,
     permissions = {},
+    ridingCompanies: initialRidingCompanies = [],
 }: RoleCreateProps) {
+    const page = usePage<SharedData>();
+    const { selectedCompany } = page.props;
+    
     const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
     const [expandedEntities, setExpandedEntities] = useState<Record<string, boolean>>({});
+    const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies);
+    const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
 
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         parent_id: '',
         module_name: '',
         entity_name: '',
-        team_id: company.id,
+        team_id: selectedCompany ? selectedCompany.id : company.id,
+        riding_company_id: '',
         permissions: [] as number[],
     });
+
+    // Update team_id when selectedCompany changes
+    useEffect(() => {
+        if (selectedCompany) {
+            setData('team_id', selectedCompany.id);
+        } else {
+            setData('team_id', company.id);
+        }
+    }, [selectedCompany, company.id]);
+
+    // Load riding companies when company/selectedCompany changes
+    useEffect(() => {
+        setLoadingRidingCompanies(true);
+        
+        // If "All Companies" is selected (selectedCompany is null), load all riding companies
+        if (!selectedCompany) {
+            axios
+                .get('/api/drivers/riding-companies/all')
+                .then((response) => {
+                    setRidingCompanies(response.data);
+                    setData('riding_company_id', '');
+                })
+                .catch((error) => {
+                    console.error('Error fetching all riding companies:', error);
+                    setRidingCompanies([]);
+                })
+                .finally(() => {
+                    setLoadingRidingCompanies(false);
+                });
+        } else {
+            const companyId = selectedCompany.id;
+            
+            axios
+                .get(`/api/drivers/companies/${companyId}/riding-companies`)
+                .then((response) => {
+                    setRidingCompanies(response.data);
+                    setData('riding_company_id', '');
+                })
+                .catch((error) => {
+                    console.error('Error fetching riding companies:', error);
+                    setRidingCompanies([]);
+                })
+                .finally(() => {
+                    setLoadingRidingCompanies(false);
+                });
+        }
+    }, [selectedCompany?.id, company.id]);
 
     const toggleModule = (moduleName: string) => {
         setExpandedModules((prev) => ({
@@ -122,7 +184,8 @@ export default function RoleCreate({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post(`/core/companies/${company.id}/roles`);
+        const companyId = selectedCompany ? selectedCompany.id : company.id;
+        post(`/core/companies/${companyId}/roles`);
     };
 
     return (
@@ -132,7 +195,7 @@ export default function RoleCreate({
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold">Create New Role</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Add a new role to {company.name}
+                        Add a new role to {selectedCompany ? selectedCompany.name : company.name}
                     </p>
                 </div>
 
@@ -150,6 +213,39 @@ export default function RoleCreate({
                                 placeholder="e.g., Sales Manager, HR Specialist"
                                 required
                             />
+
+                            <div className="space-y-2">
+                                <Label htmlFor="riding_company_id">Riding Company</Label>
+                                <select
+                                    id="riding_company_id"
+                                    name="riding_company_id"
+                                    value={data.riding_company_id}
+                                    onChange={(e) => setData('riding_company_id', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    disabled={loadingRidingCompanies || !data.team_id}
+                                >
+                                    <option value="">
+                                        {loadingRidingCompanies
+                                            ? 'Loading...'
+                                            : !data.team_id
+                                              ? 'اختر company أولاً'
+                                              : 'Select a riding company (optional)'}
+                                    </option>
+                                    {ridingCompanies.map((ridingCompany) => (
+                                        <option key={ridingCompany.id} value={ridingCompany.id}>
+                                            {ridingCompany.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.riding_company_id && (
+                                    <p className="text-sm text-red-500">{errors.riding_company_id}</p>
+                                )}
+                                {!loadingRidingCompanies && data.team_id && ridingCompanies.length === 0 && (
+                                    <p className="text-xs text-neutral-500">
+                                        No riding companies available for this company
+                                    </p>
+                                )}
+                            </div>
 
                             <div className="space-y-2">
                                 <Label htmlFor="parent_id">Parent Role (Optional)</Label>
