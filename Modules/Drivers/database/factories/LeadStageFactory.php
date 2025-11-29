@@ -33,6 +33,7 @@ class LeadStageFactory extends Factory
             'order' => $this->faker->numberBetween(0, 100),
             'active' => true,
             'requires_all_documents_approved' => $this->faker->boolean(30), // 30% chance of being true
+            'commission_value' => $this->faker->optional(0.7)->randomFloat(2, 0, 1000), // 70% chance of having a commission value
         ];
     }
 

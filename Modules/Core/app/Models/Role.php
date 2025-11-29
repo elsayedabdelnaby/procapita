@@ -4,6 +4,7 @@ namespace Modules\Core\app\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\RidingCarCompanies\app\Models\RidingCompany;
 use Spatie\Permission\Models\Role as SpatieRole;
 
 class Role extends SpatieRole
@@ -12,6 +13,7 @@ class Role extends SpatieRole
         'name',
         'guard_name',
         'team_id',
+        'riding_company_id',
         'parent_id',
         'hierarchy_path',
         'hierarchy_level',
@@ -31,6 +33,11 @@ class Role extends SpatieRole
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'team_id');
+    }
+
+    public function ridingCompany(): BelongsTo
+    {
+        return $this->belongsTo(RidingCompany::class);
     }
 
     public function parent(): BelongsTo

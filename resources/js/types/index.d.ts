@@ -33,6 +33,8 @@ export interface SharedData {
         info?: string;
     };
     sidebarOpen: boolean;
+    selectedCompany?: Company | null;
+    companies?: Company[];
     [key: string]: unknown;
 }
 
@@ -67,4 +69,12 @@ export interface User {
     company_id?: number;
     permissions?: Permission[];
     [key: string]: unknown; // This allows for additional properties...
+}
+
+export interface Company {
+    id: number;
+    name: string;
+    slug?: string;
+    logo?: string | null;
+    logo_url?: string | null;
 }

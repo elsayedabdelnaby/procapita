@@ -33,6 +33,12 @@ interface LeadStatus {
     name: string;
 }
 
+interface LeadStage {
+    id: number;
+    name: string;
+    color?: string;
+}
+
 interface User {
     id: number;
     name: string;
@@ -62,12 +68,14 @@ export default function DriversCreate({
     const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns || []);
     const [leadSources, setLeadSources] = useState<LeadSource[]>(initialLeadSources || []);
     const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>(initialLeadStatuses || []);
+    const [leadStages, setLeadStages] = useState<LeadStage[]>([]);
     const [users, setUsers] = useState<User[]>(initialUsers || []);
 
     const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
     const [loadingCampaigns, setLoadingCampaigns] = useState(false);
     const [loadingLeadSources, setLoadingLeadSources] = useState(false);
     const [loadingLeadStatuses, setLoadingLeadStatuses] = useState(false);
+    const [loadingLeadStages, setLoadingLeadStages] = useState(false);
     const [loadingUsers, setLoadingUsers] = useState(false);
 
     const { data, setData, post, processing, errors } = useForm({
@@ -81,99 +89,141 @@ export default function DriversCreate({
         lead_source_id: '',
         assigned_to: '',
         lead_status_id: '',
+        lead_stage_id: '',
         current_stage_id: '',
         notes: '',
     });
 
-    // Set selected company on mount if available
+    // Update company_id when selectedCompany changes
     useEffect(() => {
-        if (selectedCompany && !data.company_id) {
+        if (selectedCompany) {
             setData('company_id', String(selectedCompany.id));
         }
     }, [selectedCompany]);
 
-    // Fetch data when company changes (for super admin)
+    // Reset dependent fields when company changes
     useEffect(() => {
-        if (companies && data.company_id) {
+        const companyId = selectedCompany ? selectedCompany.id : (data.company_id ? Number(data.company_id) : null);
+        
+        if (companyId) {
+            // Reset dependent fields when company changes
+            setData('riding_company_id', '');
+            setData('campaign_id', '');
+            setData('lead_source_id', '');
+            setData('lead_status_id', '');
+            setData('assigned_to', '');
+            setData('lead_stage_id', '');
+        }
+    }, [selectedCompany?.id, data.company_id]);
+
+    // Fetch data when company/selectedCompany changes (for super admin)
+    useEffect(() => {
+        const companyId = selectedCompany ? selectedCompany.id : (data.company_id ? Number(data.company_id) : null);
+        
+        if (companies) {
             // Fetch riding companies
             setLoadingRidingCompanies(true);
-            axios
-                .get(`/api/drivers/companies/${data.company_id}/riding-companies`)
-                .then((response) => {
-                    setRidingCompanies(response.data);
-                    setData('riding_company_id', '');
-                })
-                .catch((error) => {
-                    console.error('Error fetching riding companies:', error);
-                    setRidingCompanies([]);
-                })
-                .finally(() => {
-                    setLoadingRidingCompanies(false);
-                });
+            
+            // If "All Companies" is selected (selectedCompany is null and no company_id), load all riding companies
+            if (!selectedCompany && !data.company_id) {
+                axios
+                    .get('/api/drivers/riding-companies/all')
+                    .then((response) => {
+                        setRidingCompanies(response.data);
+                        setData('riding_company_id', '');
+                    })
+                    .catch((error) => {
+                        console.error('Error fetching all riding companies:', error);
+                        setRidingCompanies([]);
+                    })
+                    .finally(() => {
+                        setLoadingRidingCompanies(false);
+                    });
+            } else if (companyId) {
+                axios
+                    .get(`/api/drivers/companies/${companyId}/riding-companies`)
+                    .then((response) => {
+                        setRidingCompanies(response.data);
+                        setData('riding_company_id', '');
+                    })
+                    .catch((error) => {
+                        console.error('Error fetching riding companies:', error);
+                        setRidingCompanies([]);
+                    })
+                    .finally(() => {
+                        setLoadingRidingCompanies(false);
+                    });
+            } else {
+                setRidingCompanies([]);
+                setData('riding_company_id', '');
+                setLoadingRidingCompanies(false);
+            }
+            
+            if (companyId) {
+                // Fetch campaigns
+                setLoadingCampaigns(true);
+                axios
+                    .get(`/api/drivers/companies/${companyId}/campaigns`)
+                    .then((response) => {
+                        setCampaigns(response.data);
+                        setData('campaign_id', '');
+                    })
+                    .catch((error) => {
+                        console.error('Error fetching campaigns:', error);
+                        setCampaigns([]);
+                    })
+                    .finally(() => {
+                        setLoadingCampaigns(false);
+                    });
 
-            // Fetch campaigns
-            setLoadingCampaigns(true);
-            axios
-                .get(`/api/drivers/companies/${data.company_id}/campaigns`)
-                .then((response) => {
-                    setCampaigns(response.data);
-                    setData('campaign_id', '');
-                })
-                .catch((error) => {
-                    console.error('Error fetching campaigns:', error);
-                    setCampaigns([]);
-                })
-                .finally(() => {
-                    setLoadingCampaigns(false);
-                });
+                // Fetch lead sources
+                setLoadingLeadSources(true);
+                axios
+                    .get(`/api/drivers/companies/${companyId}/lead-sources`)
+                    .then((response) => {
+                        setLeadSources(response.data);
+                        setData('lead_source_id', '');
+                    })
+                    .catch((error) => {
+                        console.error('Error fetching lead sources:', error);
+                        setLeadSources([]);
+                    })
+                    .finally(() => {
+                        setLoadingLeadSources(false);
+                    });
 
-            // Fetch lead sources
-            setLoadingLeadSources(true);
-            axios
-                .get(`/api/drivers/companies/${data.company_id}/lead-sources`)
-                .then((response) => {
-                    setLeadSources(response.data);
-                    setData('lead_source_id', '');
-                })
-                .catch((error) => {
-                    console.error('Error fetching lead sources:', error);
-                    setLeadSources([]);
-                })
-                .finally(() => {
-                    setLoadingLeadSources(false);
-                });
+                // Fetch lead statuses
+                setLoadingLeadStatuses(true);
+                axios
+                    .get(`/api/drivers/companies/${companyId}/lead-statuses`)
+                    .then((response) => {
+                        setLeadStatuses(response.data);
+                        setData('lead_status_id', '');
+                    })
+                    .catch((error) => {
+                        console.error('Error fetching lead statuses:', error);
+                        setLeadStatuses([]);
+                    })
+                    .finally(() => {
+                        setLoadingLeadStatuses(false);
+                    });
 
-            // Fetch lead statuses
-            setLoadingLeadStatuses(true);
-            axios
-                .get(`/api/drivers/companies/${data.company_id}/lead-statuses`)
-                .then((response) => {
-                    setLeadStatuses(response.data);
-                    setData('lead_status_id', '');
-                })
-                .catch((error) => {
-                    console.error('Error fetching lead statuses:', error);
-                    setLeadStatuses([]);
-                })
-                .finally(() => {
-                    setLoadingLeadStatuses(false);
-                });
-
-            // Fetch users
-            setLoadingUsers(true);
-            axios
-                .get(`/api/drivers/companies/${data.company_id}/users`)
-                .then((response) => {
-                    setUsers(response.data);
-                    setData('assigned_to', '');
-                })
-                .catch((error) => {
-                    console.error('Error fetching users:', error);
-                    setUsers([]);
-                })
-                .finally(() => {
-                    setLoadingUsers(false);
-                });
+                // Fetch users
+                setLoadingUsers(true);
+                axios
+                    .get(`/api/drivers/companies/${companyId}/users`)
+                    .then((response) => {
+                        setUsers(response.data);
+                        setData('assigned_to', '');
+                    })
+                    .catch((error) => {
+                        console.error('Error fetching users:', error);
+                        setUsers([]);
+                    })
+                    .finally(() => {
+                        setLoadingUsers(false);
+                    });
+            }
         } else if (!companies) {
             // If not super admin, keep initial data
             setRidingCompanies(initialRidingCompanies || []);
@@ -182,7 +232,30 @@ export default function DriversCreate({
             setLeadStatuses(initialLeadStatuses || []);
             setUsers(initialUsers || []);
         }
-    }, [data.company_id, companies]);
+    }, [selectedCompany?.id, data.company_id, companies]);
+
+    // Fetch lead stages when riding company changes
+    useEffect(() => {
+        if (data.riding_company_id) {
+            setLoadingLeadStages(true);
+            axios
+                .get(`/api/drivers/riding-companies/${data.riding_company_id}/lead-stages`)
+                .then((response) => {
+                    setLeadStages(response.data);
+                    setData('lead_stage_id', ''); // Reset lead_stage_id when riding company changes
+                })
+                .catch((error) => {
+                    console.error('Error fetching lead stages:', error);
+                    setLeadStages([]);
+                })
+                .finally(() => {
+                    setLoadingLeadStages(false);
+                });
+        } else {
+            setLeadStages([]);
+            setData('lead_stage_id', '');
+        }
+    }, [data.riding_company_id]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -237,7 +310,7 @@ export default function DriversCreate({
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {companies && companies.length > 0 && (
+                            {companies && companies.length > 0 && !selectedCompany && (
                                 <div className="md:col-span-2">
                                     <Label htmlFor="company_id">
                                         Company <span className="text-red-500">*</span>
@@ -261,6 +334,9 @@ export default function DriversCreate({
                                         <p className="text-sm text-red-500">{errors.company_id}</p>
                                     )}
                                 </div>
+                            )}
+                            {selectedCompany && (
+                                <input type="hidden" name="company_id" value={selectedCompany.id} />
                             )}
 
                             <div className="md:col-span-2">
@@ -427,6 +503,34 @@ export default function DriversCreate({
                                 </select>
                                 {errors.lead_status_id && (
                                     <p className="text-sm text-red-500">{errors.lead_status_id}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="lead_stage_id">Lead Stage</Label>
+                                <select
+                                    id="lead_stage_id"
+                                    name="lead_stage_id"
+                                    value={data.lead_stage_id}
+                                    onChange={(e) => setData('lead_stage_id', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    disabled={loadingLeadStages || !data.riding_company_id}
+                                >
+                                    <option value="">
+                                        {loadingLeadStages
+                                            ? 'Loading...'
+                                            : !data.riding_company_id
+                                              ? 'Select a riding company first'
+                                              : 'Select a lead stage'}
+                                    </option>
+                                    {leadStages.map((stage) => (
+                                        <option key={stage.id} value={stage.id}>
+                                            {stage.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.lead_stage_id && (
+                                    <p className="text-sm text-red-500">{errors.lead_stage_id}</p>
                                 )}
                             </div>
 

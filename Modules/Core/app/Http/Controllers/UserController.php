@@ -51,10 +51,15 @@ class UserController extends Controller
         }
 
         $roles = $this->roleService->getAllRoles($company);
+        $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
+            ->active()
+            ->orderBy('name')
+            ->get();
 
         return Inertia::render('Core/Users/Create', [
             'company' => $companyModel,
             'roles' => $roles,
+            'ridingCompanies' => $ridingCompanies,
         ]);
     }
 
@@ -129,6 +134,10 @@ class UserController extends Controller
         setPermissionsTeamId($company);
         
         $roles = $this->roleService->getAllRoles($company);
+        $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
+            ->active()
+            ->orderBy('name')
+            ->get();
         
         // Reload the user's roles in the correct team context
         $userModel->load('roles');
@@ -141,6 +150,7 @@ class UserController extends Controller
             'user' => $userModel,
             'roles' => $roles,
             'userRoles' => $userRoles,
+            'ridingCompanies' => $ridingCompanies,
         ]);
     }
 

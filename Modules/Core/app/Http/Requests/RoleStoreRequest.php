@@ -15,10 +15,25 @@ class RoleStoreRequest extends FormRequest
 
     public function rules(): array
     {
+        $companyId = $this->route('company') ?? $this->input('team_id');
+
         return [
             'name' => ['required', 'string', 'max:255'],
             'guard_name' => ['nullable', 'string', 'max:255'],
             'team_id' => ['required', 'integer', 'exists:companies,id'],
+            'riding_company_id' => [
+                'nullable',
+                'integer',
+                'exists:riding_companies,id',
+                function ($attribute, $value, $fail) use ($companyId) {
+                    if ($value && $companyId) {
+                        $ridingCompany = \Modules\RidingCarCompanies\app\Models\RidingCompany::find($value);
+                        if ($ridingCompany && $ridingCompany->company_id != $companyId) {
+                            $fail('The selected riding company does not belong to this company.');
+                        }
+                    }
+                },
+            ],
             'parent_id' => ['nullable', 'integer', 'exists:roles,id'],
             'module_name' => ['nullable', 'string', 'max:255'],
             'entity_name' => ['nullable', 'string', 'max:255'],

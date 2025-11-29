@@ -3,7 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { type SharedData } from '@/types';
+import axios from 'axios';
+import { useEffect, useState } from 'react';
 
 interface RidingCompany {
     id: number;
@@ -14,7 +17,13 @@ interface LeadStagesCreateProps {
     ridingCompanies?: RidingCompany[];
 }
 
-export default function LeadStagesCreate({ ridingCompanies = [] }: LeadStagesCreateProps) {
+export default function LeadStagesCreate({ ridingCompanies: initialRidingCompanies = [] }: LeadStagesCreateProps) {
+    const page = usePage<SharedData>();
+    const { selectedCompany } = page.props;
+    
+    const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies);
+    const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
+
     const { data, setData, post, processing, errors } = useForm({
         riding_company_id: '',
         name: '',
@@ -24,7 +33,48 @@ export default function LeadStagesCreate({ ridingCompanies = [] }: LeadStagesCre
         order: 0,
         active: true,
         requires_all_documents_approved: false,
+        commission_value: '',
     });
+
+    // Load riding companies when selectedCompany changes
+    useEffect(() => {
+        setLoadingRidingCompanies(true);
+        
+        // If "All Companies" is selected (selectedCompany is null), load all riding companies
+        if (!selectedCompany) {
+            axios
+                .get('/api/drivers/riding-companies/all')
+                .then((response) => {
+                    setRidingCompanies(response.data);
+                    setData('riding_company_id', '');
+                })
+                .catch((error) => {
+                    console.error('Error fetching all riding companies:', error);
+                    setRidingCompanies([]);
+                })
+                .finally(() => {
+                    setLoadingRidingCompanies(false);
+                });
+        } else if (selectedCompany?.id) {
+            axios
+                .get(`/api/drivers/companies/${selectedCompany.id}/riding-companies`)
+                .then((response) => {
+                    setRidingCompanies(response.data);
+                    setData('riding_company_id', '');
+                })
+                .catch((error) => {
+                    console.error('Error fetching riding companies:', error);
+                    setRidingCompanies([]);
+                })
+                .finally(() => {
+                    setLoadingRidingCompanies(false);
+                });
+        } else {
+            // If no selectedCompany, use initial riding companies
+            setRidingCompanies(initialRidingCompanies);
+            setLoadingRidingCompanies(false);
+        }
+    }, [selectedCompany?.id]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -79,31 +129,41 @@ export default function LeadStagesCreate({ ridingCompanies = [] }: LeadStagesCre
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {ridingCompanies && ridingCompanies.length > 0 && (
-                                <div className="md:col-span-2">
-                                    <Label htmlFor="riding_company_id">
-                                        Riding Company <span className="text-red-500">*</span>
-                                    </Label>
-                                    <select
-                                        id="riding_company_id"
-                                        name="riding_company_id"
-                                        value={data.riding_company_id}
-                                        onChange={(e) => setData('riding_company_id', e.target.value)}
-                                        className="w-full rounded-md border px-3 py-2"
-                                        required
-                                    >
-                                        <option value="">Select a riding company</option>
-                                        {ridingCompanies.map((company) => (
-                                            <option key={company.id} value={company.id}>
-                                                {company.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {errors.riding_company_id && (
-                                        <p className="text-sm text-red-500">{errors.riding_company_id}</p>
-                                    )}
-                                </div>
-                            )}
+                            <div className="md:col-span-2">
+                                <Label htmlFor="riding_company_id">
+                                    Riding Company <span className="text-red-500">*</span>
+                                </Label>
+                                <select
+                                    id="riding_company_id"
+                                    name="riding_company_id"
+                                    value={data.riding_company_id}
+                                    onChange={(e) => setData('riding_company_id', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    disabled={loadingRidingCompanies || (selectedCompany && ridingCompanies.length === 0)}
+                                    required
+                                >
+                                    <option value="">
+                                        {loadingRidingCompanies
+                                            ? 'Loading...'
+                                            : selectedCompany && ridingCompanies.length === 0
+                                              ? 'No riding companies available'
+                                              : 'Select a riding company'}
+                                    </option>
+                                    {ridingCompanies.map((company) => (
+                                        <option key={company.id} value={company.id}>
+                                            {company.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.riding_company_id && (
+                                    <p className="text-sm text-red-500">{errors.riding_company_id}</p>
+                                )}
+                                {selectedCompany && !loadingRidingCompanies && ridingCompanies.length === 0 && (
+                                    <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                                        No riding companies available for the selected company. Please create a riding company first.
+                                    </p>
+                                )}
+                            </div>
 
                             <div className="md:col-span-2">
                                 <FormField
@@ -198,6 +258,18 @@ export default function LeadStagesCreate({ ridingCompanies = [] }: LeadStagesCre
                                     <p className="text-sm text-red-500">{errors.requires_all_documents_approved}</p>
                                 )}
                             </div>
+
+                            <FormField
+                                label="Commission Value ($)"
+                                name="commission_value"
+                                type="number"
+                                value={data.commission_value}
+                                onChange={(e) => setData('commission_value', e.target.value)}
+                                error={errors.commission_value}
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                            />
                         </div>
                     </Card>
 

@@ -35,8 +35,13 @@ class LeadStageController extends Controller
     public function create(): Response
     {
         $user = Auth::user();
+        $companyId = $user->isSuperAdmin() ? session('selected_company_id', null) : $user->company_id;
+        
         $ridingCompanies = $user->isSuperAdmin() 
-            ? RidingCompany::active()->orderBy('name')->get() 
+            ? RidingCompany::when($companyId, fn($q) => $q->where('company_id', $companyId))
+                ->active()
+                ->orderBy('name')
+                ->get()
             : RidingCompany::when($user->company_id, fn($q) => $q->where('company_id', $user->company_id))
                 ->active()
                 ->orderBy('name')
@@ -200,7 +205,7 @@ class LeadStageController extends Controller
         // Open output stream
         $output = fopen('php://temp', 'r+');
 
-        fputcsv($output, ['ID', 'Name', 'Slug', 'Riding Company', 'Color', 'Order', 'Requires Documents Approved', 'Active', 'Created At']);
+        fputcsv($output, ['ID', 'Name', 'Slug', 'Riding Company', 'Color', 'Order', 'Requires Documents Approved', 'Commission Value', 'Active', 'Created At']);
 
         foreach ($leadStages as $stage) {
             fputcsv($output, [
@@ -211,6 +216,7 @@ class LeadStageController extends Controller
                 $stage->color ?? '',
                 $stage->order,
                 $stage->requires_all_documents_approved ? 'Yes' : 'No',
+                $stage->commission_value ?? '0.00',
                 $stage->active ? 'Yes' : 'No',
                 $stage->created_at,
             ]);

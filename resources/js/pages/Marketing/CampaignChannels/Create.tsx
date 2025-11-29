@@ -5,7 +5,8 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type Company } from '@/types/core';
 import { type CampaignType } from '@/types/marketing';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { type SharedData } from '@/types';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 
@@ -20,6 +21,9 @@ export default function CampaignChannelCreate({
     companies,
     company,
 }: CampaignChannelCreateProps) {
+    const page = usePage<SharedData>();
+    const { selectedCompany } = page.props;
+    
     const [campaignTypes, setCampaignTypes] = useState<CampaignType[]>(
         initialCampaignTypes || []
     );
@@ -33,8 +37,15 @@ export default function CampaignChannelCreate({
         icon: '',
         is_active: true,
         sort_order: 0,
-        company_id: company?.id || '',
+        company_id: selectedCompany ? String(selectedCompany.id) : (company?.id || ''),
     });
+
+    // Set selected company on mount if available
+    useEffect(() => {
+        if (selectedCompany && !data.company_id) {
+            setData('company_id', String(selectedCompany.id));
+        }
+    }, [selectedCompany]);
 
     // Fetch campaign types when company changes (for super admin)
     useEffect(() => {
@@ -110,7 +121,7 @@ export default function CampaignChannelCreate({
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {companies && (
+                            {companies && !selectedCompany && (
                                 <div className="md:col-span-2">
                                     <Label htmlFor="company_id">Company *</Label>
                                     <select
@@ -134,8 +145,8 @@ export default function CampaignChannelCreate({
                                 </div>
                             )}
 
-                            {company && (
-                                <input type="hidden" name="company_id" value={company.id} />
+                            {(selectedCompany || company) && (
+                                <input type="hidden" name="company_id" value={selectedCompany?.id || company?.id} />
                             )}
 
                             <div className="md:col-span-2">

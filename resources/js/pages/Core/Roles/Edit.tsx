@@ -6,8 +6,9 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Company, Role } from '@/types/core';
 import { Head, Link, useForm } from '@inertiajs/react';
+import axios from 'axios';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface Permission {
     id: number;
@@ -17,11 +18,17 @@ interface Permission {
     action?: string;
 }
 
+interface RidingCompany {
+    id: number;
+    name: string;
+}
+
 interface RoleEditProps {
     company: Company;
     role: Role;
     availableRoles: Role[];
     permissions?: Record<string, Record<string, Permission[]>>;
+    ridingCompanies: RidingCompany[];
 }
 
 export default function RoleEdit({
@@ -29,17 +36,51 @@ export default function RoleEdit({
     role,
     availableRoles,
     permissions = {},
+    ridingCompanies: initialRidingCompanies = [],
 }: RoleEditProps) {
     const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
     const [expandedEntities, setExpandedEntities] = useState<Record<string, boolean>>({});
+    const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies);
+    const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
 
     const { data, setData, put, processing, errors } = useForm({
         name: role.name || '',
         parent_id: role.parent_id || '',
         module_name: role.module_name || '',
         entity_name: role.entity_name || '',
+        riding_company_id: role.riding_company_id || '',
         permissions: (role.permissions || []).map((p: Permission) => p.id) as number[],
     });
+
+    // Load riding companies when company changes (company is fixed in edit, but we still need to load)
+    useEffect(() => {
+        if (company.id) {
+            setLoadingRidingCompanies(true);
+            axios
+                .get(`/api/drivers/companies/${company.id}/riding-companies`)
+                .then((response) => {
+                    setRidingCompanies(response.data);
+                    // Reset riding_company_id if current selection is not in the new list
+                    if (data.riding_company_id) {
+                        const currentRidingCompanyId = Number(data.riding_company_id);
+                        const exists = response.data.some((rc: RidingCompany) => rc.id === currentRidingCompanyId);
+                        if (!exists) {
+                            setData('riding_company_id', '');
+                        }
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error fetching riding companies:', error);
+                    setRidingCompanies([]);
+                })
+                .finally(() => {
+                    setLoadingRidingCompanies(false);
+                });
+        } else {
+            setRidingCompanies([]);
+            setData('riding_company_id', '');
+        }
+    }, [company.id]);
 
     const toggleModule = (moduleName: string) => {
         setExpandedModules((prev) => ({
@@ -185,6 +226,37 @@ export default function RoleEdit({
                                 placeholder="e.g., Sales Manager, HR Specialist"
                                 required
                             />
+
+                            <div className="space-y-2">
+                                <Label htmlFor="riding_company_id">Riding Company</Label>
+                                <select
+                                    id="riding_company_id"
+                                    name="riding_company_id"
+                                    value={data.riding_company_id}
+                                    onChange={(e) => setData('riding_company_id', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    disabled={loadingRidingCompanies}
+                                >
+                                    <option value="">
+                                        {loadingRidingCompanies
+                                            ? 'Loading...'
+                                            : 'Select a riding company (optional)'}
+                                    </option>
+                                    {ridingCompanies.map((ridingCompany) => (
+                                        <option key={ridingCompany.id} value={ridingCompany.id}>
+                                            {ridingCompany.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.riding_company_id && (
+                                    <p className="text-sm text-red-500">{errors.riding_company_id}</p>
+                                )}
+                                {!loadingRidingCompanies && ridingCompanies.length === 0 && (
+                                    <p className="text-xs text-neutral-500">
+                                        No riding companies available for this company
+                                    </p>
+                                )}
+                            </div>
 
                             <div className="space-y-2">
                                 <Label htmlFor="parent_id">Parent Role</Label>

@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Activity, CheckCircle2, Clock, FileText, Mail, Phone, User, XCircle, Upload, Eye, Trash2, Edit } from 'lucide-react';
+import { Activity, CheckCircle2, Clock, FileText, Mail, Phone, User, XCircle, Upload, Eye, Trash2, Edit, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useRef } from 'react';
 import axios from 'axios';
 import { type SharedData } from '@/types';
@@ -76,9 +76,11 @@ interface DriversShowProps {
         } | null;
         created_at: string;
     }>;
+    next_driver_id?: number | null;
+    previous_driver_id?: number | null;
 }
 
-export default function DriversShow({ driver, activities = [] }: DriversShowProps) {
+export default function DriversShow({ driver, activities = [], next_driver_id, previous_driver_id }: DriversShowProps) {
     const page = usePage<SharedData>();
     const [activeTab, setActiveTab] = useState<'overview' | 'updates'>('overview');
     const [viewingDocument, setViewingDocument] = useState<{ id: number; url: string; extension?: string } | null>(null);
@@ -345,30 +347,48 @@ export default function DriversShow({ driver, activities = [] }: DriversShowProp
 
                 {/* Tabs */}
                 <div className="mb-6 border-b">
-                    <nav className="flex gap-6">
-                        <button
-                            onClick={() => setActiveTab('overview')}
-                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
-                                activeTab === 'overview'
-                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
-                            }`}
-                        >
-                            Overview
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('updates')}
-                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
-                                activeTab === 'updates'
-                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
-                            }`}
-                        >
-                            <div className="flex items-center gap-2">
-                                <Activity className="h-4 w-4" />
-                                Updates ({activities.length})
-                            </div>
-                        </button>
+                    <nav className="flex items-center justify-between">
+                        <div className="flex gap-6">
+                            <button
+                                onClick={() => setActiveTab('overview')}
+                                className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                    activeTab === 'overview'
+                                        ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                        : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                                }`}
+                            >
+                                Overview
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('updates')}
+                                className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                    activeTab === 'updates'
+                                        ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                        : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Activity className="h-4 w-4" />
+                                    Updates ({activities.length})
+                                </div>
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {previous_driver_id && (
+                                <Link href={`/drivers/drivers/${previous_driver_id}`}>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                        <ChevronLeft className="h-5 w-5" />
+                                    </Button>
+                                </Link>
+                            )}
+                            {next_driver_id && (
+                                <Link href={`/drivers/drivers/${next_driver_id}`}>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                        <ChevronRight className="h-5 w-5" />
+                                    </Button>
+                                </Link>
+                            )}
+                        </div>
                     </nav>
                 </div>
 

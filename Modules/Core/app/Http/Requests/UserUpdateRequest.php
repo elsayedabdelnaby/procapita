@@ -18,11 +18,26 @@ class UserUpdateRequest extends FormRequest
         $userId = $this->route('user');
         $companyId = $this->route('company') ?? $this->input('company_id');
 
+        $companyId = $this->route('company') ?? $this->input('company_id') ?? ($userModel = \App\Models\User::find($userId))?->company_id;
+
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => ['sometimes', 'required', 'email', 'max:255', "unique:users,email,{$userId}"],
             'password' => ['nullable', 'string', 'min:8'],
             'company_id' => ['nullable', 'integer', 'exists:companies,id'],
+            'riding_company_id' => [
+                'nullable',
+                'integer',
+                'exists:riding_companies,id',
+                function ($attribute, $value, $fail) use ($companyId) {
+                    if ($value && $companyId) {
+                        $ridingCompany = \Modules\RidingCarCompanies\app\Models\RidingCompany::find($value);
+                        if ($ridingCompany && $ridingCompany->company_id != $companyId) {
+                            $fail('The selected riding company does not belong to this company.');
+                        }
+                    }
+                },
+            ],
             'is_company_admin' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
             'roles' => ['nullable', 'array'],

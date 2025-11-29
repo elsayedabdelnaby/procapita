@@ -3,7 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { type SharedData } from '@/types';
+import { useEffect } from 'react';
 
 interface Company {
     id: number;
@@ -15,13 +17,23 @@ interface LeadSourcesCreateProps {
 }
 
 export default function LeadSourcesCreate({ companies }: LeadSourcesCreateProps) {
+    const page = usePage<SharedData>();
+    const { selectedCompany } = page.props;
+    
     const { data, setData, post, processing, errors } = useForm({
-        company_id: '',
+        company_id: selectedCompany ? String(selectedCompany.id) : '',
         name: '',
         slug: '',
         description: '',
         active: true,
     });
+
+    // Set selected company on mount if available
+    useEffect(() => {
+        if (selectedCompany && !data.company_id) {
+            setData('company_id', String(selectedCompany.id));
+        }
+    }, [selectedCompany]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -76,7 +88,7 @@ export default function LeadSourcesCreate({ companies }: LeadSourcesCreateProps)
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {companies && companies.length > 0 && (
+                            {companies && companies.length > 0 && !selectedCompany && (
                                 <div className="md:col-span-2">
                                     <Label htmlFor="company_id">
                                         Company <span className="text-red-500">*</span>
@@ -100,6 +112,9 @@ export default function LeadSourcesCreate({ companies }: LeadSourcesCreateProps)
                                         <p className="text-sm text-red-500">{errors.company_id}</p>
                                     )}
                                 </div>
+                            )}
+                            {selectedCompany && (
+                                <input type="hidden" name="company_id" value={selectedCompany.id} />
                             )}
 
                             <div className="md:col-span-2">

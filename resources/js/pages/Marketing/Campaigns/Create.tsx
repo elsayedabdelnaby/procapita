@@ -60,6 +60,8 @@ export default function CampaignCreate({
         company_id: selectedCompany ? String(selectedCompany.id) : (company?.id || ''),
         campaign_type_id: '',
         campaign_status_id: initialCampaignStatuses[0]?.id || '',
+        budget_type: 'total',
+        daily_budget: '',
         campaign_channel_id: '',
         start_date: '',
         end_date: '',
@@ -135,6 +137,28 @@ export default function CampaignCreate({
         }
     }, [data.campaign_type_id]);
 
+    // Calculate total budget from daily budget and date range
+    const calculateTotalBudget = (dailyBudget: string, startDate: string, endDate: string) => {
+        if (data.budget_type === 'daily' && dailyBudget && startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            const diffTime = Math.abs(end.getTime() - start.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
+            const daily = parseFloat(dailyBudget) || 0;
+            const total = daily * diffDays;
+            setData('expected_budget', total.toFixed(2));
+        } else if (data.budget_type === 'daily' && (!dailyBudget || !startDate || !endDate)) {
+            setData('expected_budget', '');
+        }
+    };
+
+    // Recalculate total budget when dates or daily budget change
+    useEffect(() => {
+        if (data.budget_type === 'daily' && data.daily_budget && data.start_date && data.end_date) {
+            calculateTotalBudget(data.daily_budget, data.start_date, data.end_date);
+        }
+    }, [data.start_date, data.end_date, data.budget_type, data.daily_budget]);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         post('/marketing/campaigns');
@@ -190,7 +214,7 @@ export default function CampaignCreate({
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {companies && (
+                            {companies && !selectedCompany && (
                                 <div className="md:col-span-2">
                                     <Label htmlFor="company_id">Company *</Label>
                                     <select
@@ -212,6 +236,9 @@ export default function CampaignCreate({
                                         <p className="text-sm text-red-500">{errors.company_id}</p>
                                     )}
                                 </div>
+                            )}
+                            {selectedCompany && (
+                                <input type="hidden" name="company_id" value={selectedCompany.id} />
                             )}
 
                             {company && (
@@ -319,6 +346,100 @@ export default function CampaignCreate({
                             </div>
 
                             <div>
+                                <Label htmlFor="budget_type">Budget Type *</Label>
+                                <select
+                                    id="budget_type"
+                                    name="budget_type"
+                                    value={data.budget_type}
+                                    onChange={(e) => {
+                                        setData('budget_type', e.target.value);
+                                        // Reset daily_budget and expected_budget when budget type changes
+                                        if (e.target.value === 'total') {
+                                            setData('daily_budget', '');
+                                        } else {
+                                            setData('expected_budget', '');
+                                        }
+                                    }}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    required
+                                >
+                                    <option value="daily">Daily</option>
+                                    <option value="total">Total Budget</option>
+                                </select>
+                                {errors.budget_type && (
+                                    <p className="text-sm text-red-500">
+                                        {errors.budget_type}
+                                    </p>
+                                )}
+                            </div>
+
+                            {data.budget_type === 'daily' ? (
+                                <div>
+                                    <Label htmlFor="daily_budget">Daily Budget ($) *</Label>
+                                    <input
+                                        type="number"
+                                        id="daily_budget"
+                                        name="daily_budget"
+                                        value={data.daily_budget}
+                                        onChange={(e) => {
+                                            setData('daily_budget', e.target.value);
+                                            // Calculate total budget when daily budget, start date, or end date changes
+                                            calculateTotalBudget(e.target.value, data.start_date, data.end_date);
+                                        }}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        step="0.01"
+                                        min="0"
+                                        required={data.budget_type === 'daily'}
+                                        placeholder="100"
+                                    />
+                                    {errors.daily_budget && (
+                                        <p className="text-sm text-red-500">
+                                            {errors.daily_budget}
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                <div>
+                                    <Label htmlFor="expected_budget">Total Budget ($) *</Label>
+                                    <input
+                                        type="number"
+                                        id="expected_budget"
+                                        name="expected_budget"
+                                        value={data.expected_budget}
+                                        onChange={(e) => setData('expected_budget', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        step="0.01"
+                                        min="0"
+                                        required={data.budget_type === 'total'}
+                                        placeholder="10000"
+                                    />
+                                    {errors.expected_budget && (
+                                        <p className="text-sm text-red-500">
+                                            {errors.expected_budget}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {data.budget_type === 'daily' && (
+                                <div>
+                                    <Label htmlFor="expected_budget">Total Budget ($)</Label>
+                                    <input
+                                        type="number"
+                                        id="expected_budget"
+                                        name="expected_budget"
+                                        value={data.expected_budget}
+                                        readOnly
+                                        className="w-full rounded-md border px-3 py-2 bg-neutral-100 dark:bg-neutral-800"
+                                        placeholder="Calculated automatically"
+                                    />
+                                    <p className="text-xs text-neutral-500 mt-1">
+                                        Calculated from Daily Budget × Number of Days
+                                    </p>
+                                </div>
+                            )}
+
+                            <div>
                                 <Label htmlFor="campaign_channel_id">Channel *</Label>
                                 <select
                                     id="campaign_channel_id"
@@ -379,6 +500,7 @@ export default function CampaignCreate({
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Expected Metrics</h2>
                         <div className="grid gap-4 md:grid-cols-3">
+                            {data.budget_type === 'total' && (
                             <FormField
                                 label="Expected Budget ($)"
                                 name="expected_budget"
@@ -388,6 +510,7 @@ export default function CampaignCreate({
                                 error={errors.expected_budget}
                                 placeholder="10000"
                             />
+                            )}
 
                             <FormField
                                 label="Expected ROI (%)"

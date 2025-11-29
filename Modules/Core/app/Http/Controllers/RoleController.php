@@ -47,11 +47,16 @@ class RoleController extends Controller
 
         $roles = $this->roleService->getAllRoles($company);
         $permissions = $this->permissionService->getGroupedPermissions();
+        $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
+            ->active()
+            ->orderBy('name')
+            ->get();
 
         return Inertia::render('Core/Roles/Create', [
             'company' => $companyModel,
             'availableRoles' => $roles,
             'permissions' => $permissions,
+            'ridingCompanies' => $ridingCompanies,
         ]);
     }
 
@@ -99,12 +104,17 @@ class RoleController extends Controller
         $companyModel = $this->companyService->getCompanyById($company);
         $availableRoles = $this->roleService->getAllRoles($company);
         $permissions = $this->permissionService->getGroupedPermissions();
+        $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
+            ->active()
+            ->orderBy('name')
+            ->get();
 
         return Inertia::render('Core/Roles/Edit', [
             'company' => $companyModel,
             'role' => $roleModel,
             'availableRoles' => $availableRoles,
             'permissions' => $permissions,
+            'ridingCompanies' => $ridingCompanies,
         ]);
     }
 

@@ -15,6 +15,7 @@ class LeadStageUpdateRequest extends FormRequest
     {
         $user = $this->user();
         $rules = [
+            'riding_company_id' => ['required', 'exists:riding_companies,id'],
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -22,6 +23,7 @@ class LeadStageUpdateRequest extends FormRequest
             'order' => ['nullable', 'integer', 'min:0'],
             'active' => ['nullable', 'boolean'],
             'requires_all_documents_approved' => ['nullable', 'boolean'],
+            'commission_value' => ['nullable', 'numeric', 'min:0'],
         ];
 
         if ($user->isSuperAdmin()) {

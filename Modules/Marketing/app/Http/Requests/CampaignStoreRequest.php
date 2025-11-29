@@ -23,7 +23,7 @@ class CampaignStoreRequest extends FormRequest
         
         // Remove empty string values for numeric fields to prevent database errors
         $numericFields = [
-            'expected_budget', 'expected_roi', 'expected_leads', 'expected_conversions',
+            'daily_budget', 'expected_budget', 'expected_roi', 'expected_leads', 'expected_conversions',
             'expected_conversion_rate', 'expected_reach', 'expected_impressions',
             'expected_clicks', 'expected_ctr', 'expected_revenue',
         ];
@@ -50,12 +50,14 @@ class CampaignStoreRequest extends FormRequest
             'company_id' => $user->isSuperAdmin() ? ['required', 'integer', 'exists:companies,id'] : ['nullable'],
             'campaign_type_id' => ['required', 'integer', 'exists:campaign_types,id'],
             'campaign_status_id' => ['required', 'integer', 'exists:campaign_statuses,id'],
+            'budget_type' => ['required', 'string', 'in:daily,total'],
+            'daily_budget' => ['required_if:budget_type,daily', 'nullable', 'numeric', 'min:0'],
             'campaign_channel_id' => ['required', 'integer', 'exists:campaign_channels,id'],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             
             // Expected metrics
-            'expected_budget' => ['nullable', 'numeric', 'min:0'],
+            'expected_budget' => ['required_if:budget_type,total', 'nullable', 'numeric', 'min:0'],
             'expected_roi' => ['nullable', 'numeric'],
             'expected_leads' => ['nullable', 'integer', 'min:0'],
             'expected_conversions' => ['nullable', 'integer', 'min:0'],

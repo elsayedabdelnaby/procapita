@@ -94,7 +94,7 @@ export default function RidingCompaniesCreate({ companies }: RidingCompaniesCrea
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {companies && companies.length > 0 && (
+                            {companies && companies.length > 0 && !selectedCompany && (
                                 <div className="md:col-span-2">
                                     <Label htmlFor="company_id">
                                         Main Company <span className="text-red-500">*</span>
@@ -118,6 +118,9 @@ export default function RidingCompaniesCreate({ companies }: RidingCompaniesCrea
                                         <p className="text-sm text-red-500">{errors.company_id}</p>
                                     )}
                                 </div>
+                            )}
+                            {selectedCompany && (
+                                <input type="hidden" name="company_id" value={selectedCompany.id} />
                             )}
 
                             <div className="md:col-span-2">
