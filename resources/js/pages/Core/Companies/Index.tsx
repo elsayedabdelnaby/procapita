@@ -6,12 +6,14 @@ import AppLayout from '@/layouts/app-layout';
 import { Company } from '@/types/core';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
+import { usePermissions } from '@/hooks/use-permissions';
 
 interface CompaniesIndexProps {
     companies: Company[];
 }
 
 export default function CompaniesIndex({ companies }: CompaniesIndexProps) {
+    const { can } = usePermissions();
     const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; company: Company | null }>({
         open: false,
         company: null,
@@ -43,9 +45,12 @@ export default function CompaniesIndex({ companies }: CompaniesIndexProps) {
                             Manage all companies in the system
                         </p>
                     </div>
+                    {/* Only show create button if user has create permission */}
+                    {can('core', 'companies', 'create') && (
                     <Link href="/core/companies/create">
                         <Button>Create Company</Button>
                     </Link>
+                    )}
                 </div>
 
                 <DataTable
@@ -81,16 +86,26 @@ export default function CompaniesIndex({ companies }: CompaniesIndexProps) {
                     ]}
                     actions={(row) => (
                         <>
+                            {/* Show view button if user has read permission */}
+                            {can('core', 'companies', 'read') && (
                             <Link href={`/core/companies/${row.id}`}>
                                 <Button variant="ghost" size="sm">
                                     View
                                 </Button>
                             </Link>
+                            )}
+                            
+                            {/* Show edit button if user has update permission */}
+                            {can('core', 'companies', 'update') && (
                             <Link href={`/core/companies/${row.id}/edit`}>
                                 <Button variant="ghost" size="sm">
                                     Edit
                                 </Button>
                             </Link>
+                            )}
+                            
+                            {/* Show activate/deactivate button if user has update permission */}
+                            {can('core', 'companies', 'update') && (
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -98,6 +113,10 @@ export default function CompaniesIndex({ companies }: CompaniesIndexProps) {
                             >
                                 {row.is_active ? 'Deactivate' : 'Activate'}
                             </Button>
+                            )}
+                            
+                            {/* Show delete button if user has delete permission */}
+                            {can('core', 'companies', 'delete') && (
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -105,6 +124,7 @@ export default function CompaniesIndex({ companies }: CompaniesIndexProps) {
                             >
                                 Delete
                             </Button>
+                            )}
                         </>
                     )}
                 />

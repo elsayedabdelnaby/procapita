@@ -1,9 +1,11 @@
+import { DeleteDialog } from '@/components/core/delete-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
-import { Building2, Mail, MapPin, Phone } from 'lucide-react';
+import { Building2, Mail, MapPin, Phone, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 
 interface RidingCompany {
     id: number;
@@ -59,6 +61,43 @@ interface RidingCompanyShowProps {
 }
 
 export default function RidingCompaniesShow({ ridingCompany }: RidingCompanyShowProps) {
+    const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; requirement: { id: number; name: string } | null }>({
+        open: false,
+        requirement: null,
+    });
+    const [deleteStageDialog, setDeleteStageDialog] = useState<{ open: boolean; stage: { id: number; name: string } | null }>({
+        open: false,
+        stage: null,
+    });
+
+    const handleDeleteRequirement = (requirement: { id: number; name: string }) => {
+        setDeleteDialog({ open: true, requirement });
+    };
+
+    const confirmDeleteRequirement = () => {
+        if (deleteDialog.requirement) {
+            router.delete(`/ridingcarcompanies/document-requirements/${deleteDialog.requirement.id}`, {
+                onSuccess: () => {
+                    router.reload({ only: ['ridingCompany'] });
+                },
+            });
+        }
+    };
+
+    const handleDeleteStage = (stage: { id: number; name: string }) => {
+        setDeleteStageDialog({ open: true, stage });
+    };
+
+    const confirmDeleteStage = () => {
+        if (deleteStageDialog.stage) {
+            router.delete(`/ridingcarcompanies/stage-templates/${deleteStageDialog.stage.id}`, {
+                onSuccess: () => {
+                    router.reload({ only: ['ridingCompany'] });
+                },
+            });
+        }
+    };
+
     const handleDelete = () => {
         if (confirm(`Are you sure you want to delete "${ridingCompany.name}"?`)) {
             router.delete(`/ridingcarcompanies/riding-companies/${ridingCompany.id}`);
@@ -244,7 +283,7 @@ export default function RidingCompaniesShow({ ridingCompany }: RidingCompanyShow
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="ml-4">
+                                            <div className="ml-4 flex items-center gap-2">
                                                 <Link
                                                     href={`/ridingcarcompanies/stage-templates/${template.id}/edit`}
                                                 >
@@ -252,6 +291,14 @@ export default function RidingCompaniesShow({ ridingCompany }: RidingCompanyShow
                                                         Edit
                                                     </Button>
                                                 </Link>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleDeleteStage({ id: template.id, name: template.name })}
+                                                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
                                             </div>
                                         </div>
                                     ))}
@@ -323,7 +370,7 @@ export default function RidingCompaniesShow({ ridingCompany }: RidingCompanyShow
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="ml-4">
+                                        <div className="ml-4 flex items-center gap-2">
                                             <Link
                                                 href={`/ridingcarcompanies/document-requirements/${req.id}/edit`}
                                             >
@@ -331,6 +378,14 @@ export default function RidingCompaniesShow({ ridingCompany }: RidingCompanyShow
                                                     Edit
                                                 </Button>
                                             </Link>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleDeleteRequirement({ id: req.id, name: req.name })}
+                                                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
                                         </div>
                                     </div>
                                 ))}
@@ -415,6 +470,22 @@ export default function RidingCompaniesShow({ ridingCompany }: RidingCompanyShow
                         )}
                 </div>
             </div>
+
+            <DeleteDialog
+                open={deleteDialog.open}
+                onOpenChange={(open) => setDeleteDialog({ open, requirement: null })}
+                onConfirm={confirmDeleteRequirement}
+                title="Delete Document Requirement"
+                description={`Are you sure you want to delete "${deleteDialog.requirement?.name}"? This action cannot be undone.`}
+            />
+
+            <DeleteDialog
+                open={deleteStageDialog.open}
+                onOpenChange={(open) => setDeleteStageDialog({ open, stage: null })}
+                onConfirm={confirmDeleteStage}
+                title="Delete Stage Template"
+                description={`Are you sure you want to delete "${deleteStageDialog.stage?.name}"? This action cannot be undone.`}
+            />
         </AppLayout>
     );
 }

@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Modules\Drivers\app\Models\LeadSource;
 use Modules\Drivers\app\Models\LeadStatus;
+use Modules\Drivers\app\Models\LeadStage;
 use Modules\Marketing\app\Models\Campaign;
 use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
@@ -15,6 +16,25 @@ use Modules\RidingCarCompanies\app\Models\RidingCompany;
 */
 
 Route::middleware(['web', 'auth'])->prefix('drivers')->name('drivers.api.')->group(function () {
+    // Get all riding companies (for super admin when "All Companies" is selected)
+    Route::get('riding-companies/all', function () {
+        $user = Auth::user();
+        if (! $user->isSuperAdmin()) {
+            abort(403, 'Unauthorized');
+        }
+
+        return RidingCompany::with('company:id,name')
+            ->active()
+            ->orderBy('name')
+            ->get(['id', 'name', 'company_id'])
+            ->map(function ($ridingCompany) {
+                return [
+                    'id' => $ridingCompany->id,
+                    'name' => $ridingCompany->name . ($ridingCompany->company ? ' (' . $ridingCompany->company->name . ')' : ''),
+                ];
+            });
+    })->name('all-riding-companies');
+
     // Get riding companies by company
     Route::get('companies/{company}/riding-companies', function ($companyId) {
         // Verify user has access to this company
@@ -83,4 +103,24 @@ Route::middleware(['web', 'auth'])->prefix('drivers')->name('drivers.api.')->gro
             ->orderBy('name')
             ->get(['id', 'name']);
     })->name('users-by-company');
+
+    // Get lead stages by riding company
+    Route::get('riding-companies/{ridingCompany}/lead-stages', function ($ridingCompanyId) {
+        // Verify user has access to this riding company
+        $user = Auth::user();
+        $ridingCompany = RidingCompany::find($ridingCompanyId);
+        
+        if (! $ridingCompany) {
+            abort(404, 'Riding company not found.');
+        }
+        
+        if (! $user->isSuperAdmin() && $user->company_id != $ridingCompany->company_id) {
+            abort(403, 'Unauthorized');
+        }
+
+        return LeadStage::where('riding_company_id', $ridingCompanyId)
+            ->active()
+            ->ordered()
+            ->get(['id', 'name', 'color']);
+    })->name('lead-stages-by-riding-company');
 });

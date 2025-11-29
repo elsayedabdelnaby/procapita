@@ -6,13 +6,14 @@ use Illuminate\Database\Eloquent\Collection;
 use Modules\Drivers\app\Models\Driver;
 use Modules\Drivers\app\Models\DriverDocument;
 use Modules\Drivers\app\Models\DriverStage;
+use Modules\Drivers\app\Models\LeadStage;
 use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
 class DriverService
 {
     public function getAllDrivers(?int $companyId = null): Collection
     {
-        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'leadStatus', 'currentStage']);
+        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'leadStatus', 'leadStage', 'currentStage']);
 
         if ($companyId) {
             $query->where('company_id', $companyId);
@@ -30,6 +31,7 @@ class DriverService
             'leadSource',
             'assignedTo',
             'leadStatus',
+            'leadStage',
             'currentStage',
             'stages.stageTemplate',
             'documents.documentTemplate',
@@ -143,6 +145,32 @@ class DriverService
         }
 
         $driver = Driver::findOrFail($id);
+
+        // Convert empty string to null for lead_stage_id and ensure it's an integer
+        if (isset($data['lead_stage_id'])) {
+            if ($data['lead_stage_id'] === '' || $data['lead_stage_id'] === null) {
+                $data['lead_stage_id'] = null;
+            } else {
+                $data['lead_stage_id'] = (int) $data['lead_stage_id'];
+            }
+        }
+
+        // Validate lead_stage_id update if requires_all_documents_approved is true
+        if (isset($data['lead_stage_id']) && $data['lead_stage_id'] !== null && $data['lead_stage_id'] !== $driver->lead_stage_id) {
+            $newLeadStage = LeadStage::find($data['lead_stage_id']);
+            
+            if ($newLeadStage && $newLeadStage->requires_all_documents_approved) {
+                // Check if all driver documents are approved
+                $totalDocuments = $driver->documents()->count();
+                $approvedDocuments = $driver->documents()->where('status', 'approved')->count();
+
+                if ($totalDocuments > 0 && $approvedDocuments < $totalDocuments) {
+                    $pendingCount = $totalDocuments - $approvedDocuments;
+                    throw new \Exception("Cannot update driver to this stage. All driver documents must be approved first. {$pendingCount} document(s) still pending approval.");
+                }
+            }
+        }
+
         $driver->update($data);
 
         return $driver->fresh();

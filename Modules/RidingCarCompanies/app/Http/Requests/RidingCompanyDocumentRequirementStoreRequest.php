@@ -19,6 +19,7 @@ class RidingCompanyDocumentRequirementStoreRequest extends FormRequest
             'required' => ['nullable', 'boolean'],
             'instructions' => ['nullable', 'string'],
             'active' => ['nullable', 'boolean'],
+            'add_to_existing_drivers' => ['nullable', 'boolean'],
         ];
     }
 

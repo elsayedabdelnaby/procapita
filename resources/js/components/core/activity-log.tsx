@@ -1,7 +1,8 @@
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { Clock, User } from 'lucide-react';
+import { RelativeDate } from './relative-date';
 
 interface ActivityLogEntry {
     id: number;
@@ -96,11 +97,7 @@ export function ActivityLog({ activities }: ActivityLogProps) {
                                     )}
                                     <div className="flex items-center gap-1">
                                         <Clock className="h-3 w-3" />
-                                        <span>
-                                            {formatDistanceToNow(new Date(activity.created_at), {
-                                                addSuffix: true,
-                                            })}
-                                        </span>
+                                        <RelativeDate date={activity.created_at} />
                                     </div>
                                 </div>
                             </div>

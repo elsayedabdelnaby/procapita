@@ -4,6 +4,8 @@ import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
+import axios from 'axios';
+import { useEffect, useState } from 'react';
 
 interface Company {
     id: number;
@@ -30,6 +32,12 @@ interface LeadStatus {
     name: string;
 }
 
+interface LeadStage {
+    id: number;
+    name: string;
+    color?: string;
+}
+
 interface User {
     id: number;
     name: string;
@@ -47,6 +55,7 @@ interface Driver {
     lead_source_id?: number;
     assigned_to?: number;
     lead_status_id?: number;
+    lead_stage_id?: number;
     current_stage_id?: number;
     notes?: string;
 }
@@ -70,6 +79,9 @@ export default function DriversEdit({
     leadStatuses,
     users,
 }: DriversEditProps) {
+    const [leadStages, setLeadStages] = useState<LeadStage[]>([]);
+    const [loadingLeadStages, setLoadingLeadStages] = useState(false);
+
     const { data, setData, put, processing, errors } = useForm({
         company_id: driver.company_id ? String(driver.company_id) : '',
         full_name: driver.full_name || '',
@@ -81,13 +93,59 @@ export default function DriversEdit({
         lead_source_id: driver.lead_source_id ? String(driver.lead_source_id) : '',
         assigned_to: driver.assigned_to ? String(driver.assigned_to) : '',
         lead_status_id: driver.lead_status_id ? String(driver.lead_status_id) : '',
+        lead_stage_id: driver.lead_stage_id ? String(driver.lead_stage_id) : '',
         current_stage_id: driver.current_stage_id ? String(driver.current_stage_id) : '',
         notes: driver.notes || '',
     });
 
+    // Fetch lead stages when riding company changes
+    useEffect(() => {
+        if (data.riding_company_id) {
+            setLoadingLeadStages(true);
+            axios
+                .get(`/api/drivers/riding-companies/${data.riding_company_id}/lead-stages`)
+                .then((response) => {
+                    setLeadStages(response.data);
+                })
+                .catch((error) => {
+                    console.error('Error fetching lead stages:', error);
+                    setLeadStages([]);
+                })
+                .finally(() => {
+                    setLoadingLeadStages(false);
+                });
+        } else {
+            setLeadStages([]);
+            setData('lead_stage_id', '');
+        }
+    }, [data.riding_company_id]);
+
+    // Load lead stages on mount if riding company is already selected
+    useEffect(() => {
+        if (driver.riding_company_id) {
+            setLoadingLeadStages(true);
+            axios
+                .get(`/api/drivers/riding-companies/${driver.riding_company_id}/lead-stages`)
+                .then((response) => {
+                    setLeadStages(response.data);
+                })
+                .catch((error) => {
+                    console.error('Error fetching lead stages:', error);
+                    setLeadStages([]);
+                })
+                .finally(() => {
+                    setLoadingLeadStages(false);
+                });
+        }
+    }, []);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/drivers/drivers/${driver.id}`);
+        put(`/drivers/drivers/${driver.id}`, {
+            onSuccess: () => {
+                router.visit('/drivers/drivers');
+            },
+        });
     };
 
     return (
@@ -287,6 +345,34 @@ export default function DriversEdit({
                                 </select>
                                 {errors.lead_status_id && (
                                     <p className="text-sm text-red-500">{errors.lead_status_id}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="lead_stage_id">Lead Stage</Label>
+                                <select
+                                    id="lead_stage_id"
+                                    name="lead_stage_id"
+                                    value={data.lead_stage_id}
+                                    onChange={(e) => setData('lead_stage_id', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    disabled={loadingLeadStages || !data.riding_company_id}
+                                >
+                                    <option value="">
+                                        {loadingLeadStages
+                                            ? 'Loading...'
+                                            : !data.riding_company_id
+                                              ? 'Select a riding company first'
+                                              : 'Select a lead stage'}
+                                    </option>
+                                    {leadStages.map((stage) => (
+                                        <option key={stage.id} value={String(stage.id)}>
+                                            {stage.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.lead_stage_id && (
+                                    <p className="text-sm text-red-500">{errors.lead_stage_id}</p>
                                 )}
                             </div>
 

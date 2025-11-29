@@ -23,6 +23,7 @@ class RidingCompanyStageTemplateUpdateRequest extends FormRequest
             'allow_cumulative' => ['nullable', 'boolean'],
             'description' => ['nullable', 'string'],
             'active' => ['nullable', 'boolean'],
+            'commission_value' => ['nullable', 'numeric', 'min:0'],
         ];
     }
 

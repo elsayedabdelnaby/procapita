@@ -4,7 +4,9 @@ import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type Company } from '@/types/core';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { type SharedData } from '@/types';
+import { useEffect } from 'react';
 
 interface CampaignStatusCreateProps {
     companies?: Company[];
@@ -15,6 +17,9 @@ export default function CampaignStatusCreate({
     companies,
     company,
 }: CampaignStatusCreateProps) {
+    const page = usePage<SharedData>();
+    const { selectedCompany } = page.props;
+    
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         slug: '',
@@ -23,8 +28,15 @@ export default function CampaignStatusCreate({
         is_active: true,
         is_final: false,
         sort_order: 0,
-        company_id: company?.id || '',
+        company_id: selectedCompany ? String(selectedCompany.id) : (company?.id || ''),
     });
+
+    // Set selected company on mount if available
+    useEffect(() => {
+        if (selectedCompany && !data.company_id) {
+            setData('company_id', String(selectedCompany.id));
+        }
+    }, [selectedCompany]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -80,7 +92,7 @@ export default function CampaignStatusCreate({
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {companies && (
+                            {companies && !selectedCompany && (
                                 <div className="md:col-span-2">
                                     <Label htmlFor="company_id">Company *</Label>
                                     <select
@@ -104,8 +116,8 @@ export default function CampaignStatusCreate({
                                 </div>
                             )}
 
-                            {company && (
-                                <input type="hidden" name="company_id" value={company.id} />
+                            {(selectedCompany || company) && (
+                                <input type="hidden" name="company_id" value={selectedCompany?.id || company?.id} />
                             )}
 
                             <div className="md:col-span-2">
