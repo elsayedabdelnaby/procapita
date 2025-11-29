@@ -9,6 +9,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Modules\Core\app\Models\Company;
+use Modules\RidingCarCompanies\app\Models\RidingCompany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\CausesActivity;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -29,6 +30,7 @@ class User extends Authenticatable
         'email',
         'password',
         'company_id',
+        'riding_company_id',
         'is_super_admin',
         'is_company_admin',
         'is_active',
@@ -66,7 +68,7 @@ class User extends Authenticatable
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'email', 'company_id', 'is_super_admin', 'is_company_admin', 'is_active'])
+            ->logOnly(['name', 'email', 'company_id', 'riding_company_id', 'is_super_admin', 'is_company_admin', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -74,6 +76,11 @@ class User extends Authenticatable
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function ridingCompany(): BelongsTo
+    {
+        return $this->belongsTo(RidingCompany::class);
     }
 
     public function isSuperAdmin(): bool

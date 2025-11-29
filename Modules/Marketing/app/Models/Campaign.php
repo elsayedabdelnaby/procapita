@@ -24,6 +24,8 @@ class Campaign extends Model
         'description',
         'campaign_type_id',
         'campaign_status_id',
+        'budget_type',
+        'daily_budget',
         'campaign_channel_id',
         'expected_budget',
         'actual_spend',
@@ -54,6 +56,7 @@ class Campaign extends Model
     protected function casts(): array
     {
         return [
+            'daily_budget' => 'decimal:2',
             'expected_budget' => 'decimal:2',
             'actual_spend' => 'decimal:2',
             'expected_roi' => 'decimal:2',
@@ -72,7 +75,7 @@ class Campaign extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'status', 'expected_budget', 'actual_spend', 'expected_leads', 'actual_leads'])
+            ->logOnly(['name', 'status', 'budget_type', 'daily_budget', 'expected_budget', 'actual_spend', 'expected_leads', 'actual_leads'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

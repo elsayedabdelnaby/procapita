@@ -10,11 +10,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown, User, Mail, CheckCircle2, FileText, Activity } from 'lucide-react';
-import { useState, useMemo, useRef } from 'react';
+import { Head, Link, router, usePage, useForm } from '@inertiajs/react';
+import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown, User, Mail, CheckCircle2, FileText, Activity, Settings2, GripVertical, ChevronLeft, ChevronRight, Upload, Edit } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { type SharedData } from '@/types';
+import axios from 'axios';
 
 interface Company {
     id: number;
@@ -42,6 +45,12 @@ interface LeadStatus {
     color?: string;
 }
 
+interface LeadStage {
+    id: number;
+    name: string;
+    color?: string;
+}
+
 interface User {
     id: number;
     name: string;
@@ -60,6 +69,7 @@ interface Driver {
     lead_source?: LeadSource;
     assigned_to?: User;
     lead_status?: LeadStatus;
+    lead_stage?: LeadStage;
     created_at: string;
     updated_at: string;
 }
@@ -87,9 +97,34 @@ interface DriversIndexProps {
     };
 }
 
-export default function DriversIndex({ drivers, importAvailableFields, filterOptions = {} }: DriversIndexProps) {
+// Define all available columns outside component to avoid hoisting issues
+const ALL_DRIVER_COLUMNS = [
+    { id: 'actions', label: 'Actions', defaultVisible: true, defaultOrder: 0 },
+    { id: 'name', label: 'Name', defaultVisible: true, defaultOrder: 1 },
+    { id: 'phone', label: 'Phone', defaultVisible: true, defaultOrder: 2 },
+    { id: 'whatsapp', label: 'WhatsApp', defaultVisible: true, defaultOrder: 3 },
+    { id: 'email', label: 'Email', defaultVisible: true, defaultOrder: 4 },
+    { id: 'riding_company', label: 'Riding Company', defaultVisible: true, defaultOrder: 5 },
+    { id: 'campaign', label: 'Campaign', defaultVisible: true, defaultOrder: 6 },
+    { id: 'lead_source', label: 'Lead Source', defaultVisible: true, defaultOrder: 7 },
+    { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 8 },
+    { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 9 },
+    { id: 'assigned_to', label: 'Assigned To', defaultVisible: true, defaultOrder: 10 },
+    { id: 'uuid', label: 'UUID', defaultVisible: false, defaultOrder: 11 },
+    { id: 'created_at', label: 'Created At', defaultVisible: false, defaultOrder: 12 },
+    { id: 'updated_at', label: 'Updated At', defaultVisible: false, defaultOrder: 13 },
+];
+
+export default function DriversIndex({ drivers = [], importAvailableFields, filterOptions = {} }: DriversIndexProps) {
     const page = usePage<SharedData>();
+    
+    // Ensure drivers is always an array
+    const safeDrivers = Array.isArray(drivers) ? drivers : [];
     const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; driver: Driver | null }>({
+        open: false,
+        driver: null,
+    });
+    const [quickEditDialog, setQuickEditDialog] = useState<{ open: boolean; driver: Driver | null }>({
         open: false,
         driver: null,
     });
@@ -125,6 +160,7 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
     // Quick edit states
     const [editingRowId, setEditingRowId] = useState<number | null>(null);
     const [editingData, setEditingData] = useState<Partial<Driver> | null>(null);
+    const [editingLeadStages, setEditingLeadStages] = useState<LeadStage[]>([]);
     
     // View details dialog states
     const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -134,14 +170,70 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
     const [loadingDetails, setLoadingDetails] = useState(false);
     const [hoveredPhone, setHoveredPhone] = useState<string | null>(null);
     const [hoveredEmail, setHoveredEmail] = useState<string | null>(null);
+    const [phoneMousePosition, setPhoneMousePosition] = useState<{ x: number; y: number } | null>(null);
+    const [whatsappMousePosition, setWhatsappMousePosition] = useState<{ x: number; y: number } | null>(null);
+    const [emailMousePosition, setEmailMousePosition] = useState<{ x: number; y: number } | null>(null);
     const [viewDialogTab, setViewDialogTab] = useState<'overview' | 'updates'>('overview');
     const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const emailHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const lastClickTimeRef = useRef<number>(0);
+    const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [viewingDocument, setViewingDocument] = useState<{ id: number; url: string; extension?: string } | null>(null);
 
     // Sort states
     const [sortField, setSortField] = useState<string | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+    // Column visibility and order states
+    const STORAGE_KEY_COLUMNS = 'drivers_table_columns';
+    const STORAGE_KEY_PAGE_SIZE = 'drivers_table_page_size';
+
+    // Load column preferences from localStorage
+    const loadColumnPreferences = () => {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY_COLUMNS);
+            if (saved) {
+                return JSON.parse(saved);
+            }
+        } catch (e) {
+            console.error('Error loading column preferences:', e);
+        }
+        return null;
+    };
+
+    const savedColumns = loadColumnPreferences();
+    const initialColumns = (savedColumns && Array.isArray(savedColumns) && savedColumns.length > 0) 
+        ? savedColumns 
+        : ALL_DRIVER_COLUMNS.map(col => ({
+            id: col.id,
+            visible: col.defaultVisible,
+            order: col.defaultOrder,
+        }));
+
+    const [columns, setColumns] = useState<Array<{ id: string; visible: boolean; order: number }>>(
+        Array.isArray(initialColumns) ? initialColumns : ALL_DRIVER_COLUMNS.map(col => ({
+            id: col.id,
+            visible: col.defaultVisible,
+            order: col.defaultOrder,
+        }))
+    );
+    const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
+
+    // Pagination states
+    const loadPageSize = () => {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY_PAGE_SIZE);
+            if (saved) {
+                return parseInt(saved, 10);
+            }
+        } catch (e) {
+            console.error('Error loading page size:', e);
+        }
+        return 10; // default
+    };
+
+    const [pageSize, setPageSize] = useState(loadPageSize());
+    const [currentPage, setCurrentPage] = useState(1);
 
     // Filter states
     const [filters, setFilters] = useState<Record<string, string | number | null | 'is_empty'>>({
@@ -153,6 +245,7 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
         campaign_id: null,
         lead_source_id: null,
         lead_status_id: null,
+        lead_stage_id: null,
         assigned_to: null,
     });
 
@@ -187,14 +280,6 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
         }
     };
 
-    const handleSelectAll = (checked: boolean) => {
-        if (checked) {
-            setSelectedDrivers(new Set(drivers.map((d) => d.id)));
-        } else {
-            setSelectedDrivers(new Set());
-        }
-    };
-
     const handleSelectDriver = (driverId: number, checked: boolean) => {
         const newSelected = new Set(selectedDrivers);
         if (checked) {
@@ -205,12 +290,12 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
         setSelectedDrivers(newSelected);
     };
 
-    const isAllSelected = drivers.length > 0 && selectedDrivers.size === drivers.length;
-    const isIndeterminate = selectedDrivers.size > 0 && selectedDrivers.size < drivers.length;
-
     // Filter drivers based on active filters
     const filteredDrivers = useMemo(() => {
-        return drivers.filter((driver) => {
+        if (!safeDrivers || safeDrivers.length === 0) {
+            return [];
+        }
+        return safeDrivers.filter((driver) => {
             // Full name filter
             if (filters.full_name) {
                 if (filters.full_name === 'is_empty') {
@@ -299,6 +384,16 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                     return false;
                 }
             }
+            // Lead Stage filter
+            if (filters.lead_stage_id) {
+                if (filters.lead_stage_id === 'is_empty') {
+                    if (driver.lead_stage?.id) {
+                        return false;
+                    }
+                } else if (driver.lead_stage?.id !== filters.lead_stage_id) {
+                    return false;
+                }
+            }
             // Assigned To filter
             if (filters.assigned_to) {
                 if (filters.assigned_to === 'is_empty') {
@@ -313,7 +408,104 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
         });
     }, [drivers, filters]);
 
+    // Save column preferences to localStorage
+    useEffect(() => {
+        try {
+            localStorage.setItem(STORAGE_KEY_COLUMNS, JSON.stringify(columns));
+        } catch (e) {
+            console.error('Error saving column preferences:', e);
+        }
+    }, [columns]);
+
+    // Save page size to localStorage
+    useEffect(() => {
+        try {
+            localStorage.setItem(STORAGE_KEY_PAGE_SIZE, pageSize.toString());
+        } catch (e) {
+            console.error('Error saving page size:', e);
+        }
+    }, [pageSize]);
+
+    // Column management functions
+    const toggleColumnVisibility = (columnId: string) => {
+        setColumns(prev => prev.map(col => 
+            col.id === columnId ? { ...col, visible: !col.visible } : col
+        ));
+    };
+
+    const handleDragStart = (columnId: string) => {
+        setDraggedColumn(columnId);
+    };
+
+    const handleDragOver = (e: React.DragEvent, targetColumnId: string) => {
+        e.preventDefault();
+        if (!draggedColumn || draggedColumn === targetColumnId) return;
+
+        setColumns(prev => {
+            const newColumns = [...prev];
+            const draggedIndex = newColumns.findIndex(c => c.id === draggedColumn);
+            const targetIndex = newColumns.findIndex(c => c.id === targetColumnId);
+            
+            if (draggedIndex === -1 || targetIndex === -1) return prev;
+            
+            const [removed] = newColumns.splice(draggedIndex, 1);
+            newColumns.splice(targetIndex, 0, removed);
+            
+            // Update order values
+            return newColumns.map((col, index) => ({ ...col, order: index }));
+        });
+    };
+
+    const handleDragEnd = () => {
+        setDraggedColumn(null);
+    };
+
+    // Get sorted columns by order
+    const sortedColumns = useMemo(() => {
+        try {
+            if (!columns || !Array.isArray(columns) || columns.length === 0) {
+                return ALL_DRIVER_COLUMNS.map(col => ({
+                    id: col.id,
+                    visible: col.defaultVisible,
+                    order: col.defaultOrder,
+                }));
+            }
+            return [...columns].sort((a, b) => (a.order || 0) - (b.order || 0));
+        } catch (e) {
+            console.error('Error in sortedColumns:', e);
+            return ALL_DRIVER_COLUMNS.map(col => ({
+                id: col.id,
+                visible: col.defaultVisible,
+                order: col.defaultOrder,
+            }));
+        }
+    }, [columns]);
+
+    // Get visible columns
+    const visibleColumns = useMemo(() => {
+        try {
+            if (!sortedColumns || !Array.isArray(sortedColumns) || sortedColumns.length === 0) {
+                return ALL_DRIVER_COLUMNS.filter(col => col.defaultVisible).map(col => ({
+                    id: col.id,
+                    visible: col.defaultVisible,
+                    order: col.defaultOrder,
+                }));
+            }
+            return sortedColumns.filter(col => col.visible);
+        } catch (e) {
+            console.error('Error in visibleColumns:', e);
+            return ALL_DRIVER_COLUMNS.filter(col => col.defaultVisible).map(col => ({
+                id: col.id,
+                visible: col.defaultVisible,
+                order: col.defaultOrder,
+            }));
+        }
+    }, [sortedColumns]);
+
     const sortedAndFilteredDrivers = useMemo(() => {
+        if (!filteredDrivers || !Array.isArray(filteredDrivers)) {
+            return [];
+        }
         let result = [...filteredDrivers];
         
         if (sortField) {
@@ -354,6 +546,10 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                         aValue = a.lead_status?.name || '';
                         bValue = b.lead_status?.name || '';
                         break;
+                    case 'lead_stage':
+                        aValue = a.lead_stage?.name || '';
+                        bValue = b.lead_stage?.name || '';
+                        break;
                     case 'assigned_to':
                         aValue = a.assigned_to?.name || '';
                         bValue = b.assigned_to?.name || '';
@@ -381,6 +577,64 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
         
         return result;
     }, [filteredDrivers, sortField, sortDirection]);
+
+    // Pagination functions
+    const paginatedDrivers = useMemo(() => {
+        if (!sortedAndFilteredDrivers || sortedAndFilteredDrivers.length === 0) {
+            return [];
+        }
+        const startIndex = (currentPage - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        return sortedAndFilteredDrivers.slice(startIndex, endIndex);
+    }, [sortedAndFilteredDrivers, currentPage, pageSize]);
+
+    const totalPages = useMemo(() => {
+        if (!sortedAndFilteredDrivers || sortedAndFilteredDrivers.length === 0) {
+            return 1;
+        }
+        return Math.ceil(sortedAndFilteredDrivers.length / pageSize);
+    }, [sortedAndFilteredDrivers, pageSize]);
+
+    const handlePageChange = (newPage: number) => {
+        setCurrentPage(newPage);
+        setShowAllDrivers(false);
+    };
+
+    const handlePageSizeChange = (newSize: number) => {
+        setPageSize(newSize);
+        setCurrentPage(1);
+        setShowAllDrivers(false);
+    };
+
+    // Update handleSelectAll to use paginatedDrivers
+    const handleSelectAll = useCallback((checked: boolean) => {
+        setSelectedDrivers((prevSelected) => {
+            const newSelected = new Set(prevSelected);
+            if (paginatedDrivers && Array.isArray(paginatedDrivers)) {
+                if (checked) {
+                    paginatedDrivers.forEach((d) => newSelected.add(d.id));
+                } else {
+                    paginatedDrivers.forEach((d) => newSelected.delete(d.id));
+                }
+            }
+            return newSelected;
+        });
+    }, [paginatedDrivers]);
+
+    // Update isAllSelected and isIndeterminate to use paginatedDrivers
+    const isAllSelected = useMemo(() => {
+        if (!paginatedDrivers || paginatedDrivers.length === 0) {
+            return false;
+        }
+        return paginatedDrivers.every((d) => selectedDrivers.has(d.id));
+    }, [paginatedDrivers, selectedDrivers]);
+
+    const isIndeterminate = useMemo(() => {
+        if (!paginatedDrivers || paginatedDrivers.length === 0) {
+            return false;
+        }
+        return paginatedDrivers.some((d) => selectedDrivers.has(d.id)) && !isAllSelected;
+    }, [paginatedDrivers, selectedDrivers, isAllSelected]);
 
     const handleFilterChange = (field: string, value: string | number | null | 'is_empty') => {
         setFilters((prev) => ({
@@ -415,6 +669,7 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
             campaign_id: null,
             lead_source_id: null,
             lead_status_id: null,
+            lead_stage_id: null,
             assigned_to: null,
         });
     };
@@ -477,8 +732,24 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
             campaign_id: driver.campaign?.id || null,
             lead_source_id: driver.lead_source?.id || null,
             lead_status_id: driver.lead_status?.id || null,
+            lead_stage_id: driver.lead_stage?.id || null,
             assigned_to: driver.assigned_to?.id || null,
         });
+
+        // Load lead stages for the selected riding company
+        if (driver.riding_company?.id) {
+            axios
+                .get(`/api/drivers/riding-companies/${driver.riding_company.id}/lead-stages`)
+                .then((response) => {
+                    setEditingLeadStages(response.data);
+                })
+                .catch((error) => {
+                    console.error('Error fetching lead stages:', error);
+                    setEditingLeadStages([]);
+                });
+        } else {
+            setEditingLeadStages([]);
+        }
     };
 
     const handleQuickSave = (driverId: number) => {
@@ -491,7 +762,7 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
         }
 
         // Find the driver to get company_id
-        const driver = drivers.find((d) => d.id === driverId);
+        const driver = safeDrivers.find((d) => d.id === driverId);
         if (!driver) {
             alert('Driver not found.');
             return;
@@ -569,10 +840,29 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
     const handleQuickCancel = () => {
         setEditingRowId(null);
         setEditingData(null);
+        setEditingLeadStages([]);
     };
 
     const updateEditingData = (field: string, value: string | number | null) => {
         setEditingData((prev) => (prev ? { ...prev, [field]: value } : null));
+
+        // If riding_company_id changes, load lead stages
+        if (field === 'riding_company_id' && value) {
+            axios
+                .get(`/api/drivers/riding-companies/${value}/lead-stages`)
+                .then((response) => {
+                    setEditingLeadStages(response.data);
+                    // Reset lead_stage_id when riding company changes
+                    setEditingData((prev) => (prev ? { ...prev, lead_stage_id: null } : null));
+                })
+                .catch((error) => {
+                    console.error('Error fetching lead stages:', error);
+                    setEditingLeadStages([]);
+                });
+        } else if (field === 'riding_company_id' && !value) {
+            setEditingLeadStages([]);
+            setEditingData((prev) => (prev ? { ...prev, lead_stage_id: null } : null));
+        }
     };
 
     const formatPhoneForWhatsApp = (phone: string): string => {
@@ -647,6 +937,113 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
         );
     };
 
+    const canUploadDocument = () => {
+        return hasPermission('drivers.driverdocuments.upload');
+    };
+
+    const canViewDocument = () => {
+        return hasPermission('drivers.driverdocuments.view');
+    };
+
+    const canReplaceDocument = () => {
+        return hasPermission('drivers.driverdocuments.replace');
+    };
+
+    const canSetPending = () => {
+        return hasPermission('drivers.driverdocuments.set-pending');
+    };
+
+    const canSetApproved = () => {
+        return hasPermission('drivers.driverdocuments.set-approved');
+    };
+
+    const canSetRejected = () => {
+        return hasPermission('drivers.driverdocuments.set-rejected');
+    };
+
+    const [uploadingDocId, setUploadingDocId] = useState<number | null>(null);
+    const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+    const handleFileSelect = (docId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('Please select a valid file (JPG, PNG, or PDF)');
+            return;
+        }
+
+        // Validate file size (10MB)
+        if (file.size > 10 * 1024 * 1024) {
+            alert('File size must be less than 10MB');
+            return;
+        }
+
+        setUploadingDocId(docId);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        axios
+            .post(`/drivers/driver-documents/${docId}/upload`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            })
+            .then(() => {
+                // Reload driver details
+                if (viewingDriver) {
+                    fetch(`/drivers/drivers/${viewingDriver.id}/details`, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                    })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            setDriverDetails(data.driver);
+                        });
+                }
+            })
+            .catch((error) => {
+                console.error('Error uploading file:', error);
+                alert('Failed to upload file. Please try again.');
+            })
+            .finally(() => {
+                setUploadingDocId(null);
+                if (fileInputRefs.current[docId]) {
+                    fileInputRefs.current[docId]!.value = '';
+                }
+            });
+    };
+
+    const handleUpdateStatus = async (docId: number, status: string) => {
+        try {
+            await axios.post(`/drivers/driver-documents/${docId}/update-status`, { status });
+            // Reload driver details to get updated documents
+            if (viewingDriver) {
+                const response = await fetch(`/drivers/drivers/${viewingDriver.id}/details`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setDriverDetails(data.driver);
+                }
+            }
+        } catch (error) {
+            console.error('Error updating document status:', error);
+            alert('Failed to update document status. Please try again.');
+        }
+    };
+
     const handleViewFile = (docId: number) => {
         const url = `/drivers/driver-documents/${docId}/view`;
         const doc = driverDetails?.documents?.find((d: any) => d.id === docId);
@@ -694,13 +1091,13 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                         >
                                 Import
                             </Button>
-                        {canDeleteAllDrivers() && drivers.length > 0 && (
+                        {canDeleteAllDrivers() && safeDrivers.length > 0 && (
                             <Button
                                 type="button"
                                 variant="destructive"
                                 onClick={() => {
-                                    if (confirm(`Are you sure you want to delete ALL ${drivers.length} driver(s)? This action cannot be undone.`)) {
-                                        const allIds = drivers.map(d => d.id);
+                                    if (confirm(`Are you sure you want to delete ALL ${safeDrivers.length} driver(s)? This action cannot be undone.`)) {
+                                        const allIds = safeDrivers.map(d => d.id);
                                         router.post('/drivers/drivers/mass-delete', {
                                             ids: allIds,
                                         }, {
@@ -714,14 +1111,19 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                 Delete All
                             </Button>
                         )}
-                        <Link href="/drivers/drivers/create">
-                            <Button>Create Driver</Button>
-                        </Link>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                                Total: {sortedAndFilteredDrivers?.length || 0} driver(s)
+                            </span>
+                            <Link href="/drivers/drivers/create">
+                                <Button>Create Driver</Button>
+                            </Link>
+                        </div>
                     </div>
                 </div>
 
                 <Card className="p-6">
-                    {drivers.length > 0 ? (
+                    {safeDrivers.length > 0 ? (
                         <>
                             {/* Mass Actions Bar */}
                             {selectedDrivers.size > 0 && (
@@ -738,7 +1140,7 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                                 onClick={handleMassEdit}
                                             >
                                                 Mass Edit
-                                            </Button>
+                                                </Button>
                                         )}
                                         {canMassDelete() && (
                                             <Button
@@ -750,9 +1152,56 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                                 Delete Selected
                                             </Button>
                                         )}
-                                    </div>
+                                        </div>
                                 </div>
                             )}
+
+                            {/* Table Controls Bar */}
+                            <div className="mb-4 flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                                        Showing {paginatedDrivers?.length || 0} of {sortedAndFilteredDrivers?.length || 0} driver(s)
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm text-neutral-600 dark:text-neutral-400">Rows per page:</span>
+                                    <Select value={pageSize.toString()} onValueChange={(value) => handlePageSizeChange(parseInt(value, 10))}>
+                                        <SelectTrigger className="w-20">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="10">10</SelectItem>
+                                            <SelectItem value="25">25</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                            <SelectItem value="100">100</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="outline" size="sm">
+                                                <Settings2 className="h-4 w-4 mr-2" />
+                                                Columns
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-56">
+                                            <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            {(sortedColumns || []).map((col) => {
+                                                const columnDef = ALL_DRIVER_COLUMNS.find(c => c.id === col.id);
+                                                return (
+                                                    <DropdownMenuCheckboxItem
+                                                        key={col.id}
+                                                        checked={col.visible}
+                                                        onCheckedChange={() => toggleColumnVisibility(col.id)}
+                                                    >
+                                                        {columnDef?.label || col.id}
+                                                    </DropdownMenuCheckboxItem>
+                                                );
+                                            })}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+                            </div>
 
                             <div className="overflow-x-auto rounded-lg border">
                                 <table className="w-full">
@@ -764,1054 +1213,563 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                                     onCheckedChange={handleSelectAll}
                                                 />
                                             </th>
-                                            <th className="px-4 py-3 text-center text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                Actions
-                                            </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleSort('full_name')}
-                                                    className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                >
-                                                    {sortField === 'full_name' && (
+                                            {(visibleColumns || []).map((col) => {
+                                                if (col.id === 'actions') {
+                                                    return (
+                                                        <th 
+                                                            key={col.id}
+                                                            className="px-4 py-3 text-center text-sm font-medium text-neutral-700 dark:text-neutral-300 cursor-move"
+                                                            draggable
+                                                            onDragStart={() => handleDragStart(col.id)}
+                                                            onDragOver={(e) => handleDragOver(e, col.id)}
+                                                            onDragEnd={handleDragEnd}
+                                                        >
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                <GripVertical className="h-3 w-3 text-neutral-400" />
+                                                                Actions
+                                                            </div>
+                                                        </th>
+                                                    );
+                                                }
+                                                const columnDef = ALL_DRIVER_COLUMNS.find(c => c.id === col.id);
+                                                const sortKey = col.id === 'name' ? 'full_name' : 
+                                                               col.id === 'whatsapp' ? 'whatsapp_phone' :
+                                                               col.id === 'riding_company' ? 'riding_company' :
+                                                               col.id === 'lead_source' ? 'lead_source' :
+                                                               col.id === 'lead_status' ? 'lead_status' :
+                                                               col.id === 'lead_stage' ? 'lead_stage' :
+                                                               col.id === 'assigned_to' ? 'assigned_to' :
+                                                               col.id;
+                                                return (
+                                                    <th 
+                                                        key={col.id}
+                                                        className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300 cursor-move"
+                                                        draggable
+                                                        onDragStart={() => handleDragStart(col.id)}
+                                                        onDragOver={(e) => handleDragOver(e, col.id)}
+                                                        onDragEnd={handleDragEnd}
+                                                    >
                                                         <button
                                                             type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                clearSort();
-                                                            }}
-                                                            className="text-red-500 hover:text-red-700 mr-1"
-                                                            title="Clear sort"
+                                                            onClick={() => handleSort(sortKey)}
+                                                            className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors w-full"
                                                         >
-                                                            <X className="h-3 w-3" />
+                                                            <GripVertical className="h-3 w-3 text-neutral-400" />
+                                                            {sortField === sortKey && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        clearSort();
+                                                                    }}
+                                                                    className="text-red-500 hover:text-red-700 mr-1"
+                                                                    title="Clear sort"
+                                                                >
+                                                                    <X className="h-3 w-3" />
+                                                                </button>
+                                                            )}
+                                                            <span>{columnDef?.label || col.id}</span>
+                                                            {sortField === sortKey ? (
+                                                                sortDirection === 'asc' ? (
+                                                                    <ArrowUp className="h-3 w-3" />
+                                                                ) : (
+                                                                    <ArrowDown className="h-3 w-3" />
+                                                                )
+                                                            ) : (
+                                                                <div className="h-3 w-3" />
+                                                            )}
                                                         </button>
-                                                    )}
-                                                    <span>Name</span>
-                                                    {sortField === 'full_name' ? (
-                                                        sortDirection === 'asc' ? (
-                                                            <ArrowUp className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowDown className="h-3 w-3" />
-                                                        )
-                                                    ) : (
-                                                        <div className="h-3 w-3" />
-                                                    )}
-                                                </button>
-                                            </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleSort('phone')}
-                                                    className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                >
-                                                    {sortField === 'phone' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                clearSort();
-                                                            }}
-                                                            className="text-red-500 hover:text-red-700 mr-1"
-                                                            title="Clear sort"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                    <span>Phone</span>
-                                                    {sortField === 'phone' ? (
-                                                        sortDirection === 'asc' ? (
-                                                            <ArrowUp className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowDown className="h-3 w-3" />
-                                                        )
-                                                    ) : (
-                                                        <div className="h-3 w-3" />
-                                                    )}
-                                                </button>
-                                            </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleSort('whatsapp_phone')}
-                                                    className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                >
-                                                    {sortField === 'whatsapp_phone' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                clearSort();
-                                                            }}
-                                                            className="text-red-500 hover:text-red-700 mr-1"
-                                                            title="Clear sort"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                    <span>WhatsApp</span>
-                                                    {sortField === 'whatsapp_phone' ? (
-                                                        sortDirection === 'asc' ? (
-                                                            <ArrowUp className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowDown className="h-3 w-3" />
-                                                        )
-                                                    ) : (
-                                                        <div className="h-3 w-3" />
-                                                    )}
-                                                </button>
-                                            </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleSort('email')}
-                                                    className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                >
-                                                    {sortField === 'email' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                clearSort();
-                                                            }}
-                                                            className="text-red-500 hover:text-red-700 mr-1"
-                                                            title="Clear sort"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                    <span>Email</span>
-                                                    {sortField === 'email' ? (
-                                                        sortDirection === 'asc' ? (
-                                                            <ArrowUp className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowDown className="h-3 w-3" />
-                                                        )
-                                                    ) : (
-                                                        <div className="h-3 w-3" />
-                                                    )}
-                                                </button>
-                                            </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleSort('riding_company')}
-                                                    className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                >
-                                                    {sortField === 'riding_company' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                clearSort();
-                                                            }}
-                                                            className="text-red-500 hover:text-red-700 mr-1"
-                                                            title="Clear sort"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                    <span>Riding Company</span>
-                                                    {sortField === 'riding_company' ? (
-                                                        sortDirection === 'asc' ? (
-                                                            <ArrowUp className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowDown className="h-3 w-3" />
-                                                        )
-                                                    ) : (
-                                                        <div className="h-3 w-3" />
-                                                    )}
-                                                </button>
-                                            </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleSort('campaign')}
-                                                    className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                >
-                                                    {sortField === 'campaign' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                clearSort();
-                                                            }}
-                                                            className="text-red-500 hover:text-red-700 mr-1"
-                                                            title="Clear sort"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                    <span>Campaign</span>
-                                                    {sortField === 'campaign' ? (
-                                                        sortDirection === 'asc' ? (
-                                                            <ArrowUp className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowDown className="h-3 w-3" />
-                                                        )
-                                                    ) : (
-                                                        <div className="h-3 w-3" />
-                                                    )}
-                                                </button>
-                                            </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleSort('lead_source')}
-                                                    className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                >
-                                                    {sortField === 'lead_source' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                clearSort();
-                                                            }}
-                                                            className="text-red-500 hover:text-red-700 mr-1"
-                                                            title="Clear sort"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                    <span>Lead Source</span>
-                                                    {sortField === 'lead_source' ? (
-                                                        sortDirection === 'asc' ? (
-                                                            <ArrowUp className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowDown className="h-3 w-3" />
-                                                        )
-                                                    ) : (
-                                                        <div className="h-3 w-3" />
-                                                    )}
-                                                </button>
-                                            </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleSort('lead_status')}
-                                                    className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                >
-                                                    {sortField === 'lead_status' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                clearSort();
-                                                            }}
-                                                            className="text-red-500 hover:text-red-700 mr-1"
-                                                            title="Clear sort"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                    <span>Lead Status</span>
-                                                    {sortField === 'lead_status' ? (
-                                                        sortDirection === 'asc' ? (
-                                                            <ArrowUp className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowDown className="h-3 w-3" />
-                                                        )
-                                                    ) : (
-                                                        <div className="h-3 w-3" />
-                                                    )}
-                                                </button>
-                                            </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleSort('assigned_to')}
-                                                    className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                >
-                                                    {sortField === 'assigned_to' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                clearSort();
-                                                            }}
-                                                            className="text-red-500 hover:text-red-700 mr-1"
-                                                            title="Clear sort"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                    <span>Assigned To</span>
-                                                    {sortField === 'assigned_to' ? (
-                                                        sortDirection === 'asc' ? (
-                                                            <ArrowUp className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowDown className="h-3 w-3" />
-                                                        )
-                                                    ) : (
-                                                        <div className="h-3 w-3" />
-                                                    )}
-                                                </button>
-                                            </th>
+                                                    </th>
+                                                );
+                                            })}
                                         </tr>
                                         {/* Filter Row */}
                                         <tr className="bg-neutral-100 dark:bg-neutral-800/50">
                                             <th className="px-4 py-2"></th>
-                                            <th className="px-4 py-2">
-                                                <div className="flex items-center justify-center">
-                                                    {hasAnyActiveFilter() ? (
-                                                        <button
-                                                            onClick={clearAllFilters}
-                                                            className="text-red-500 hover:text-red-700 transition-colors"
-                                                            title="Clear all filters"
-                                                        >
-                                                            <X className="h-4 w-4" />
-                                                        </button>
-                                                    ) : (
-                                                        <div className="text-green-500">
-                                                            <Search className="h-4 w-4" />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </th>
-                                            {/* Name Filter */}
-                                            <th className="px-4 py-2">
-                                                <div className="relative">
-                                                    <Input
-                                                        type="text"
-                                                        placeholder="Search name..."
-                                                        value={typeof filters.full_name === 'string' && filters.full_name !== 'is_empty' ? filters.full_name : ''}
-                                                        onChange={(e) => handleFilterChange('full_name', e.target.value)}
-                                                        className="w-full text-xs h-8 pr-20"
-                                                    />
-                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                                        {!hasActiveFilter('full_name') && (
-                                                            <button
-                                                                onClick={() => handleFilterChange('full_name', 'is_empty')}
-                                                                className="text-xs text-blue-500 hover:text-blue-700 px-1"
-                                                                title="Filter empty"
-                                                            >
-                                                                Empty
-                                                            </button>
-                                                        )}
-                                                        {hasActiveFilter('full_name') && (
-                                                            <button
-                                                                onClick={() => clearFilter('full_name')}
-                                                                className="text-red-500 hover:text-red-700"
-                                                                title="Clear filter"
-                                                            >
-                                                                <X className="h-3 w-3" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </th>
-                                            {/* Phone Filter */}
-                                            <th className="px-4 py-2">
-                                                <div className="relative">
-                                                    <Input
-                                                        type="text"
-                                                        placeholder="Search phone..."
-                                                        value={typeof filters.phone === 'string' && filters.phone !== 'is_empty' ? filters.phone : ''}
-                                                        onChange={(e) => handleFilterChange('phone', e.target.value)}
-                                                        className="w-full text-xs h-8 pr-20"
-                                                    />
-                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                                        {!hasActiveFilter('phone') && (
-                                                            <button
-                                                                onClick={() => handleFilterChange('phone', 'is_empty')}
-                                                                className="text-xs text-blue-500 hover:text-blue-700 px-1"
-                                                                title="Filter empty"
-                                                            >
-                                                                Empty
-                                                            </button>
-                                                        )}
-                                                        {hasActiveFilter('phone') && (
-                                                            <button
-                                                                onClick={() => clearFilter('phone')}
-                                                                className="text-red-500 hover:text-red-700"
-                                                                title="Clear filter"
-                                                            >
-                                                                <X className="h-3 w-3" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </th>
-                                            {/* WhatsApp Filter */}
-                                            <th className="px-4 py-2">
-                                                <div className="relative">
-                                                    <Input
-                                                        type="text"
-                                                        placeholder="Search WhatsApp..."
-                                                        value={typeof filters.whatsapp_phone === 'string' && filters.whatsapp_phone !== 'is_empty' ? filters.whatsapp_phone : ''}
-                                                        onChange={(e) => handleFilterChange('whatsapp_phone', e.target.value)}
-                                                        className="w-full text-xs h-8 pr-20"
-                                                    />
-                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                                        {!hasActiveFilter('whatsapp_phone') && (
-                                                            <button
-                                                                onClick={() => handleFilterChange('whatsapp_phone', 'is_empty')}
-                                                                className="text-xs text-blue-500 hover:text-blue-700 px-1"
-                                                                title="Filter empty"
-                                                            >
-                                                                Empty
-                                                            </button>
-                                                        )}
-                                                        {hasActiveFilter('whatsapp_phone') && (
-                                                            <button
-                                                                onClick={() => clearFilter('whatsapp_phone')}
-                                                                className="text-red-500 hover:text-red-700"
-                                                                title="Clear filter"
-                                                            >
-                                                                <X className="h-3 w-3" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </th>
-                                            {/* Email Filter */}
-                                            <th className="px-4 py-2">
-                                                <div className="relative">
-                                                    <Input
-                                                        type="text"
-                                                        placeholder="Search email..."
-                                                        value={typeof filters.email === 'string' && filters.email !== 'is_empty' ? filters.email : ''}
-                                                        onChange={(e) => handleFilterChange('email', e.target.value)}
-                                                        className="w-full text-xs h-8 pr-20"
-                                                    />
-                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                                        {!hasActiveFilter('email') && (
-                                                            <button
-                                                                onClick={() => handleFilterChange('email', 'is_empty')}
-                                                                className="text-xs text-blue-500 hover:text-blue-700 px-1"
-                                                                title="Filter empty"
-                                                            >
-                                                                Empty
-                                                            </button>
-                                                        )}
-                                                        {hasActiveFilter('email') && (
-                                                            <button
-                                                                onClick={() => clearFilter('email')}
-                                                                className="text-red-500 hover:text-red-700"
-                                                                title="Clear filter"
-                                                            >
-                                                                <X className="h-3 w-3" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </th>
-                                            {/* Riding Company Filter */}
-                                            <th className="px-4 py-2">
-                                                <div className="relative">
-                                                    <Input
-                                                        type="text"
-                                                        placeholder="Search riding company..."
-                                                        value={typeof filters.riding_company === 'string' && filters.riding_company !== 'is_empty' ? filters.riding_company : ''}
-                                                        onChange={(e) => handleFilterChange('riding_company', e.target.value)}
-                                                        className="w-full text-xs h-8 pr-20"
-                                                    />
-                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                                        {!hasActiveFilter('riding_company') && (
-                                                            <button
-                                                                onClick={() => handleFilterChange('riding_company', 'is_empty')}
-                                                                className="text-xs text-blue-500 hover:text-blue-700 px-1"
-                                                                title="Filter empty"
-                                                            >
-                                                                Empty
-                                                            </button>
-                                                        )}
-                                                        {hasActiveFilter('riding_company') && (
-                                                            <button
-                                                                onClick={() => clearFilter('riding_company')}
-                                                                className="text-red-500 hover:text-red-700"
-                                                                title="Clear filter"
-                                                            >
-                                                                <X className="h-3 w-3" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </th>
-                                            {/* Campaign Filter */}
-                                            <th className="px-4 py-2">
-                                                <div className="relative">
-                                                    <Select
-                                                        key={`campaign-${filters.campaign_id === 'is_empty' ? 'is_empty' : (filters.campaign_id || 'empty')}`}
-                                                        value={filters.campaign_id === 'is_empty' ? 'is_empty' : (filters.campaign_id ? String(filters.campaign_id) : undefined)}
-                                                        onValueChange={(value) => {
-                                                            if (value === '__none__') {
-                                                                clearFilter('campaign_id');
-                                                            } else if (value === 'is_empty') {
-                                                                handleFilterChange('campaign_id', 'is_empty');
-                                                            } else {
-                                                                handleFilterChange('campaign_id', Number(value));
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="w-full text-xs h-8 pr-8">
-                                                            <SelectValue placeholder="Select..." />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="__none__">-- All --</SelectItem>
-                                                            <SelectItem value="is_empty" className="text-blue-500 hover:text-blue-700">Is Empty</SelectItem>
-                                                            {filterOptions.campaigns?.map((option) => (
-                                                                <SelectItem key={option.id} value={String(option.id)}>
-                                                                    {option.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    {hasActiveFilter('campaign_id') && (
-                                                        <button
-                                                            onClick={() => clearFilter('campaign_id')}
-                                                            className="absolute right-8 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-700 z-10"
-                                                            title="Clear filter"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </th>
-                                            {/* Lead Source Filter */}
-                                            <th className="px-4 py-2">
-                                                <div className="relative">
-                                                    <Select
-                                                        key={`lead_source-${filters.lead_source_id === 'is_empty' ? 'is_empty' : (filters.lead_source_id || 'empty')}`}
-                                                        value={filters.lead_source_id === 'is_empty' ? 'is_empty' : (filters.lead_source_id ? String(filters.lead_source_id) : undefined)}
-                                                        onValueChange={(value) => {
-                                                            if (value === '__none__') {
-                                                                clearFilter('lead_source_id');
-                                                            } else if (value === 'is_empty') {
-                                                                handleFilterChange('lead_source_id', 'is_empty');
-                                                            } else {
-                                                                handleFilterChange('lead_source_id', Number(value));
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="w-full text-xs h-8 pr-8">
-                                                            <SelectValue placeholder="Select..." />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="__none__">-- All --</SelectItem>
-                                                            <SelectItem value="is_empty" className="text-blue-500 hover:text-blue-700">Is Empty</SelectItem>
-                                                            {filterOptions.leadSources?.map((option) => (
-                                                                <SelectItem key={option.id} value={String(option.id)}>
-                                                                    {option.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    {hasActiveFilter('lead_source_id') && (
-                                                        <button
-                                                            onClick={() => clearFilter('lead_source_id')}
-                                                            className="absolute right-8 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-700 z-10"
-                                                            title="Clear filter"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </th>
-                                            {/* Lead Status Filter */}
-                                            <th className="px-4 py-2">
-                                                <div className="relative">
-                                                    <Select
-                                                        key={`lead_status-${filters.lead_status_id === 'is_empty' ? 'is_empty' : (filters.lead_status_id || 'empty')}`}
-                                                        value={filters.lead_status_id === 'is_empty' ? 'is_empty' : (filters.lead_status_id ? String(filters.lead_status_id) : undefined)}
-                                                        onValueChange={(value) => {
-                                                            if (value === '__none__') {
-                                                                clearFilter('lead_status_id');
-                                                            } else if (value === 'is_empty') {
-                                                                handleFilterChange('lead_status_id', 'is_empty');
-                                                            } else {
-                                                                handleFilterChange('lead_status_id', Number(value));
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="w-full text-xs h-8 pr-8">
-                                                            <SelectValue placeholder="Select..." />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="__none__">-- All --</SelectItem>
-                                                            <SelectItem value="is_empty" className="text-blue-500 hover:text-blue-700">Is Empty</SelectItem>
-                                                            {filterOptions.leadStatuses?.map((option) => (
-                                                                <SelectItem key={option.id} value={String(option.id)}>
-                                                                    {option.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    {hasActiveFilter('lead_status_id') && (
-                                                        <button
-                                                            onClick={() => clearFilter('lead_status_id')}
-                                                            className="absolute right-8 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-700 z-10"
-                                                            title="Clear filter"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </th>
-                                            {/* Assigned To Filter */}
-                                            <th className="px-4 py-2">
-                                                <div className="relative">
-                                                    <Select
-                                                        key={`assigned_to-${filters.assigned_to === 'is_empty' ? 'is_empty' : (filters.assigned_to || 'empty')}`}
-                                                        value={filters.assigned_to === 'is_empty' ? 'is_empty' : (filters.assigned_to ? String(filters.assigned_to) : undefined)}
-                                                        onValueChange={(value) => {
-                                                            if (value === '__none__') {
-                                                                clearFilter('assigned_to');
-                                                            } else if (value === 'is_empty') {
-                                                                handleFilterChange('assigned_to', 'is_empty');
-                                                            } else {
-                                                                handleFilterChange('assigned_to', Number(value));
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="w-full text-xs h-8 pr-8">
-                                                            <SelectValue placeholder="Select..." />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="__none__">-- All --</SelectItem>
-                                                            <SelectItem value="is_empty" className="text-blue-500 hover:text-blue-700">Is Empty</SelectItem>
-                                                            {filterOptions.users?.map((option) => (
-                                                                <SelectItem key={option.id} value={String(option.id)}>
-                                                                    {option.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    {hasActiveFilter('assigned_to') && (
-                                                        <button
-                                                            onClick={() => clearFilter('assigned_to')}
-                                                            className="absolute right-8 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-700 z-10"
-                                                            title="Clear filter"
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </th>
-                                            <th className="px-4 py-2"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                                        {sortedAndFilteredDrivers.map((row) => (
-                                            <tr
-                                                key={row.id}
-                                                className="hover:bg-neutral-50 dark:hover:bg-neutral-900/50"
-                                            >
-                                                <td className="px-4 py-3">
-                                                    <Checkbox
-                                                        checked={selectedDrivers.has(row.id)}
-                                                        onCheckedChange={(checked) =>
-                                                            handleSelectDriver(row.id, checked as boolean)
-                                                        }
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <div className="flex items-center justify-center gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleViewDetails(row)}
-                                                            className="flex items-center justify-center h-8 w-8 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                                                            title="View Details"
-                                                        >
-                                                            <Eye className="h-4 w-4 text-neutral-600 dark:text-neutral-400" />
-                                                        </button>
-                                                        {editingRowId === row.id ? (
-                                                            <>
+                                            {(visibleColumns || []).map((col) => {
+                                                if (col.id === 'actions') {
+                                                    return <th key={col.id} className="px-4 py-2">
+                                                        <div className="flex items-center justify-center">
+                                                            {hasAnyActiveFilter() ? (
                                                                 <button
-                                                                    type="button"
-                                                                    onClick={() => handleQuickSave(row.id)}
-                                                                    className="flex items-center justify-center h-8 w-8 rounded-md bg-green-500 text-white hover:bg-green-600 transition-colors"
-                                                                    title="Save"
-                                                                >
-                                                                    <Check className="h-4 w-4" />
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={handleQuickCancel}
-                                                                    className="flex items-center justify-center h-8 w-8 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
-                                                                    title="Cancel"
+                                                                    onClick={clearAllFilters}
+                                                                    className="text-red-500 hover:text-red-700 transition-colors"
+                                                                    title="Clear all filters"
                                                                 >
                                                                     <X className="h-4 w-4" />
                                                                 </button>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleQuickEdit(row)}
-                                                                    className="flex items-center justify-center h-8 w-8 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                                                                    title="Quick Edit"
-                                                                >
-                                                                    <Pencil className="h-4 w-4 text-neutral-600 dark:text-neutral-400" />
-                                                                </button>
-                                                                <Link href={`/drivers/drivers/${row.id}/edit`}>
-                                                                    <Button type="button" variant="outline" size="sm">
-                                                                        Edit
-                                                                    </Button>
-                                                                </Link>
-                                                                {canDeleteDriver() && (
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="destructive"
-                                                                        size="sm"
-                                                                        onClick={() => handleDelete(row)}
-                                                                    >
-                                                                        Delete
-                                                                    </Button>
-                                                                )}
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {editingRowId === row.id ? (
-                                                        <Input
-                                                            type="text"
-                                                            value={editingData?.full_name || ''}
-                                                            onChange={(e) => updateEditingData('full_name', e.target.value)}
-                                                            className="h-8 text-sm"
-                                                            autoFocus
-                                                        />
-                                                    ) : (
-                                        <Link
-                                            href={`/drivers/drivers/${row.id}`}
-                                            className="font-medium hover:underline"
-                                        >
-                                            {row.full_name}
-                                        </Link>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {editingRowId === row.id ? (
-                                                        <Input
-                                                            type="text"
-                                                            value={editingData?.phone || ''}
-                                                            onChange={(e) => updateEditingData('phone', e.target.value)}
-                                                            className="h-8 text-sm"
-                                                        />
-                                                    ) : (
-                                                        <div 
-                                                            className="relative inline-block group"
-                                                            onMouseEnter={() => {
-                                                                if (hoverTimeoutRef.current) {
-                                                                    clearTimeout(hoverTimeoutRef.current);
-                                                                    hoverTimeoutRef.current = null;
-                                                                }
-                                                                if (row.phone) {
-                                                                    setHoveredPhone(`phone-${row.id}`);
-                                                                }
-                                                            }}
-                                                            onMouseLeave={() => {
-                                                                hoverTimeoutRef.current = setTimeout(() => {
-                                                                    setHoveredPhone(null);
-                                                                }, 200);
-                                                            }}
-                                                        >
-                                                            <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                                                {row.phone}
-                                                            </span>
-                                                            {hoveredPhone === `phone-${row.id}` && row.phone && (
-                                                                <div 
-                                                                    className="absolute left-0 bottom-full mb-3 z-[9999] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-3 flex gap-3 pointer-events-auto"
-                                                                    onMouseEnter={() => {
-                                                                        if (hoverTimeoutRef.current) {
-                                                                            clearTimeout(hoverTimeoutRef.current);
-                                                                            hoverTimeoutRef.current = null;
-                                                                        }
-                                                                        setHoveredPhone(`phone-${row.id}`);
-                                                                    }}
-                                                                    onMouseLeave={() => {
-                                                                        hoverTimeoutRef.current = setTimeout(() => {
-                                                                            setHoveredPhone(null);
-                                                                        }, 200);
-                                                                    }}
-                                                                >
-                                                                    <a
-                                                                        href={`tel:${row.phone}`}
-                                                                        className="flex items-center justify-center w-10 h-10 rounded-md bg-green-500 hover:bg-green-600 text-white transition-colors"
-                                                                        title="Call"
-                                                                    >
-                                                                        <Phone className="h-5 w-5" />
-                                                                    </a>
-                                                                    <a
-                                                                        href={`https://api.whatsapp.com/send/?phone=${formatPhoneForWhatsApp(row.phone)}&text&type=phone_number&app_absent=0`}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="flex items-center justify-center w-10 h-10 rounded-md bg-green-600 hover:bg-green-700 text-white transition-colors"
-                                                                        title="WhatsApp"
-                                                                    >
-                                                                        <MessageCircle className="h-5 w-5" />
-                                                                    </a>
+                                                            ) : (
+                                                                <div className="text-green-500">
+                                                                    <Search className="h-4 w-4" />
                                                                 </div>
                                                             )}
                                                         </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {editingRowId === row.id ? (
-                                                        <Input
-                                                            type="text"
-                                                            value={editingData?.whatsapp_phone || ''}
-                                                            onChange={(e) => updateEditingData('whatsapp_phone', e.target.value)}
-                                                            className="h-8 text-sm"
-                                                        />
-                                                    ) : (
-                                                        row.whatsapp_phone ? (
-                                                            <div 
-                                                                className="relative inline-block group"
-                                                                onMouseEnter={() => {
-                                                                    if (hoverTimeoutRef.current) {
-                                                                        clearTimeout(hoverTimeoutRef.current);
-                                                                        hoverTimeoutRef.current = null;
-                                                                    }
-                                                                    if (row.whatsapp_phone) {
-                                                                        setHoveredPhone(`whatsapp-${row.id}`);
-                                                                    }
-                                                                }}
-                                                                onMouseLeave={() => {
-                                                                    hoverTimeoutRef.current = setTimeout(() => {
-                                                                        setHoveredPhone(null);
-                                                                    }, 200);
-                                                                }}
-                                                            >
-                                                                <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                                                    {row.whatsapp_phone}
-                                                                </span>
-                                                                {hoveredPhone === `whatsapp-${row.id}` && row.whatsapp_phone && (
-                                                                    <div 
-                                                                        className="absolute left-0 bottom-full mb-3 z-[9999] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-3 flex gap-3 pointer-events-auto"
-                                                                        onMouseEnter={() => {
-                                                                            if (hoverTimeoutRef.current) {
-                                                                                clearTimeout(hoverTimeoutRef.current);
-                                                                                hoverTimeoutRef.current = null;
-                                                                            }
-                                                                            setHoveredPhone(`whatsapp-${row.id}`);
-                                                                        }}
-                                                                        onMouseLeave={() => {
-                                                                            hoverTimeoutRef.current = setTimeout(() => {
-                                                                                setHoveredPhone(null);
-                                                                            }, 200);
-                                                                        }}
+                                                    </th>;
+                                                }
+                                                const filterKey = col.id === 'name' ? 'full_name' : 
+                                                                  col.id === 'whatsapp' ? 'whatsapp_phone' :
+                                                                  col.id === 'riding_company' ? 'riding_company' :
+                                                                  col.id === 'lead_source' ? 'lead_source_id' :
+                                                                  col.id === 'lead_status' ? 'lead_status_id' :
+                                                                  col.id === 'lead_stage' ? 'lead_stage_id' :
+                                                                  col.id === 'assigned_to' ? 'assigned_to' :
+                                                                  col.id === 'campaign' ? 'campaign_id' :
+                                                                  col.id;
+                                                if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to'].includes(col.id)) {
+                                                    return (
+                                                        <th key={col.id} className="px-4 py-2">
+                                                            <div className="relative">
+                                                                <Select
+                                                                    key={`${filterKey}-${filters[filterKey] === 'is_empty' ? 'is_empty' : (filters[filterKey] || 'empty')}`}
+                                                                    value={filters[filterKey] === 'is_empty' ? 'is_empty' : (filters[filterKey] ? String(filters[filterKey]) : undefined)}
+                                                                    onValueChange={(value) => {
+                                                                        if (value === '__none__') {
+                                                                            clearFilter(filterKey);
+                                                                        } else if (value === 'is_empty') {
+                                                                            handleFilterChange(filterKey, 'is_empty');
+                                                                        } else {
+                                                                            handleFilterChange(filterKey, Number(value));
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <SelectTrigger className="w-full text-xs h-8 pr-8">
+                                                                        <SelectValue placeholder="Select..." />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="__none__">-- All --</SelectItem>
+                                                                        <SelectItem value="is_empty" className="text-blue-500 hover:text-blue-700">Is Empty</SelectItem>
+                                                                        {(col.id === 'campaign' ? (filterOptions?.campaigns || []) :
+                                                                          col.id === 'lead_source' ? (filterOptions?.leadSources || []) :
+                                                                          col.id === 'lead_status' ? (filterOptions?.leadStatuses || []) :
+                                                                          col.id === 'lead_stage' ? ((filterOptions as any)?.leadStages || []) :
+                                                                          col.id === 'assigned_to' ? (filterOptions?.users || []) : []).map((option: any) => (
+                                                                            <SelectItem key={option.id} value={String(option.id)}>
+                                                                                {option.name}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                {hasActiveFilter(filterKey) && (
+                                                                    <button
+                                                                        onClick={() => clearFilter(filterKey)}
+                                                                        className="absolute right-8 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-700 z-10"
+                                                                        title="Clear filter"
                                                                     >
-                                                                        <a
-                                                                            href={`tel:${row.whatsapp_phone}`}
-                                                                            className="flex items-center justify-center w-10 h-10 rounded-md bg-green-500 hover:bg-green-600 text-white transition-colors"
-                                                                            title="Call"
-                                                                        >
-                                                                            <Phone className="h-5 w-5" />
-                                                                        </a>
-                                                                        <a
-                                                                            href={`https://api.whatsapp.com/send/?phone=${formatPhoneForWhatsApp(row.whatsapp_phone)}&text&type=phone_number&app_absent=0`}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="flex items-center justify-center w-10 h-10 rounded-md bg-green-600 hover:bg-green-700 text-white transition-colors"
-                                                                            title="WhatsApp"
-                                                                        >
-                                                                            <MessageCircle className="h-5 w-5" />
-                                                                        </a>
-                                                                    </div>
+                                                                        <X className="h-3 w-3" />
+                                                                    </button>
                                                                 )}
                                                             </div>
-                                                        ) : '-'
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {editingRowId === row.id ? (
-                                                        <Input
-                                                            type="email"
-                                                            value={editingData?.email || ''}
-                                                            onChange={(e) => updateEditingData('email', e.target.value)}
-                                                            className="h-8 text-sm"
-                                                        />
-                                                    ) : (
-                                                        row.email ? (
-                                                            <div 
-                                                                className="relative inline-block group"
-                                                                onMouseEnter={() => {
-                                                                    if (emailHoverTimeoutRef.current) {
-                                                                        clearTimeout(emailHoverTimeoutRef.current);
-                                                                        emailHoverTimeoutRef.current = null;
-                                                                    }
-                                                                    if (row.email) {
-                                                                        setHoveredEmail(`email-${row.id}`);
-                                                                    }
-                                                                }}
-                                                                onMouseLeave={() => {
-                                                                    emailHoverTimeoutRef.current = setTimeout(() => {
-                                                                        setHoveredEmail(null);
-                                                                    }, 200);
-                                                                }}
-                                                            >
-                                                                <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                                                    {row.email}
-                                                                </span>
-                                                                {hoveredEmail === `email-${row.id}` && row.email && (
-                                                                    <div 
-                                                                        className="absolute left-0 bottom-full mb-3 z-[9999] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-3 flex gap-3 pointer-events-auto"
-                                                                        onMouseEnter={() => {
-                                                                            if (emailHoverTimeoutRef.current) {
-                                                                                clearTimeout(emailHoverTimeoutRef.current);
-                                                                                emailHoverTimeoutRef.current = null;
-                                                                            }
-                                                                            setHoveredEmail(`email-${row.id}`);
-                                                                        }}
-                                                                        onMouseLeave={() => {
-                                                                            emailHoverTimeoutRef.current = setTimeout(() => {
-                                                                                setHoveredEmail(null);
-                                                                            }, 200);
-                                                                        }}
+                                                        </th>
+                                                    );
+                                                }
+                                                return (
+                                                    <th key={col.id} className="px-4 py-2">
+                                                        <div className="relative">
+                                                            <Input
+                                                                type="text"
+                                                                placeholder={`Search ${col.id}...`}
+                                                                value={typeof filters[filterKey] === 'string' && filters[filterKey] !== 'is_empty' ? filters[filterKey] : ''}
+                                                                onChange={(e) => handleFilterChange(filterKey, e.target.value)}
+                                                                className="w-full text-xs h-8 pr-20"
+                                                            />
+                                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                {!hasActiveFilter(filterKey) && (
+                                                                    <button
+                                                                        onClick={() => handleFilterChange(filterKey, 'is_empty')}
+                                                                        className="text-xs text-blue-500 hover:text-blue-700 px-1"
+                                                                        title="Filter empty"
                                                                     >
-                                                                        <a
-                                                                            href={`mailto:${row.email}`}
-                                                                            className="flex items-center justify-center w-10 h-10 rounded-md bg-blue-500 hover:bg-blue-600 text-white transition-colors"
-                                                                            title="Send Email"
-                                                                        >
-                                                                            <Mail className="h-5 w-5" />
-                                                                        </a>
-                                                                    </div>
+                                                                        Empty
+                                                                    </button>
+                                                                )}
+                                                                {hasActiveFilter(filterKey) && (
+                                                                    <button
+                                                                        onClick={() => clearFilter(filterKey)}
+                                                                        className="text-red-500 hover:text-red-700"
+                                                                        title="Clear filter"
+                                                                    >
+                                                                        <X className="h-3 w-3" />
+                                                                    </button>
                                                                 )}
                                                             </div>
-                                                        ) : '-'
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {editingRowId === row.id ? (
-                                                        <Select
-                                                            key={`riding-company-${row.id}-${editingData?.riding_company_id || 'none'}`}
-                                                            value={editingData?.riding_company_id ? String(editingData.riding_company_id) : '__none__'}
-                                                            onValueChange={(value) => updateEditingData('riding_company_id', value === '__none__' ? null : Number(value))}
-                                                        >
-                                                            <SelectTrigger className="h-8 text-sm">
-                                                                <SelectValue placeholder="Select..." />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="__none__">-- None --</SelectItem>
-                                                                {filterOptions.ridingCompanies?.map((option) => (
-                                                                    <SelectItem key={option.id} value={String(option.id)}>
-                                                                        {option.name}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    ) : (
-                                                        row.riding_company?.name || '-'
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {editingRowId === row.id ? (
-                                                        <Select
-                                                            key={`campaign-${row.id}-${editingData?.campaign_id || 'none'}`}
-                                                            value={editingData?.campaign_id ? String(editingData.campaign_id) : '__none__'}
-                                                            onValueChange={(value) => updateEditingData('campaign_id', value === '__none__' ? null : Number(value))}
-                                                        >
-                                                            <SelectTrigger className="h-8 text-sm">
-                                                                <SelectValue placeholder="Select..." />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="__none__">-- None --</SelectItem>
-                                                                {filterOptions.campaigns?.map((option) => (
-                                                                    <SelectItem key={option.id} value={String(option.id)}>
-                                                                        {option.name}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    ) : (
-                                                        row.campaign?.name || '-'
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {editingRowId === row.id ? (
-                                                        <Select
-                                                            key={`lead-source-${row.id}-${editingData?.lead_source_id || 'none'}`}
-                                                            value={editingData?.lead_source_id ? String(editingData.lead_source_id) : '__none__'}
-                                                            onValueChange={(value) => updateEditingData('lead_source_id', value === '__none__' ? null : Number(value))}
-                                                        >
-                                                            <SelectTrigger className="h-8 text-sm">
-                                                                <SelectValue placeholder="Select..." />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="__none__">-- None --</SelectItem>
-                                                                {filterOptions.leadSources?.map((option) => (
-                                                                    <SelectItem key={option.id} value={String(option.id)}>
-                                                                        {option.name}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    ) : (
-                                                        row.lead_source?.name || '-'
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {editingRowId === row.id ? (
-                                                        <Select
-                                                            key={`lead-status-${row.id}-${editingData?.lead_status_id || 'none'}`}
-                                                            value={editingData?.lead_status_id ? String(editingData.lead_status_id) : '__none__'}
-                                                            onValueChange={(value) => updateEditingData('lead_status_id', value === '__none__' ? null : Number(value))}
-                                                        >
-                                                            <SelectTrigger className="h-8 text-sm">
-                                                                <SelectValue placeholder="Select..." />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="__none__">-- None --</SelectItem>
-                                                                {filterOptions.leadStatuses?.map((option) => (
-                                                                    <SelectItem key={option.id} value={String(option.id)}>
-                                                                        {option.name}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    ) : (
-                                        row.lead_status ? (
-                                            <Badge
-                                                variant="outline"
-                                                style={{
-                                                    borderColor: row.lead_status.color || 'gray',
-                                                    color: row.lead_status.color || 'gray',
-                                                }}
-                                            >
-                                                {row.lead_status.name}
-                                            </Badge>
-                                        ) : (
-                                            '-'
-                                                        )
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {editingRowId === row.id ? (
-                                                        <Select
-                                                            key={`assigned-to-edit-${row.id}`}
-                                                            value={editingData?.assigned_to ? String(editingData.assigned_to) : undefined}
-                                                            onValueChange={(value) => updateEditingData('assigned_to', value === '__none__' ? null : Number(value))}
-                                                        >
-                                                            <SelectTrigger className="h-8 text-sm">
-                                                                <SelectValue placeholder="Select a user..." />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="__none__">-- None --</SelectItem>
-                                                                {filterOptions.users?.map((option) => (
-                                                                    <SelectItem key={option.id} value={String(option.id)}>
-                                                                        {option.name}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    ) : (
-                                                        row.assigned_to?.name || '-'
-                                                    )}
+                                                        </div>
+                                                    </th>
+                                                );
+                                            })}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                                        {(!paginatedDrivers || paginatedDrivers.length === 0) ? (
+                                            <tr>
+                                                <td
+                                                    colSpan={(visibleColumns?.length || 0) + 1}
+                                                    className="px-4 py-8 text-center text-sm text-neutral-500"
+                                                >
+                                                    No drivers found
                                                 </td>
                                             </tr>
-                                        ))}
+                                        ) : (
+                                            (paginatedDrivers || []).map((driver) => (
+                                                <tr
+                                                    key={driver.id}
+                                                    className="hover:bg-neutral-50 dark:hover:bg-neutral-900/50 cursor-pointer"
+                                                    onClick={(e) => {
+                                                        // Don't navigate if clicking on interactive elements
+                                                        const target = e.target as HTMLElement;
+                                                        // Check if clicking on button, link, input, or checkbox
+                                                        if (target.closest('button') || 
+                                                            target.closest('a') || 
+                                                            target.closest('input') ||
+                                                            target.closest('[role="checkbox"]')) {
+                                                            return;
+                                                        }
+                                                        
+                                                        // Clear any pending click timeout
+                                                        if (clickTimeoutRef.current) {
+                                                            clearTimeout(clickTimeoutRef.current);
+                                                        }
+                                                        
+                                                        const now = Date.now();
+                                                        const timeSinceLastClick = now - lastClickTimeRef.current;
+                                                        
+                                                        // If this is a potential double click (within 300ms), wait a bit
+                                                        if (timeSinceLastClick < 300) {
+                                                            // This might be a double click, don't navigate yet
+                                                            return;
+                                                        }
+                                                        
+                                                        // Set a timeout to navigate after a short delay
+                                                        // This allows us to cancel if a double click happens
+                                                        clickTimeoutRef.current = setTimeout(() => {
+                                                            router.visit(`/drivers/drivers/${driver.id}`);
+                                                        }, 300);
+                                                        
+                                                        lastClickTimeRef.current = now;
+                                                    }}
+                                                    onDoubleClick={(e) => {
+                                                        // Don't open quick edit if double clicking on interactive elements
+                                                        const target = e.target as HTMLElement;
+                                                        if (target.closest('button') || 
+                                                            target.closest('a') || 
+                                                            target.closest('input') ||
+                                                            target.closest('[role="checkbox"]')) {
+                                                            return;
+                                                        }
+                                                        
+                                                        // Cancel any pending single click navigation
+                                                        if (clickTimeoutRef.current) {
+                                                            clearTimeout(clickTimeoutRef.current);
+                                                            clickTimeoutRef.current = null;
+                                                        }
+                                                        
+                                                        e.stopPropagation();
+                                                        e.preventDefault();
+                                                        setQuickEditDialog({ open: true, driver });
+                                                    }}
+                                                >
+                                                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                                        <Checkbox
+                                                            checked={selectedDrivers.has(driver.id)}
+                                                            onCheckedChange={(checked) => {
+                                                                handleSelectDriver(driver.id, checked as boolean);
+                                                            }}
+                                                        />
+                                                    </td>
+                                                    {(visibleColumns || []).map((col) => {
+                                                        if (col.id === 'actions') {
+                                                            return (
+                                                                <td key={col.id} className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                                                    <div className="flex items-center justify-center gap-2">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleViewDetails(driver);
+                                                                            }}
+                                                                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                                                            title="View Details"
+                                                                        >
+                                                                            <Eye className="h-4 w-4" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setQuickEditDialog({ open: true, driver });
+                                                                            }}
+                                                                            className="text-yellow-600 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
+                                                                            title="Quick Edit"
+                                                                        >
+                                                                            <Pencil className="h-4 w-4" />
+                                                                        </button>
+                                                                        {canDeleteDriver() && (
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleDelete(driver);
+                                                                                }}
+                                                                                className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                                                                title="Delete"
+                                                                            >
+                                                                                <X className="h-4 w-4" />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                            );
+                                                        }
+                                                        // Render cell content based on column id
+                                                        let cellContent: React.ReactNode = '';
+                                                        switch (col.id) {
+                                                            case 'name':
+                                                                cellContent = driver.full_name || '-';
+                                                                break;
+                                                            case 'phone':
+                                                                cellContent = driver.phone ? (
+                                                                    <div className="relative group" onClick={(e) => e.stopPropagation()}>
+                                                                        <span
+                                                                            onMouseEnter={(e) => {
+                                                                                if (hoverTimeoutRef.current) {
+                                                                                    clearTimeout(hoverTimeoutRef.current);
+                                                                                }
+                                                                                setHoveredPhone(driver.phone || null);
+                                                                                setPhoneMousePosition({ x: e.clientX, y: e.clientY });
+                                                                            }}
+                                                                            onMouseMove={(e) => {
+                                                                                setPhoneMousePosition({ x: e.clientX, y: e.clientY });
+                                                                            }}
+                                                                            onMouseLeave={() => {
+                                                                                hoverTimeoutRef.current = setTimeout(() => {
+                                                                                    setHoveredPhone(null);
+                                                                                    setPhoneMousePosition(null);
+                                                                                }, 200);
+                                                                            }}
+                                                                        >
+                                                                            {driver.phone}
+                                                                        </span>
+                                                                        {hoveredPhone === driver.phone && phoneMousePosition && (
+                                                                            <div className="fixed z-[9999] flex gap-2 bg-white dark:bg-neutral-800 p-3 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 pointer-events-auto"
+                                                                                style={{ 
+                                                                                    left: `${phoneMousePosition.x}px`,
+                                                                                    top: `${phoneMousePosition.y - 60}px`,
+                                                                                    transform: 'translate(-50%, 0)'
+                                                                                }}
+                                                                                onMouseEnter={() => {
+                                                                                    if (hoverTimeoutRef.current) {
+                                                                                        clearTimeout(hoverTimeoutRef.current);
+                                                                                    }
+                                                                                }}
+                                                                                onMouseLeave={() => {
+                                                                                    hoverTimeoutRef.current = setTimeout(() => {
+                                                                                        setHoveredPhone(null);
+                                                                                        setPhoneMousePosition(null);
+                                                                                    }, 200);
+                                                                                }}
+                                                                            >
+                                                                                <a
+                                                                                    href={`tel:${driver.phone}`}
+                                                                                    className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
+                                                                                >
+                                                                                    <Phone className="h-5 w-5" />
+                                                                                </a>
+                                                                                <a
+                                                                                    href={`https://wa.me/${formatPhoneForWhatsApp(driver.phone)}`}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
+                                                                                    className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
+                                                                                >
+                                                                                    <MessageCircle className="h-5 w-5" />
+                                                                                </a>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'whatsapp':
+                                                                cellContent = driver.whatsapp_phone ? (
+                                                                    <div className="relative group" onClick={(e) => e.stopPropagation()}>
+                                                                        <span
+                                                                            onMouseEnter={(e) => {
+                                                                                if (hoverTimeoutRef.current) {
+                                                                                    clearTimeout(hoverTimeoutRef.current);
+                                                                                }
+                                                                                setHoveredPhone(driver.whatsapp_phone || null);
+                                                                                setWhatsappMousePosition({ x: e.clientX, y: e.clientY });
+                                                                            }}
+                                                                            onMouseMove={(e) => {
+                                                                                setWhatsappMousePosition({ x: e.clientX, y: e.clientY });
+                                                                            }}
+                                                                            onMouseLeave={() => {
+                                                                                hoverTimeoutRef.current = setTimeout(() => {
+                                                                                    setHoveredPhone(null);
+                                                                                    setWhatsappMousePosition(null);
+                                                                                }, 200);
+                                                                            }}
+                                                                        >
+                                                                            {driver.whatsapp_phone}
+                                                                        </span>
+                                                                        {hoveredPhone === driver.whatsapp_phone && whatsappMousePosition && (
+                                                                            <div className="fixed z-[9999] flex gap-2 bg-white dark:bg-neutral-800 p-3 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 pointer-events-auto"
+                                                                                style={{ 
+                                                                                    left: `${whatsappMousePosition.x}px`,
+                                                                                    top: `${whatsappMousePosition.y - 60}px`,
+                                                                                    transform: 'translate(-50%, 0)'
+                                                                                }}
+                                                                                onMouseEnter={() => {
+                                                                                    if (hoverTimeoutRef.current) {
+                                                                                        clearTimeout(hoverTimeoutRef.current);
+                                                                                    }
+                                                                                }}
+                                                                                onMouseLeave={() => {
+                                                                                    hoverTimeoutRef.current = setTimeout(() => {
+                                                                                        setHoveredPhone(null);
+                                                                                        setWhatsappMousePosition(null);
+                                                                                    }, 200);
+                                                                                }}
+                                                                            >
+                                                                                <a
+                                                                                    href={`tel:${driver.whatsapp_phone}`}
+                                                                                    className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
+                                                                                >
+                                                                                    <Phone className="h-5 w-5" />
+                                                                                </a>
+                                                                                <a
+                                                                                    href={`https://wa.me/${formatPhoneForWhatsApp(driver.whatsapp_phone)}`}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
+                                                                                    className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
+                                                                                >
+                                                                                    <MessageCircle className="h-5 w-5" />
+                                                                                </a>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'email':
+                                                                cellContent = driver.email ? (
+                                                                    <div className="relative group" onClick={(e) => e.stopPropagation()}>
+                                                                        <span
+                                                                            onMouseEnter={(e) => {
+                                                                                if (emailHoverTimeoutRef.current) {
+                                                                                    clearTimeout(emailHoverTimeoutRef.current);
+                                                                                }
+                                                                                setHoveredEmail(driver.email || null);
+                                                                                setEmailMousePosition({ x: e.clientX, y: e.clientY });
+                                                                            }}
+                                                                            onMouseMove={(e) => {
+                                                                                setEmailMousePosition({ x: e.clientX, y: e.clientY });
+                                                                            }}
+                                                                            onMouseLeave={() => {
+                                                                                emailHoverTimeoutRef.current = setTimeout(() => {
+                                                                                    setHoveredEmail(null);
+                                                                                    setEmailMousePosition(null);
+                                                                                }, 200);
+                                                                            }}
+                                                                        >
+                                                                            {driver.email}
+                                                                        </span>
+                                                                        {hoveredEmail === driver.email && emailMousePosition && (
+                                                                            <div className="fixed z-[9999] bg-white dark:bg-neutral-800 p-3 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 pointer-events-auto"
+                                                                                style={{ 
+                                                                                    left: `${emailMousePosition.x}px`,
+                                                                                    top: `${emailMousePosition.y - 60}px`,
+                                                                                    transform: 'translate(-50%, 0)'
+                                                                                }}
+                                                                                onMouseEnter={() => {
+                                                                                    if (emailHoverTimeoutRef.current) {
+                                                                                        clearTimeout(emailHoverTimeoutRef.current);
+                                                                                    }
+                                                                                }}
+                                                                                onMouseLeave={() => {
+                                                                                    emailHoverTimeoutRef.current = setTimeout(() => {
+                                                                                        setHoveredEmail(null);
+                                                                                        setEmailMousePosition(null);
+                                                                                    }, 200);
+                                                                                }}
+                                                                            >
+                                                                                <a
+                                                                                    href={`mailto:${driver.email}`}
+                                                                                    className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+                                                                                >
+                                                                                    <Mail className="h-5 w-5" />
+                                                                                </a>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'riding_company':
+                                                                cellContent = driver.riding_company?.name || '-';
+                                                                break;
+                                                            case 'campaign':
+                                                                cellContent = driver.campaign?.name || '-';
+                                                                break;
+                                                            case 'lead_source':
+                                                                cellContent = driver.lead_source?.name || '-';
+                                                                break;
+                                                            case 'lead_status':
+                                                                cellContent = driver.lead_status?.name || '-';
+                                                                break;
+                                                            case 'lead_stage':
+                                                                cellContent = driver.lead_stage?.name || '-';
+                                                                break;
+                                                            case 'assigned_to':
+                                                                cellContent = driver.assigned_to?.name || '-';
+                                                                break;
+                                                            case 'uuid':
+                                                                cellContent = driver.uuid || '-';
+                                                                break;
+                                                            case 'created_at':
+                                                                cellContent = driver.created_at ? new Date(driver.created_at).toLocaleDateString() : '-';
+                                                                break;
+                                                            case 'updated_at':
+                                                                cellContent = driver.updated_at ? new Date(driver.updated_at).toLocaleDateString() : '-';
+                                                                break;
+                                                            default:
+                                                                cellContent = '-';
+                                                        }
+                                                        return (
+                                                            <td key={col.id} className="px-4 py-3 text-sm">
+                                                                {cellContent}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))
+                                        )}
                                     </tbody>
                                 </table>
-                                        </div>
+                            </div>
+
+                            {/* Pagination Controls */}
+                            <div className="mt-4 flex items-center justify-between">
+                                <div className="text-sm text-neutral-600 dark:text-neutral-400">
+                                    Page {currentPage} of {totalPages}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handlePageChange(currentPage - 1)}
+                                        disabled={currentPage === 1}
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                        Previous
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handlePageChange(currentPage + 1)}
+                                        disabled={currentPage === totalPages}
+                                    >
+                                        Next
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
                         </>
                     ) : (
-                        <div className="py-12 text-center">
-                            <p className="text-neutral-500">No drivers found.</p>
-                            <Link href="/drivers/drivers/create" className="mt-4 inline-block">
-                                <Button>Create First Driver</Button>
-                            </Link>
+                        <div className="text-center py-12 text-neutral-500">
+                            No drivers found
                         </div>
                     )}
                 </Card>
@@ -1823,6 +1781,16 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                     title="Delete Driver"
                     description={`Are you sure you want to delete ${deleteDialog.driver?.full_name}? This action cannot be undone.`}
                 />
+
+                {/* Quick Edit Dialog */}
+                {quickEditDialog.driver && (
+                    <QuickEditDialog
+                        driver={quickEditDialog.driver}
+                        open={quickEditDialog.open}
+                        onOpenChange={(open) => setQuickEditDialog({ open, driver: null })}
+                        filterOptions={filterOptions}
+                    />
+                )}
 
                 <DeleteDialog
                     open={massDeleteDialog}
@@ -2113,26 +2081,140 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                                                                     </p>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex items-center gap-2">
+                                                            <div className="flex items-center gap-2 flex-wrap">
                                                                 {doc.uploaded_path ? (
                                                                     <>
-                                                                        {getStatusBadge(doc.status)}
-                                                                        <Button 
-                                                                            variant="outline" 
-                                                                            size="sm"
-                                                                            onClick={() => handleViewFile(doc.id)}
-                                                                        >
-                                                                            <Eye className="h-4 w-4 mr-1" />
-                                                                            View
-                                                                            {doc.original_filename && (
-                                                                                <span className="ml-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
-                                                                                    .{doc.original_filename.split('.').pop()?.toUpperCase()}
-                                                                                </span>
-                                                                            )}
-                                                                        </Button>
+                                                                        {/* Status buttons - only show if file is uploaded */}
+                                                                        {(canSetPending() || canSetApproved() || canSetRejected()) && (
+                                                                            <div className="flex items-center gap-1 border rounded-md p-1">
+                                                                                {canSetPending() && (
+                                                                                    <Button
+                                                                                        variant={doc.status === 'pending' ? 'default' : 'ghost'}
+                                                                                        size="sm"
+                                                                                        className={`h-7 px-3 text-xs ${
+                                                                                            doc.status === 'pending'
+                                                                                                ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                        }`}
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleUpdateStatus(doc.id, 'pending');
+                                                                                        }}
+                                                                                    >
+                                                                                        PENDING
+                                                                                    </Button>
+                                                                                )}
+                                                                                {canSetApproved() && (
+                                                                                    <Button
+                                                                                        variant={doc.status === 'approved' ? 'default' : 'ghost'}
+                                                                                        size="sm"
+                                                                                        className={`h-7 px-3 text-xs ${
+                                                                                            doc.status === 'approved'
+                                                                                                ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                        }`}
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleUpdateStatus(doc.id, 'approved');
+                                                                                        }}
+                                                                                    >
+                                                                                        APPROVED
+                                                                                    </Button>
+                                                                                )}
+                                                                                {canSetRejected() && (
+                                                                                    <Button
+                                                                                        variant={doc.status === 'rejected' ? 'default' : 'ghost'}
+                                                                                        size="sm"
+                                                                                        className={`h-7 px-3 text-xs ${
+                                                                                            doc.status === 'rejected'
+                                                                                                ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                        }`}
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleUpdateStatus(doc.id, 'rejected');
+                                                                                        }}
+                                                                                    >
+                                                                                        REJECT
+                                                                                    </Button>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                        {canViewDocument() && (
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleViewFile(doc.id);
+                                                                                }}
+                                                                            >
+                                                                                <Eye className="h-4 w-4 mr-1" />
+                                                                                View
+                                                                                {getFileExtension(doc.original_filename, doc.uploaded_path) && (
+                                                                                    <span className="ml-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                                                                        .{getFileExtension(doc.original_filename, doc.uploaded_path)}
+                                                                                    </span>
+                                                                                )}
+                                                                            </Button>
+                                                                        )}
+                                                                        {canReplaceDocument() && (
+                                                                            <>
+                                                                                <input
+                                                                                    ref={(el) => (fileInputRefs.current[doc.id] = el)}
+                                                                                    type="file"
+                                                                                    accept="image/jpeg,image/jpg,image/png,application/pdf"
+                                                                                    className="hidden"
+                                                                                    onChange={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleFileSelect(doc.id, e);
+                                                                                    }}
+                                                                                />
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        fileInputRefs.current[doc.id]?.click();
+                                                                                    }}
+                                                                                    disabled={uploadingDocId === doc.id}
+                                                                                >
+                                                                                    <Edit className="h-4 w-4 mr-1" />
+                                                                                    {uploadingDocId === doc.id ? 'Uploading...' : 'Replace'}
+                                                                                </Button>
+                                                                            </>
+                                                                        )}
                                                                     </>
                                                                 ) : (
-                                                                    getStatusBadge(doc.status)
+                                                                    <>
+                                                                        {getStatusBadge(doc.status)}
+                                                                        {canUploadDocument() && (
+                                                                            <>
+                                                                                <input
+                                                                                    ref={(el) => (fileInputRefs.current[doc.id] = el)}
+                                                                                    type="file"
+                                                                                    accept="image/jpeg,image/jpg,image/png,application/pdf"
+                                                                                    className="hidden"
+                                                                                    onChange={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleFileSelect(doc.id, e);
+                                                                                    }}
+                                                                                />
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        fileInputRefs.current[doc.id]?.click();
+                                                                                    }}
+                                                                                    disabled={uploadingDocId === doc.id}
+                                                                                >
+                                                                                    <Upload className="h-4 w-4 mr-1" />
+                                                                                    {uploadingDocId === doc.id ? 'Uploading...' : 'Upload'}
+                                                                                </Button>
+                                                                            </>
+                                                                        )}
+                                                                    </>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -2205,6 +2287,246 @@ export default function DriversIndex({ drivers, importAvailableFields, filterOpt
                 </Dialog>
             </div>
         </AppLayout>
+    );
+}
+
+// Quick Edit Dialog Component
+interface QuickEditDialogProps {
+    driver: Driver;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    filterOptions: {
+        companies?: FilterOption[];
+        ridingCompanies?: FilterOption[];
+        campaigns?: FilterOption[];
+        leadSources?: FilterOption[];
+        leadStatuses?: FilterOption[];
+        users?: FilterOption[];
+    };
+}
+
+function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEditDialogProps) {
+    const page = usePage<SharedData>();
+    const isSuperAdmin = page.props.auth?.user?.is_super_admin;
+    
+    const { data, setData, put, processing, errors, transform } = useForm({
+        company_id: driver.company_id ? String(driver.company_id) : '',
+        full_name: driver.full_name || '',
+        phone: driver.phone || '',
+        whatsapp_phone: driver.whatsapp_phone || '',
+        email: driver.email || '',
+        riding_company_id: driver.riding_company?.id ? String(driver.riding_company.id) : '',
+        campaign_id: driver.campaign?.id ? String(driver.campaign.id) : '',
+        lead_source_id: driver.lead_source?.id ? String(driver.lead_source.id) : '',
+        assigned_to: driver.assigned_to?.id ? String(driver.assigned_to.id) : '',
+        lead_status_id: driver.lead_status?.id ? String(driver.lead_status.id) : '',
+        lead_stage_id: driver.lead_stage?.id ? String(driver.lead_stage.id) : '',
+        current_stage_id: '',
+        notes: '',
+    });
+
+    // Transform data before submitting - convert empty strings to null
+    transform((data) => {
+        const transformed: any = {
+            full_name: data.full_name,
+            phone: data.phone,
+            whatsapp_phone: data.whatsapp_phone || null,
+            email: data.email || null,
+            riding_company_id: data.riding_company_id || null,
+            campaign_id: data.campaign_id || null,
+            lead_source_id: data.lead_source_id || null,
+            assigned_to: data.assigned_to || null,
+            lead_status_id: data.lead_status_id || null,
+            lead_stage_id: data.lead_stage_id || null,
+            current_stage_id: data.current_stage_id || null,
+            notes: data.notes || null,
+        };
+        
+        // Add company_id only for super admin
+        if (isSuperAdmin && data.company_id) {
+            transformed.company_id = data.company_id;
+        }
+        
+        return transformed;
+    });
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        put(`/drivers/drivers/${driver.id}`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                onOpenChange(false);
+                router.reload({ only: ['drivers'] });
+            },
+            onError: (errors) => {
+                console.error('Error updating driver:', errors);
+            },
+        });
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="!max-w-6xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>Quick Edit Driver</DialogTitle>
+                    <DialogDescription>
+                        Edit driver details: {driver.full_name}
+                    </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Full Name</label>
+                            <Input
+                                value={data.full_name}
+                                onChange={(e) => setData('full_name', e.target.value)}
+                                className={errors.full_name ? 'border-red-500' : ''}
+                            />
+                            {errors.full_name && (
+                                <p className="text-sm text-red-500 mt-1">{errors.full_name}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Phone</label>
+                            <Input
+                                value={data.phone}
+                                onChange={(e) => setData('phone', e.target.value)}
+                                className={errors.phone ? 'border-red-500' : ''}
+                            />
+                            {errors.phone && (
+                                <p className="text-sm text-red-500 mt-1">{errors.phone}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">WhatsApp</label>
+                            <Input
+                                value={data.whatsapp_phone}
+                                onChange={(e) => setData('whatsapp_phone', e.target.value)}
+                                className={errors.whatsapp_phone ? 'border-red-500' : ''}
+                            />
+                            {errors.whatsapp_phone && (
+                                <p className="text-sm text-red-500 mt-1">{errors.whatsapp_phone}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Email</label>
+                            <Input
+                                type="email"
+                                value={data.email}
+                                onChange={(e) => setData('email', e.target.value)}
+                                className={errors.email ? 'border-red-500' : ''}
+                            />
+                            {errors.email && (
+                                <p className="text-sm text-red-500 mt-1">{errors.email}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Riding Company</label>
+                            <Select
+                                value={data.riding_company_id}
+                                onValueChange={(value) => setData('riding_company_id', value)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Riding Company" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {filterOptions.ridingCompanies?.map((company) => (
+                                        <SelectItem key={company.id} value={String(company.id)}>
+                                            {company.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Campaign</label>
+                            <Select
+                                value={data.campaign_id}
+                                onValueChange={(value) => setData('campaign_id', value)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Campaign" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {filterOptions.campaigns?.map((campaign) => (
+                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                            {campaign.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Lead Source</label>
+                            <Select
+                                value={data.lead_source_id}
+                                onValueChange={(value) => setData('lead_source_id', value)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Lead Source" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {filterOptions.leadSources?.map((source) => (
+                                        <SelectItem key={source.id} value={String(source.id)}>
+                                            {source.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Lead Status</label>
+                            <Select
+                                value={data.lead_status_id}
+                                onValueChange={(value) => setData('lead_status_id', value)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Lead Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {filterOptions.leadStatuses?.map((status) => (
+                                        <SelectItem key={status.id} value={String(status.id)}>
+                                            {status.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Assigned To</label>
+                            <Select
+                                value={data.assigned_to}
+                                onValueChange={(value) => setData('assigned_to', value)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select User" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {filterOptions.users?.map((user) => (
+                                        <SelectItem key={user.id} value={String(user.id)}>
+                                            {user.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-4">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                            disabled={processing}
+                        >
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={processing}>
+                            {processing ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                    </div>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
 

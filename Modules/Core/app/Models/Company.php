@@ -114,5 +114,23 @@ class Company extends Model
     {
         return $query->where('is_active', true);
     }
+
+    /**
+     * Get the logo URL.
+     */
+    public function getLogoUrlAttribute(): ?string
+    {
+        if (! $this->logo) {
+            return null;
+        }
+
+        // If logo is already a full URL, return it
+        if (filter_var($this->logo, FILTER_VALIDATE_URL)) {
+            return $this->logo;
+        }
+
+        // Otherwise, return storage URL
+        return \Illuminate\Support\Facades\Storage::url($this->logo);
+    }
 }
 

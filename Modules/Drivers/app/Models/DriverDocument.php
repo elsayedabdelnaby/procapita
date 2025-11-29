@@ -18,7 +18,6 @@ class DriverDocument extends Model
     use HasFactory, LogsActivity;
 
     protected $fillable = [
-        'company_id',
         'driver_id',
         'document_template_id',
         'uploaded_path',

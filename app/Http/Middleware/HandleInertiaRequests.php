@@ -138,7 +138,7 @@ class HandleInertiaRequests extends Middleware
             if ($selectedCompanyId) {
                 $selectedCompany = \Modules\Core\app\Models\Company::find($selectedCompanyId);
             }
-            $companies = \Modules\Core\app\Models\Company::active()->orderBy('name')->get(['id', 'name']);
+            $companies = \Modules\Core\app\Models\Company::active()->orderBy('name')->get(['id', 'name', 'logo']);
         }
 
         // Load user permissions if user exists (both direct and through roles)
@@ -188,8 +188,17 @@ class HandleInertiaRequests extends Middleware
             'selectedCompany' => $selectedCompany ? [
                 'id' => $selectedCompany->id,
                 'name' => $selectedCompany->name,
+                'slug' => $selectedCompany->slug,
+                'logo' => $selectedCompany->logo,
+                'logo_url' => $selectedCompany->logo_url,
             ] : null,
-            'companies' => $companies->map(fn($c) => ['id' => $c->id, 'name' => $c->name])->toArray(),
+            'companies' => $companies->map(fn($c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'slug' => $c->slug,
+                'logo' => $c->logo,
+                'logo_url' => $c->logo_url,
+            ])->toArray(),
         ];
     }
 

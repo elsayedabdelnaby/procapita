@@ -117,6 +117,11 @@ class DriverController extends Controller
                     'name' => $driver->leadStatus->name,
                     'color' => $driver->leadStatus->color,
                 ] : null,
+                'lead_stage' => $driver->leadStage ? [
+                    'id' => $driver->leadStage->id,
+                    'name' => $driver->leadStage->name,
+                    'color' => $driver->leadStage->color,
+                ] : null,
                 'created_at' => $driver->created_at,
                 'updated_at' => $driver->updated_at,
             ]),
@@ -171,6 +176,15 @@ class DriverController extends Controller
                 }
             }
 
+            // Convert empty strings to null for nullable fields
+            if (isset($data['lead_stage_id'])) {
+                if ($data['lead_stage_id'] === '' || $data['lead_stage_id'] === null) {
+                    $data['lead_stage_id'] = null;
+                } else {
+                    $data['lead_stage_id'] = (int) $data['lead_stage_id'];
+                }
+            }
+
             $this->driverService->createDriver($data);
 
             return redirect()
@@ -196,6 +210,20 @@ class DriverController extends Controller
         $stagesProgress = $driverModel->getStagesProgress();
         $stagesStatus = $driverModel->getStagesStatus();
         $nextStage = $driverModel->getNextStage();
+
+        // Get next and previous driver IDs
+        $companyId = $this->getCompanyId();
+        $nextDriver = \Modules\Drivers\app\Models\Driver::where('id', '>', $driverModel->id)
+            ->when($companyId, fn($q) => $q->where('company_id', $companyId))
+            ->whereNull('deleted_at')
+            ->orderBy('id')
+            ->first(['id']);
+        
+        $previousDriver = \Modules\Drivers\app\Models\Driver::where('id', '<', $driverModel->id)
+            ->when($companyId, fn($q) => $q->where('company_id', $companyId))
+            ->whereNull('deleted_at')
+            ->orderByDesc('id')
+            ->first(['id']);
 
         // Load activity logs with relationship names
         $activities = \Spatie\Activitylog\Models\Activity::forSubject($driverModel)
@@ -257,6 +285,11 @@ class DriverController extends Controller
                     'name' => $driverModel->leadStatus->name,
                     'color' => $driverModel->leadStatus->color,
                 ] : null,
+                'lead_stage' => $driverModel->leadStage ? [
+                    'id' => $driverModel->leadStage->id,
+                    'name' => $driverModel->leadStage->name,
+                    'color' => $driverModel->leadStage->color,
+                ] : null,
                 'current_stage' => $driverModel->currentStage ? [
                     'id' => $driverModel->currentStage->id,
                     'name' => $driverModel->currentStage->name,
@@ -294,6 +327,8 @@ class DriverController extends Controller
                 'updated_at' => $driverModel->updated_at,
             ],
             'activities' => $activities,
+            'next_driver_id' => $nextDriver?->id,
+            'previous_driver_id' => $previousDriver?->id,
         ]);
         } catch (\Exception $e) {
             \Log::error('Error in DriverController::show: ' . $e->getMessage(), [
@@ -376,6 +411,11 @@ class DriverController extends Controller
                     'name' => $driverModel->leadStatus->name,
                     'color' => $driverModel->leadStatus->color,
                 ] : null,
+                'lead_stage' => $driverModel->leadStage ? [
+                    'id' => $driverModel->leadStage->id,
+                    'name' => $driverModel->leadStage->name,
+                    'color' => $driverModel->leadStage->color,
+                ] : null,
                 'current_stage' => $driverModel->currentStage ? [
                     'id' => $driverModel->currentStage->id,
                     'name' => $driverModel->currentStage->name,
@@ -447,6 +487,7 @@ class DriverController extends Controller
                 'lead_source_id' => $driverModel->lead_source_id,
                 'assigned_to' => $driverModel->assigned_to,
                 'lead_status_id' => $driverModel->lead_status_id,
+                'lead_stage_id' => $driverModel->lead_stage_id,
                 'current_stage_id' => $driverModel->current_stage_id,
                 'notes' => $driverModel->notes,
             ],
@@ -472,6 +513,15 @@ class DriverController extends Controller
                 // For super admin, use selected company from session
                 if ($companyId) {
                     $data['company_id'] = $companyId;
+                }
+            }
+
+            // Convert empty strings to null for nullable fields
+            if (isset($data['lead_stage_id'])) {
+                if ($data['lead_stage_id'] === '' || $data['lead_stage_id'] === null) {
+                    $data['lead_stage_id'] = null;
+                } else {
+                    $data['lead_stage_id'] = (int) $data['lead_stage_id'];
                 }
             }
 
@@ -654,7 +704,7 @@ class DriverController extends Controller
             
             // If user doesn't have company_id and is not super admin, we can't proceed
             if (empty($companyId) && ! $user->isSuperAdmin()) {
-                return redirect()
+            return redirect()
                     ->back()
                     ->with('error', 'Your user account must have a company assigned to import drivers. Please contact your administrator.');
             }
@@ -798,7 +848,7 @@ class DriverController extends Controller
                             'driver_id' => $driver->id,
                         ];
                     }
-                } catch (\Exception $e) {
+        } catch (\Exception $e) {
                     $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": " . $e->getMessage();
                 }
             }

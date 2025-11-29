@@ -14,6 +14,7 @@ use Modules\Core\app\Models\Company;
 use Modules\Marketing\app\Models\Campaign;
 use Modules\RidingCarCompanies\app\Models\RidingCompany;
 use Modules\RidingCarCompanies\app\Models\RidingCompanyStageTemplate;
+use Modules\Drivers\app\Models\LeadStage;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 

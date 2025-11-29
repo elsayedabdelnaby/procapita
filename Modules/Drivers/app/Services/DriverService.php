@@ -146,8 +146,17 @@ class DriverService
 
         $driver = Driver::findOrFail($id);
 
+        // Convert empty string to null for lead_stage_id and ensure it's an integer
+        if (isset($data['lead_stage_id'])) {
+            if ($data['lead_stage_id'] === '' || $data['lead_stage_id'] === null) {
+                $data['lead_stage_id'] = null;
+            } else {
+                $data['lead_stage_id'] = (int) $data['lead_stage_id'];
+            }
+        }
+
         // Validate lead_stage_id update if requires_all_documents_approved is true
-        if (isset($data['lead_stage_id']) && $data['lead_stage_id'] !== $driver->lead_stage_id) {
+        if (isset($data['lead_stage_id']) && $data['lead_stage_id'] !== null && $data['lead_stage_id'] !== $driver->lead_stage_id) {
             $newLeadStage = LeadStage::find($data['lead_stage_id']);
             
             if ($newLeadStage && $newLeadStage->requires_all_documents_approved) {

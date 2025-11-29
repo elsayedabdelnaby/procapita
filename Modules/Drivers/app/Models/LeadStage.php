@@ -25,6 +25,7 @@ class LeadStage extends Model
         'order',
         'active',
         'requires_all_documents_approved',
+        'commission_value',
     ];
 
     protected function casts(): array
@@ -33,6 +34,7 @@ class LeadStage extends Model
             'order' => 'integer',
             'active' => 'boolean',
             'requires_all_documents_approved' => 'boolean',
+            'commission_value' => 'decimal:2',
         ];
     }
 
@@ -93,7 +95,7 @@ class LeadStage extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'slug', 'color', 'order', 'active', 'requires_all_documents_approved'])
+            ->logOnly(['name', 'slug', 'color', 'order', 'active', 'requires_all_documents_approved', 'commission_value'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
