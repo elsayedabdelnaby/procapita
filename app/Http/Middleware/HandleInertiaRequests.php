@@ -427,6 +427,17 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
+        // Recycle Bin Module - accessible to all authenticated users with permission
+        if ($user && ($user->canAccessModule('recyclebin') || $user->isSuperAdmin() || $user->isCompanyAdmin())) {
+            $navigation[] = [
+                'title' => 'Recycle Bin',
+                'href' => '/recyclebin',
+                'icon' => 'Trash2',
+                'permission_module' => 'recyclebin',
+                'permission_entity' => 'recyclebin',
+            ];
+        }
+
         return $navigation;
     }
 }
