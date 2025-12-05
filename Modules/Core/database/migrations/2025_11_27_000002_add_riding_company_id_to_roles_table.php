@@ -16,8 +16,8 @@ return new class extends Migration
         if (! isset($tableNames['roles'])) {
             return;
         }
-
-        Schema::table($tableNames['roles'], function (Blueprint $table) {
+        
+        Schema::table($tableNames['roles'], function (Blueprint $table) use ($tableNames) {
             if (! Schema::hasColumn($tableNames['roles'], 'riding_company_id')) {
                 $table->foreignId('riding_company_id')->nullable()->after('team_id')->constrained('riding_companies')->nullOnDelete();
                 $table->index('riding_company_id');

@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
 import axios from 'axios';
@@ -87,6 +88,7 @@ export default function DriversMassEdit({
         campaign_id: '',
         lead_source_id: '',
         assigned_to: '',
+        assigned_users: [] as number[],
         lead_status_id: '',
         notes: '',
     });
@@ -97,7 +99,11 @@ export default function DriversMassEdit({
         const newClearFields = new Set(clearFields);
         if (checked) {
             newClearFields.add(fieldName);
-            setData(fieldName as any, '');
+            if (fieldName === 'assigned_users') {
+                setData('assigned_users', []);
+            } else {
+                setData(fieldName as any, '');
+            }
         } else {
             newClearFields.delete(fieldName);
         }
@@ -379,29 +385,25 @@ export default function DriversMassEdit({
                             <div className="space-y-2">
                                 <div className="flex items-center gap-2">
                                     <Checkbox
-                                        checked={clearFields.has('assigned_to')}
-                                        onCheckedChange={(checked) => handleClearField('assigned_to', checked as boolean)}
+                                        checked={clearFields.has('assigned_users')}
+                                        onCheckedChange={(checked) => handleClearField('assigned_users', checked as boolean)}
                                     />
-                                    <Label htmlFor="assigned_to" className="text-sm font-medium">
+                                    <Label htmlFor="assigned_users" className="text-sm font-medium">
                                         Assigned To
                                     </Label>
                                 </div>
-                                <select
-                                    id="assigned_to"
-                                    value={data.assigned_to}
-                                    onChange={(e) => setData('assigned_to', e.target.value)}
-                                    disabled={loadingUsers || clearFields.has('assigned_to')}
-                                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
-                                >
-                                    <option value="">-- Keep existing --</option>
-                                    {users.map((user) => (
-                                        <option key={user.id} value={user.id}>
-                                            {user.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.assigned_to && (
-                                    <p className="text-sm text-red-500">{errors.assigned_to}</p>
+                                <MultiSelect
+                                    options={users.map((user) => ({
+                                        value: user.id,
+                                        label: user.name,
+                                    }))}
+                                    value={data.assigned_users || []}
+                                    onChange={(value) => setData('assigned_users', value)}
+                                    placeholder="-- Keep existing --"
+                                    disabled={loadingUsers || clearFields.has('assigned_users')}
+                                />
+                                {errors.assigned_users && (
+                                    <p className="text-sm text-red-500">{errors.assigned_users}</p>
                                 )}
                             </div>
 

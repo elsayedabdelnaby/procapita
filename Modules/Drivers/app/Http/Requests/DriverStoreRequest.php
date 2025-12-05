@@ -59,8 +59,14 @@ class DriverStoreRequest extends FormRequest
                     }
                 },
             ],
-            'assigned_to' => [
+            'assigned_users' => [
                 'required',
+                'array',
+                'min:1',
+            ],
+            'assigned_users.*' => [
+                'required',
+                'integer',
                 'exists:users,id',
                 function ($attribute, $value, $fail) use ($companyId) {
                     if ($value && $companyId) {
@@ -71,6 +77,7 @@ class DriverStoreRequest extends FormRequest
                     }
                 },
             ],
+            'assigned_to' => ['nullable', 'integer', 'exists:users,id'], // Keep for backward compatibility
             'lead_status_id' => [
                 'required',
                 'exists:lead_statuses,id',
@@ -126,7 +133,9 @@ class DriverStoreRequest extends FormRequest
             'email.email' => 'Please provide a valid email address.',
             'riding_company_id.required' => 'Riding company is required.',
             'lead_source_id.required' => 'Lead source is required.',
-            'assigned_to.required' => 'Assigned to is required.',
+            'assigned_users.required' => 'At least one user must be assigned.',
+            'assigned_users.min' => 'At least one user must be assigned.',
+            'assigned_users.*.required' => 'Each assigned user must be valid.',
             'lead_status_id.required' => 'Lead status is required.',
         ];
     }

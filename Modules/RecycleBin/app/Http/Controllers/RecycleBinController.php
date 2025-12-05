@@ -90,6 +90,44 @@ class RecycleBinController extends Controller
     }
 
     /**
+     * Restore multiple deleted records
+     */
+    public function restoreMultiple(Request $request, string $modelType): RedirectResponse
+    {
+        $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer'],
+        ]);
+
+        $user = Auth::user();
+        $successCount = 0;
+        $failCount = 0;
+
+        foreach ($request->ids as $id) {
+            $success = $this->recycleBinService->restoreRecord($modelType, $id, $user->id);
+            if ($success) {
+                $successCount++;
+            } else {
+                $failCount++;
+            }
+        }
+
+        if ($successCount > 0) {
+            $message = "{$successCount} record(s) restored successfully.";
+            if ($failCount > 0) {
+                $message .= " {$failCount} record(s) failed to restore.";
+            }
+            return redirect()
+                ->back()
+                ->with('success', $message);
+        }
+
+        return redirect()
+            ->back()
+            ->with('error', 'Failed to restore records.');
+    }
+
+    /**
      * Permanently delete a record
      */
     public function forceDelete(Request $request, string $modelType, int $id): RedirectResponse
