@@ -2,9 +2,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Trash2, RotateCcw, Eye, FileText } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useEffect, useState } from 'react';
 
 interface DeletedRecord {
     id: number;
@@ -39,6 +40,14 @@ interface RecycleBinOverviewProps {
 
 export default function RecycleBinOverview({ deletedRecords, availableModels }: RecycleBinOverviewProps) {
     const hasDeletedRecords = Object.keys(deletedRecords).length > 0;
+    const page = usePage();
+    const [showAvailableModels, setShowAvailableModels] = useState(true);
+
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const selectedModelType = urlParams.get('type');
+        setShowAvailableModels(!selectedModelType);
+    }, [page.url]);
 
     return (
         <AppLayout>
@@ -52,6 +61,30 @@ export default function RecycleBinOverview({ deletedRecords, availableModels }: 
                         </p>
                     </div>
                 </div>
+
+                {/* Available Models List - Show first */}
+                {showAvailableModels && availableModels.length > 0 && (
+                    <Card className="mb-6 p-6">
+                        <h3 className="text-lg font-semibold mb-4">Available Models</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                            {availableModels.map((model) => (
+                                <button
+                                    key={model.key}
+                                    onClick={() => router.visit(`/recyclebin?type=${model.key}`)}
+                                    className="p-3 border border-neutral-200 dark:border-neutral-800 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors text-left"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <FileText className="h-4 w-4 text-neutral-500" />
+                                        <span className="text-sm font-medium">{model.name}</span>
+                                    </div>
+                                    <Badge variant="outline" className="mt-2 text-xs">
+                                        {model.module}
+                                    </Badge>
+                                </button>
+                            ))}
+                        </div>
+                    </Card>
+                )}
 
                 {!hasDeletedRecords ? (
                     <Card className="p-8 text-center">
@@ -124,30 +157,6 @@ export default function RecycleBinOverview({ deletedRecords, availableModels }: 
                             </Card>
                         ))}
                     </div>
-                )}
-
-                {/* Available Models List */}
-                {availableModels.length > 0 && (
-                    <Card className="mt-6 p-6">
-                        <h3 className="text-lg font-semibold mb-4">Available Models</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {availableModels.map((model) => (
-                                <Link
-                                    key={model.key}
-                                    href={`/recyclebin?type=${model.key}`}
-                                    className="p-3 border border-neutral-200 dark:border-neutral-800 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <FileText className="h-4 w-4 text-neutral-500" />
-                                        <span className="text-sm font-medium">{model.name}</span>
-                                    </div>
-                                    <Badge variant="outline" className="mt-2 text-xs">
-                                        {model.module}
-                                    </Badge>
-                                </Link>
-                            ))}
-                        </div>
-                    </Card>
                 )}
             </div>
         </AppLayout>

@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
@@ -68,6 +69,7 @@ interface Driver {
     campaign?: Campaign;
     lead_source?: LeadSource;
     assigned_to?: User;
+    assigned_users?: User[];
     lead_status?: LeadStatus;
     lead_stage?: LeadStage;
     created_at: string;
@@ -2321,6 +2323,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         campaign_id: driver.campaign?.id ? String(driver.campaign.id) : '',
         lead_source_id: driver.lead_source?.id ? String(driver.lead_source.id) : '',
         assigned_to: driver.assigned_to?.id ? String(driver.assigned_to.id) : '',
+        assigned_users: driver.assigned_users?.map((u) => u.id) || [],
         lead_status_id: driver.lead_status?.id ? String(driver.lead_status.id) : '',
         lead_stage_id: driver.lead_stage?.id ? String(driver.lead_stage.id) : '',
         current_stage_id: '',
@@ -2338,6 +2341,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
             campaign_id: data.campaign_id || null,
             lead_source_id: data.lead_source_id || null,
             assigned_to: data.assigned_to || null,
+            assigned_users: data.assigned_users && data.assigned_users.length > 0 ? data.assigned_users : null,
             lead_status_id: data.lead_status_id || null,
             lead_stage_id: data.lead_stage_id || null,
             current_stage_id: data.current_stage_id || null,
@@ -2570,23 +2574,23 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                 <p className="text-sm text-red-500 mt-1">{errors.lead_stage_id}</p>
                             )}
                         </div>
-                        <div>
+                        <div className="col-span-2">
                             <label className="block text-sm font-medium mb-1">Assigned To</label>
-                            <Select
-                                value={data.assigned_to}
-                                onValueChange={(value) => setData('assigned_to', value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select User" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {filterOptions.users?.map((user) => (
-                                        <SelectItem key={user.id} value={String(user.id)}>
-                                            {user.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <MultiSelect
+                                options={filterOptions.users?.map((user) => ({
+                                    value: user.id,
+                                    label: user.name,
+                                })) || []}
+                                value={data.assigned_users}
+                                onChange={(value) => setData('assigned_users', value)}
+                                placeholder="Select users..."
+                            />
+                            {errors.assigned_users && (
+                                <p className="text-sm text-red-500 mt-1">{errors.assigned_users}</p>
+                            )}
+                            {errors['assigned_users.*'] && (
+                                <p className="text-sm text-red-500 mt-1">{errors['assigned_users.*']}</p>
+                            )}
                         </div>
                     </div>
                     <div className="flex justify-end gap-2 pt-4">

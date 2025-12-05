@@ -2,8 +2,9 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, router } from '@inertiajs/react';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 
@@ -54,6 +55,7 @@ interface Driver {
     campaign_id?: number;
     lead_source_id?: number;
     assigned_to?: number;
+    assigned_users?: number[];
     lead_status_id?: number;
     lead_stage_id?: number;
     current_stage_id?: number;
@@ -92,6 +94,7 @@ export default function DriversEdit({
         campaign_id: driver.campaign_id ? String(driver.campaign_id) : '',
         lead_source_id: driver.lead_source_id ? String(driver.lead_source_id) : '',
         assigned_to: driver.assigned_to ? String(driver.assigned_to) : '',
+        assigned_users: driver.assigned_users || [],
         lead_status_id: driver.lead_status_id ? String(driver.lead_status_id) : '',
         lead_stage_id: driver.lead_stage_id ? String(driver.lead_stage_id) : '',
         current_stage_id: driver.current_stage_id ? String(driver.current_stage_id) : '',
@@ -376,24 +379,25 @@ export default function DriversEdit({
                                 )}
                             </div>
 
-                            <div>
-                                <Label htmlFor="assigned_to">Assigned To</Label>
-                                <select
-                                    id="assigned_to"
-                                    name="assigned_to"
-                                    value={data.assigned_to}
-                                    onChange={(e) => setData('assigned_to', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                >
-                                    <option value="">Select a user</option>
-                                    {users.map((user) => (
-                                        <option key={user.id} value={String(user.id)}>
-                                            {user.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.assigned_to && (
-                                    <p className="text-sm text-red-500">{errors.assigned_to}</p>
+                            <div className="md:col-span-2">
+                                <Label htmlFor="assigned_users">
+                                    Assigned To <span className="text-red-500">*</span>
+                                </Label>
+                                <MultiSelect
+                                    options={users.map((user) => ({
+                                        value: user.id,
+                                        label: user.name,
+                                    }))}
+                                    value={data.assigned_users}
+                                    onChange={(value) => setData('assigned_users', value)}
+                                    placeholder="Select users..."
+                                    className="mt-1"
+                                />
+                                {errors.assigned_users && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.assigned_users}</p>
+                                )}
+                                {errors['assigned_users.*'] && (
+                                    <p className="text-sm text-red-500 mt-1">{errors['assigned_users.*']}</p>
                                 )}
                             </div>
 

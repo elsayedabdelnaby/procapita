@@ -15,11 +15,11 @@ class RecycleBinService
     public function getAvailableModels(): array
     {
         return [
-            'drivers' => [
-                'model' => \Modules\Drivers\app\Models\Driver::class,
-                'name' => 'Drivers',
-                'module' => 'drivers',
-                'display_field' => 'full_name',
+            'companies' => [
+                'model' => \Modules\Core\app\Models\Company::class,
+                'name' => 'Companies',
+                'module' => 'core',
+                'display_field' => 'name',
             ],
             'lead_sources' => [
                 'model' => \Modules\Drivers\app\Models\LeadSource::class,
@@ -33,10 +33,10 @@ class RecycleBinService
                 'module' => 'drivers',
                 'display_field' => 'name',
             ],
-            'lead_stages' => [
-                'model' => \Modules\Drivers\app\Models\LeadStage::class,
-                'name' => 'Lead Stages',
-                'module' => 'drivers',
+            'riding_companies' => [
+                'model' => \Modules\RidingCarCompanies\app\Models\RidingCompany::class,
+                'name' => 'Riding Companies',
+                'module' => 'riding_companies',
                 'display_field' => 'name',
             ],
             'campaigns' => [
@@ -45,9 +45,51 @@ class RecycleBinService
                 'module' => 'marketing',
                 'display_field' => 'name',
             ],
-            'companies' => [
-                'model' => \Modules\Core\app\Models\Company::class,
-                'name' => 'Companies',
+            'campaign_types' => [
+                'model' => \Modules\Marketing\app\Models\CampaignType::class,
+                'name' => 'Campaign Types',
+                'module' => 'marketing',
+                'display_field' => 'name',
+            ],
+            'campaign_statuses' => [
+                'model' => \Modules\Marketing\app\Models\CampaignStatus::class,
+                'name' => 'Campaign Statuses',
+                'module' => 'marketing',
+                'display_field' => 'name',
+            ],
+            'campaign_channels' => [
+                'model' => \Modules\Marketing\app\Models\CampaignChannel::class,
+                'name' => 'Campaign Channels',
+                'module' => 'marketing',
+                'display_field' => 'name',
+            ],
+            'drivers' => [
+                'model' => \Modules\Drivers\app\Models\Driver::class,
+                'name' => 'Drivers',
+                'module' => 'drivers',
+                'display_field' => 'full_name',
+            ],
+            'lead_stages' => [
+                'model' => \Modules\Drivers\app\Models\LeadStage::class,
+                'name' => 'Lead Stages',
+                'module' => 'drivers',
+                'display_field' => 'name',
+            ],
+            'driver_stages' => [
+                'model' => \Modules\Drivers\app\Models\DriverStage::class,
+                'name' => 'Driver Stages',
+                'module' => 'drivers',
+                'display_field' => 'status', // Using status as display field
+            ],
+            'driver_documents' => [
+                'model' => \Modules\Drivers\app\Models\DriverDocument::class,
+                'name' => 'Driver Documents',
+                'module' => 'drivers',
+                'display_field' => 'original_filename', // Using original_filename as display field
+            ],
+            'company_users' => [
+                'model' => \App\Models\User::class,
+                'name' => 'Company Users',
                 'module' => 'core',
                 'display_field' => 'name',
             ],
@@ -67,6 +109,18 @@ class RecycleBinService
 
         $config = $models[$modelType];
         $modelClass = $config['model'];
+
+        // Check if model uses SoftDeletes
+        $usesSoftDeletes = in_array(
+            \Illuminate\Database\Eloquent\SoftDeletes::class,
+            class_uses_recursive($modelClass)
+        );
+
+        if (!$usesSoftDeletes) {
+            // If model doesn't use SoftDeletes, return empty collection
+            // These models won't have deleted records in recycle bin
+            return collect([]);
+        }
 
         $query = $modelClass::onlyTrashed();
 
@@ -124,6 +178,20 @@ class RecycleBinService
 
         $modelClass = $models[$modelType]['model'];
         
+        // Check if model uses SoftDeletes
+        $usesSoftDeletes = in_array(
+            \Illuminate\Database\Eloquent\SoftDeletes::class,
+            class_uses_recursive($modelClass)
+        );
+
+        if (!$usesSoftDeletes) {
+            \Log::warning('Attempted to restore record from model that does not use SoftDeletes', [
+                'model_type' => $modelType,
+                'record_id' => $recordId,
+            ]);
+            return false;
+        }
+        
         $record = $modelClass::onlyTrashed()->find($recordId);
         
         if (!$record) {
@@ -173,6 +241,20 @@ class RecycleBinService
         }
 
         $modelClass = $models[$modelType]['model'];
+        
+        // Check if model uses SoftDeletes
+        $usesSoftDeletes = in_array(
+            \Illuminate\Database\Eloquent\SoftDeletes::class,
+            class_uses_recursive($modelClass)
+        );
+
+        if (!$usesSoftDeletes) {
+            \Log::warning('Attempted to permanently delete record from model that does not use SoftDeletes', [
+                'model_type' => $modelType,
+                'record_id' => $recordId,
+            ]);
+            return false;
+        }
         
         $record = $modelClass::onlyTrashed()->find($recordId);
         
@@ -259,6 +341,16 @@ class RecycleBinService
 
         $modelClass = $models[$modelType]['model'];
         $config = $models[$modelType];
+        
+        // Check if model uses SoftDeletes
+        $usesSoftDeletes = in_array(
+            \Illuminate\Database\Eloquent\SoftDeletes::class,
+            class_uses_recursive($modelClass)
+        );
+
+        if (!$usesSoftDeletes) {
+            return null;
+        }
         
         $record = $modelClass::onlyTrashed()->find($recordId);
         

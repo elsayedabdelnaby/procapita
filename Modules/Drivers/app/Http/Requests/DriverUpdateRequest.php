@@ -61,8 +61,13 @@ class DriverUpdateRequest extends FormRequest
                     }
                 },
             ],
-            'assigned_to' => [
+            'assigned_users' => [
                 'nullable',
+                'array',
+            ],
+            'assigned_users.*' => [
+                'required',
+                'integer',
                 'exists:users,id',
                 function ($attribute, $value, $fail) use ($companyId) {
                     if ($value && $companyId) {
@@ -73,6 +78,7 @@ class DriverUpdateRequest extends FormRequest
                     }
                 },
             ],
+            'assigned_to' => ['nullable', 'integer', 'exists:users,id'], // Keep for backward compatibility
             'lead_status_id' => [
                 'nullable',
                 'exists:lead_statuses,id',

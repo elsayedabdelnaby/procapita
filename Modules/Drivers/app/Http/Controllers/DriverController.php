@@ -112,6 +112,10 @@ class DriverController extends Controller
                     'id' => $driver->assignedTo->id,
                     'name' => $driver->assignedTo->name,
                 ] : null,
+                'assigned_users' => $driver->assignedUsers->map(fn($user) => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                ])->toArray(),
                 'lead_status' => $driver->leadStatus ? [
                     'id' => $driver->leadStatus->id,
                     'name' => $driver->leadStatus->name,
@@ -280,6 +284,10 @@ class DriverController extends Controller
                     'id' => $driverModel->assignedTo->id,
                     'name' => $driverModel->assignedTo->name,
                 ] : null,
+                'assigned_users' => $driverModel->assignedUsers->map(fn($user) => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                ])->toArray(),
                 'lead_status' => $driverModel->leadStatus ? [
                     'id' => $driverModel->leadStatus->id,
                     'name' => $driverModel->leadStatus->name,
@@ -406,6 +414,10 @@ class DriverController extends Controller
                     'id' => $driverModel->assignedTo->id,
                     'name' => $driverModel->assignedTo->name,
                 ] : null,
+                'assigned_users' => $driverModel->assignedUsers->map(fn($user) => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                ])->toArray(),
                 'lead_status' => $driverModel->leadStatus ? [
                     'id' => $driverModel->leadStatus->id,
                     'name' => $driverModel->leadStatus->name,
@@ -486,6 +498,7 @@ class DriverController extends Controller
                 'campaign_id' => $driverModel->campaign_id,
                 'lead_source_id' => $driverModel->lead_source_id,
                 'assigned_to' => $driverModel->assigned_to,
+                'assigned_users' => $driverModel->assignedUsers->pluck('id')->toArray(),
                 'lead_status_id' => $driverModel->lead_status_id,
                 'lead_stage_id' => $driverModel->lead_stage_id,
                 'current_stage_id' => $driverModel->current_stage_id,
@@ -1275,6 +1288,8 @@ class DriverController extends Controller
             'lead_source_id' => ['nullable', 'string'],
             'lead_status_id' => ['nullable', 'string'],
             'assigned_to' => ['nullable', 'string'],
+            'assigned_users' => ['nullable', 'array'],
+            'assigned_users.*' => ['required', 'integer', 'exists:users,id'],
             'notes' => ['nullable', 'string'],
             'clear_fields' => ['nullable', 'array'],
         ]);
@@ -1322,6 +1337,18 @@ class DriverController extends Controller
         }
         if ($request->filled('assigned_to') && ! in_array('assigned_to', $clearFields)) {
             $updateData['assigned_to'] = $request->assigned_to ? (int) $request->assigned_to : null;
+        }
+
+        // Handle assigned_users separately (sync for each driver)
+        if (in_array('assigned_users', $clearFields)) {
+            foreach ($drivers as $driver) {
+                $driver->assignedUsers()->sync([]);
+            }
+        } elseif ($request->filled('assigned_users') && is_array($request->assigned_users)) {
+            $assignedUsers = array_filter(array_map('intval', $request->assigned_users));
+            foreach ($drivers as $driver) {
+                $driver->assignedUsers()->sync($assignedUsers);
+            }
         }
 
         // Handle notes separately (append to existing notes, or clear if in clear_fields)

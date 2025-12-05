@@ -15,7 +15,6 @@ class DriverStage extends Model
     use HasFactory, LogsActivity;
 
     protected $fillable = [
-        'company_id',
         'driver_id',
         'stage_template_id',
         'stage_order',

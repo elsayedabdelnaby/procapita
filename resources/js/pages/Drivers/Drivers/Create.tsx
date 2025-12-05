@@ -2,6 +2,7 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
@@ -88,6 +89,7 @@ export default function DriversCreate({
         campaign_id: '',
         lead_source_id: '',
         assigned_to: '',
+        assigned_users: [] as number[],
         lead_status_id: '',
         lead_stage_id: '',
         current_stage_id: '',
@@ -534,34 +536,40 @@ export default function DriversCreate({
                                 )}
                             </div>
 
-                            <div>
-                                <Label htmlFor="assigned_to">
+                            <div className="md:col-span-2">
+                                <Label>
                                     Assigned To <span className="text-red-500">*</span>
                                 </Label>
-                                <select
-                                    id="assigned_to"
-                                    name="assigned_to"
-                                    value={data.assigned_to}
-                                    onChange={(e) => setData('assigned_to', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                    disabled={loadingUsers || (companies && !data.company_id)}
-                                    required
-                                >
-                                    <option value="">
-                                        {loadingUsers
-                                            ? 'Loading...'
-                                            : companies && !data.company_id
-                                              ? 'Select a company first'
-                                              : 'Select a user'}
-                                    </option>
-                                    {users.map((user) => (
-                                        <option key={user.id} value={user.id}>
-                                            {user.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.assigned_to && (
-                                    <p className="text-sm text-red-500">{errors.assigned_to}</p>
+                                {loadingUsers ? (
+                                    <div className="mt-1">
+                                        <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading users...</p>
+                                    </div>
+                                ) : users.length === 0 ? (
+                                    <div className="mt-1">
+                                        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                                            {companies && !data.company_id
+                                                ? 'Select a company first'
+                                                : 'No users available'}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <MultiSelect
+                                        options={users.map((user) => ({
+                                            value: user.id,
+                                            label: user.name,
+                                        }))}
+                                        value={data.assigned_users}
+                                        onChange={(value) => setData('assigned_users', value)}
+                                        placeholder="Select users..."
+                                        className="mt-1"
+                                        disabled={loadingUsers}
+                                    />
+                                )}
+                                {errors.assigned_users && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.assigned_users}</p>
+                                )}
+                                {errors['assigned_users.*'] && (
+                                    <p className="text-sm text-red-500 mt-1">{errors['assigned_users.*']}</p>
                                 )}
                             </div>
 

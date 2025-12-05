@@ -13,7 +13,7 @@ class DriverService
 {
     public function getAllDrivers(?int $companyId = null): Collection
     {
-        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'leadStatus', 'leadStage', 'currentStage']);
+        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'assignedUsers', 'leadStatus', 'leadStage', 'currentStage']);
 
         if ($companyId) {
             $query->where('company_id', $companyId);
@@ -30,6 +30,7 @@ class DriverService
             'campaign',
             'leadSource',
             'assignedTo',
+            'assignedUsers',
             'leadStatus',
             'leadStage',
             'currentStage',
@@ -48,7 +49,19 @@ class DriverService
             $data['whatsapp_phone'] = $this->reformatPhoneNumber($data['whatsapp_phone']);
         }
 
+        // Extract assigned_users if present
+        $assignedUsers = [];
+        if (isset($data['assigned_users']) && is_array($data['assigned_users'])) {
+            $assignedUsers = array_filter(array_map('intval', $data['assigned_users']));
+            unset($data['assigned_users']);
+        }
+
         $driver = Driver::create($data);
+
+        // Sync assigned users
+        if (!empty($assignedUsers)) {
+            $driver->assignedUsers()->sync($assignedUsers);
+        }
 
         // If riding company is selected, create stages and documents automatically
         if ($driver->riding_company_id) {
@@ -56,7 +69,7 @@ class DriverService
             $this->createDriverDocumentsFromRidingCompany($driver);
         }
 
-        return $driver->fresh(['stages.stageTemplate', 'documents.documentTemplate']);
+        return $driver->fresh(['stages.stageTemplate', 'documents.documentTemplate', 'assignedUsers']);
     }
 
     /**
@@ -155,6 +168,17 @@ class DriverService
             }
         }
 
+        // Extract assigned_users if present
+        $assignedUsers = null;
+        if (isset($data['assigned_users'])) {
+            if (is_array($data['assigned_users'])) {
+                $assignedUsers = array_filter(array_map('intval', $data['assigned_users']));
+            } elseif ($data['assigned_users'] === '' || $data['assigned_users'] === null) {
+                $assignedUsers = [];
+            }
+            unset($data['assigned_users']);
+        }
+
         // Validate lead_stage_id update if requires_all_documents_approved is true
         if (isset($data['lead_stage_id']) && $data['lead_stage_id'] !== null && $data['lead_stage_id'] !== $driver->lead_stage_id) {
             $newLeadStage = LeadStage::find($data['lead_stage_id']);
@@ -173,7 +197,12 @@ class DriverService
 
         $driver->update($data);
 
-        return $driver->fresh();
+        // Sync assigned users if provided
+        if ($assignedUsers !== null) {
+            $driver->assignedUsers()->sync($assignedUsers);
+        }
+
+        return $driver->fresh(['assignedUsers']);
     }
 
     public function deleteDriver(int $id): bool

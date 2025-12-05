@@ -1,13 +1,13 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { DataTable } from '@/components/core/data-table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DeleteDialog } from '@/components/core/delete-dialog';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
-import { Trash2, RotateCcw, Eye, ArrowLeft, Trash } from 'lucide-react';
+import { Trash2, RotateCcw, Eye, ArrowLeft, Trash, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 interface DeletedRecord {
     id: number;
@@ -37,6 +37,51 @@ export default function RecycleBinIndex({ modelType, modelName, records }: Recyc
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState<DeletedRecord | null>(null);
     const [restoringId, setRestoringId] = useState<number | null>(null);
+    const [selectedRecords, setSelectedRecords] = useState<Set<number>>(new Set());
+    const [currentPage, setCurrentPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(5);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    // Filter records by search term
+    const filteredRecords = useMemo(() => {
+        if (!searchTerm) return records;
+        return records.filter((record) =>
+            record.display_name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [records, searchTerm]);
+
+    // Pagination
+    const totalRecords = filteredRecords.length;
+    const totalPages = Math.ceil(totalRecords / rowsPerPage);
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage;
+    const paginatedRecords = filteredRecords.slice(startIndex, endIndex);
+
+    // Select all checkbox
+    const allSelected = paginatedRecords.length > 0 && paginatedRecords.every((r) => selectedRecords.has(r.id));
+    const someSelected = paginatedRecords.some((r) => selectedRecords.has(r.id)) && !allSelected;
+
+    const handleSelectAll = (checked: boolean) => {
+        if (checked) {
+            const newSelected = new Set(selectedRecords);
+            paginatedRecords.forEach((record) => newSelected.add(record.id));
+            setSelectedRecords(newSelected);
+        } else {
+            const newSelected = new Set(selectedRecords);
+            paginatedRecords.forEach((record) => newSelected.delete(record.id));
+            setSelectedRecords(newSelected);
+        }
+    };
+
+    const handleSelectRecord = (recordId: number, checked: boolean) => {
+        const newSelected = new Set(selectedRecords);
+        if (checked) {
+            newSelected.add(recordId);
+        } else {
+            newSelected.delete(recordId);
+        }
+        setSelectedRecords(newSelected);
+    };
 
     const handleRestore = (record: DeletedRecord) => {
         setRestoringId(record.id);
@@ -46,6 +91,27 @@ export default function RecycleBinIndex({ modelType, modelName, records }: Recyc
             {
                 onFinish: () => setRestoringId(null),
                 onSuccess: () => {
+                    setSelectedRecords((prev) => {
+                        const newSet = new Set(prev);
+                        newSet.delete(record.id);
+                        return newSet;
+                    });
+                    router.reload({ only: ['records'] });
+                },
+            }
+        );
+    };
+
+    const handleMassRestore = () => {
+        if (selectedRecords.size === 0) return;
+
+        const ids = Array.from(selectedRecords);
+        router.post(
+            `/recyclebin/${modelType}/restore-multiple`,
+            { ids },
+            {
+                onSuccess: () => {
+                    setSelectedRecords(new Set());
                     router.reload({ only: ['records'] });
                 },
             }
@@ -64,82 +130,15 @@ export default function RecycleBinIndex({ modelType, modelName, records }: Recyc
             onSuccess: () => {
                 setDeleteDialogOpen(false);
                 setSelectedRecord(null);
+                setSelectedRecords((prev) => {
+                    const newSet = new Set(prev);
+                    newSet.delete(selectedRecord.id);
+                    return newSet;
+                });
                 router.reload({ only: ['records'] });
             },
         });
     };
-
-    const columns = [
-        {
-            header: 'Name',
-            accessorKey: 'display_name',
-        },
-        {
-            header: 'Deleted At',
-            accessorKey: 'deleted_at',
-            cell: ({ row }: { row: { original: DeletedRecord } }) => {
-                const record = row.original;
-                return (
-                    <div className="flex flex-col">
-                        <span className="text-sm">
-                            {record.deleted_at_human || formatDistanceToNow(new Date(record.deleted_at), { addSuffix: true })}
-                        </span>
-                        <span className="text-xs text-neutral-600 dark:text-neutral-400">
-                            {new Date(record.deleted_at).toLocaleString()}
-                        </span>
-                    </div>
-                );
-            },
-        },
-        {
-            header: 'Deleted By',
-            accessorKey: 'deleted_by',
-            cell: ({ row }: { row: { original: DeletedRecord } }) => {
-                const record = row.original;
-                return record.deleted_by ? (
-                    <span className="text-sm">{record.deleted_by.name}</span>
-                ) : (
-                    <span className="text-sm text-neutral-500">Unknown</span>
-                );
-            },
-        },
-        {
-            header: 'Actions',
-            id: 'actions',
-            cell: ({ row }: { row: { original: DeletedRecord } }) => {
-                const record = row.original;
-                const isRestoring = restoringId === record.id;
-
-                return (
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => router.visit(`/recyclebin/${modelType}/${record.id}`)}
-                        >
-                            <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRestore(record)}
-                            disabled={isRestoring}
-                        >
-                            <RotateCcw className={`h-4 w-4 ${isRestoring ? 'animate-spin' : ''}`} />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(record)}
-                            className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                        >
-                            <Trash className="h-4 w-4" />
-                        </Button>
-                    </div>
-                );
-            },
-        },
-    ];
 
     return (
         <AppLayout>
@@ -160,6 +159,12 @@ export default function RecycleBinIndex({ modelType, modelName, records }: Recyc
                             </p>
                         </div>
                     </div>
+                    {selectedRecords.size > 0 && (
+                        <Button onClick={handleMassRestore} variant="default">
+                            <RotateCcw className="h-4 w-4 mr-2" />
+                            Restore Selected ({selectedRecords.size})
+                        </Button>
+                    )}
                 </div>
 
                 {records.length === 0 ? (
@@ -172,12 +177,192 @@ export default function RecycleBinIndex({ modelType, modelName, records }: Recyc
                     </Card>
                 ) : (
                     <Card>
-                        <DataTable
-                            columns={columns}
-                            data={records}
-                            searchKey="display_name"
-                            searchPlaceholder={`Search ${modelName.toLowerCase()}...`}
-                        />
+                        <div className="p-4">
+                            {/* Search */}
+                            <div className="mb-4">
+                                <input
+                                    type="text"
+                                    placeholder={`Search ${modelName.toLowerCase()}...`}
+                                    value={searchTerm}
+                                    onChange={(e) => {
+                                        setSearchTerm(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                />
+                            </div>
+
+                            {/* Table */}
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left">
+                                                <Checkbox
+                                                    checked={allSelected}
+                                                    onCheckedChange={handleSelectAll}
+                                                    ref={(el) => {
+                                                        if (el) {
+                                                            (el as any).indeterminate = someSelected;
+                                                        }
+                                                    }}
+                                                />
+                                            </th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                                Name
+                                            </th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                                Deleted At
+                                            </th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                                Deleted By
+                                            </th>
+                                            <th className="px-4 py-3 text-right text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                                Restore
+                                            </th>
+                                            <th className="px-4 py-3 text-right text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                                Actions
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                                        {paginatedRecords.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={6} className="px-4 py-8 text-center text-sm text-neutral-500">
+                                                    No records found
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            paginatedRecords.map((record) => {
+                                                const isRestoring = restoringId === record.id;
+                                                const isSelected = selectedRecords.has(record.id);
+
+                                                return (
+                                                    <tr
+                                                        key={record.id}
+                                                        className="hover:bg-neutral-50 dark:hover:bg-neutral-900/50"
+                                                    >
+                                                        <td className="px-4 py-3">
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                onCheckedChange={(checked) =>
+                                                                    handleSelectRecord(record.id, checked as boolean)
+                                                                }
+                                                            />
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm">{record.display_name}</td>
+                                                        <td className="px-4 py-3 text-sm">
+                                                            <div className="flex flex-col">
+                                                                <span>
+                                                                    {record.deleted_at_human ||
+                                                                        formatDistanceToNow(new Date(record.deleted_at), {
+                                                                            addSuffix: true,
+                                                                        })}
+                                                                </span>
+                                                                <span className="text-xs text-neutral-600 dark:text-neutral-400">
+                                                                    {new Date(record.deleted_at).toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm">
+                                                            {record.deleted_by ? (
+                                                                record.deleted_by.name
+                                                            ) : (
+                                                                <span className="text-neutral-500">Unknown</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleRestore(record)}
+                                                                disabled={isRestoring}
+                                                            >
+                                                                <RotateCcw
+                                                                    className={`h-4 w-4 ${isRestoring ? 'animate-spin' : ''}`}
+                                                                />
+                                                                <span className="ml-2">Restore</span>
+                                                            </Button>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            <div className="flex items-center justify-end gap-2">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        router.visit(`/recyclebin/${modelType}/${record.id}`)
+                                                                    }
+                                                                >
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Button>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleDelete(record)}
+                                                                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                                                >
+                                                                    <Trash className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination */}
+                            <div className="mt-4 flex items-center justify-between border-t pt-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="text-sm text-neutral-600 dark:text-neutral-400">
+                                        Showing {startIndex + 1} to {Math.min(endIndex, totalRecords)} of {totalRecords}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-neutral-600 dark:text-neutral-400">Rows per page:</span>
+                                        <select
+                                            value={rowsPerPage}
+                                            onChange={(e) => {
+                                                setRowsPerPage(Number(e.target.value));
+                                                setCurrentPage(1);
+                                            }}
+                                            className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                                        >
+                                            <option value={5}>5</option>
+                                            <option value={10}>10</option>
+                                            <option value={25}>25</option>
+                                            <option value={50}>50</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="text-sm text-neutral-600 dark:text-neutral-400">
+                                        Page {currentPage} of {totalPages || 1} Total: {totalRecords}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                            disabled={currentPage === 1}
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                            Previous
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                            disabled={currentPage >= totalPages}
+                                        >
+                                            Next
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </Card>
                 )}
 
@@ -192,4 +377,3 @@ export default function RecycleBinIndex({ modelType, modelName, records }: Recyc
         </AppLayout>
     );
 }
-
