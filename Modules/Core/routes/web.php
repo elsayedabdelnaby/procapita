@@ -36,6 +36,7 @@ Route::middleware(['auth', 'verified'])->prefix('core')->name('core.')->group(fu
             Route::get('roles/{role}', [RoleController::class, 'show'])->name('roles.show');
             Route::get('roles/{role}/edit', [RoleController::class, 'edit'])->name('roles.edit');
             Route::put('roles/{role}', [RoleController::class, 'update'])->name('roles.update');
+            Route::post('roles/{role}/move', [RoleController::class, 'move'])->name('roles.move');
             Route::delete('roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
         });
     });

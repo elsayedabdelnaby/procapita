@@ -9,6 +9,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Core\app\Http\Requests\CompanyStoreRequest;
 use Modules\Core\app\Http\Requests\CompanyUpdateRequest;
+use Modules\Core\app\Models\Role;
 use Modules\Core\app\Services\CompanyService;
 
 class CompanyController extends Controller
@@ -63,11 +64,27 @@ class CompanyController extends Controller
         // Load company users with roles
         $users = $company->users()->with('roles')->get();
 
-        // Load company roles with hierarchy
-        $roles = $company->roles()->with('parent', 'children')->get();
+        // Load company roles with hierarchy, ordered by level (lowest first)
+        $roles = $company->roles()
+            ->with('parent', 'children')
+            ->orderBy('hierarchy_level', 'asc')
+            ->orderBy('name', 'asc')
+            ->get();
 
-        // Build role hierarchy tree
-        $roleHierarchy = $company->roles()->rootRoles()->with('allChildren')->get();
+        // Build role hierarchy tree - load all roles with recursive children
+        // Get root roles (is_root = true AND parent_id is null)
+        // Roles with is_root = true but parent_id != null should appear as children, not roots
+        $rootRoles = $company->roles()
+            ->where('is_root', true)
+            ->whereNull('parent_id')
+            ->orderBy('hierarchy_level')
+            ->orderBy('name')
+            ->get();
+        
+        // Build complete hierarchy tree recursively
+        $roleHierarchy = $rootRoles->map(function ($role) {
+            return $this->buildRoleHierarchyTree($role);
+        })->values()->toArray();
 
         // Load activity logs
         $activities = \Spatie\Activitylog\Models\Activity::forSubject($company)
@@ -201,6 +218,39 @@ class CompanyController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Company filter cleared. Showing all companies.');
+    }
+
+    /**
+     * Build role hierarchy tree recursively
+     */
+    protected function buildRoleHierarchyTree(Role $role): array
+    {
+        // Load children recursively
+        $children = Role::where('parent_id', $role->id)
+            ->orderBy('hierarchy_level')
+            ->orderBy('name')
+            ->get();
+
+        return [
+            'id' => $role->id,
+            'name' => $role->name,
+            'guard_name' => $role->guard_name,
+            'team_id' => $role->team_id,
+            'parent_id' => $role->parent_id,
+            'hierarchy_path' => $role->hierarchy_path,
+            'hierarchy_level' => $role->hierarchy_level,
+            'is_root' => $role->is_root,
+            'module_name' => $role->module_name,
+            'entity_name' => $role->entity_name,
+            'created_at' => $role->created_at?->toISOString(),
+            'updated_at' => $role->updated_at?->toISOString(),
+            'children' => $children->map(function ($child) {
+                return $this->buildRoleHierarchyTree($child);
+            })->toArray(),
+            'all_children' => $children->map(function ($child) {
+                return $this->buildRoleHierarchyTree($child);
+            })->toArray(),
+        ];
     }
 }
 

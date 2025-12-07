@@ -108,6 +108,13 @@ class RidingCompanyDocumentRequirement extends Model
     {
         parent::boot();
 
+        static::creating(function ($model) {
+            // Set active to true by default if not set
+            if (! isset($model->active)) {
+                $model->active = true;
+            }
+        });
+
         // Helper method to create driver documents for a document requirement
         $createDriverDocuments = function ($documentRequirement) {
             // Only create documents if the requirement is active

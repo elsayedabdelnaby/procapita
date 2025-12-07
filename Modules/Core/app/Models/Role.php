@@ -77,6 +77,9 @@ class Role extends SpatieRole
 
     public function updateHierarchy(): void
     {
+        // Remember if this role was originally root
+        $wasRoot = $this->is_root;
+        
         if ($this->parent_id) {
             $parent = $this->parent;
             
@@ -85,7 +88,12 @@ class Role extends SpatieRole
             
             $this->hierarchy_path = $parent->hierarchy_path . ':H' . $hierarchicalNumber;
             $this->hierarchy_level = $parent->hierarchy_level + 1;
+            
+            // Only change is_root to false if it wasn't originally root
+            // This allows root roles to have a parent while keeping is_root = true
+            if (!$wasRoot) {
             $this->is_root = false;
+            }
         } else {
             // For root roles, get the next hierarchical number for root roles in this company
             $hierarchicalNumber = $this->getHierarchicalNumber();
@@ -205,6 +213,13 @@ class Role extends SpatieRole
         });
 
         static::updated(function (Role $role) {
+            // If role was originally root, keep is_root = true even if parent_id changes
+            // But we need to do this before updateHierarchy to preserve the root status
+            if ($role->isDirty('parent_id') && $role->getOriginal('is_root')) {
+                // Keep is_root = true, but updateHierarchy will handle hierarchy_path correctly
+                $role->is_root = true;
+            }
+            
             if ($role->isDirty('parent_id')) {
                 $role->updateHierarchy();
             }

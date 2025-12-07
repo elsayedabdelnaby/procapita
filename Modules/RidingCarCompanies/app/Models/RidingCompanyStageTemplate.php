@@ -41,6 +41,18 @@ class RidingCompanyStageTemplate extends Model
         ];
     }
 
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            // Set active to true by default if not set
+            if (! isset($model->active)) {
+                $model->active = true;
+            }
+        });
+    }
+
     protected static function newFactory()
     {
         return \Modules\RidingCarCompanies\database\factories\RidingCompanyStageTemplateFactory::new();

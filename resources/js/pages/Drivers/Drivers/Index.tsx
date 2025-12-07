@@ -1715,7 +1715,21 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                 cellContent = driver.lead_stage?.name || '-';
                                                                 break;
                                                             case 'assigned_to':
-                                                                cellContent = driver.assigned_to?.name || '-';
+                                                                if (driver.assigned_to) {
+                                                                    cellContent = driver.assigned_to.name;
+                                                                } else if (driver.assigned_users && driver.assigned_users.length > 0) {
+                                                                    cellContent = (
+                                                                        <div className="flex flex-wrap gap-1">
+                                                                            {driver.assigned_users.map((user: any) => (
+                                                                                <Badge key={user.id} variant="secondary" className="text-xs">
+                                                                                    {user.name}
+                                                                                </Badge>
+                                                                            ))}
+                                                                        </div>
+                                                                    );
+                                                                } else {
+                                                                    cellContent = '-';
+                                                                }
                                                                 break;
                                                             case 'uuid':
                                                                 cellContent = driver.uuid || '-';
@@ -1910,27 +1924,27 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                             <Card className="p-6">
                                                 <h2 className="mb-4 text-lg font-semibold">CRM Information</h2>
                                                 <div className="space-y-4">
-                                                    {driverDetails.riding_company && (
                                                         <div>
                                                             <p className="text-sm text-neutral-500">Riding Company</p>
-                                                            <p className="font-medium">{driverDetails.riding_company.name}</p>
+                                                        <p className="font-medium">
+                                                            {driverDetails.riding_company?.name || <span className="text-neutral-400 italic">Not Set</span>}
+                                                        </p>
                                                         </div>
-                                                    )}
                                                     {driverDetails.campaign && (
                                                         <div>
                                                             <p className="text-sm text-neutral-500">Campaign</p>
                                                             <p className="font-medium">{driverDetails.campaign.name}</p>
                                                         </div>
                                                     )}
-                                                    {driverDetails.lead_source && (
                                                         <div>
                                                             <p className="text-sm text-neutral-500">Lead Source</p>
-                                                            <p className="font-medium">{driverDetails.lead_source.name}</p>
+                                                        <p className="font-medium">
+                                                            {driverDetails.lead_source?.name || <span className="text-neutral-400 italic">Not Set</span>}
+                                                        </p>
                                                         </div>
-                                                    )}
-                                                    {driverDetails.lead_status && (
                                                         <div>
                                                             <p className="text-sm text-neutral-500">Lead Status</p>
+                                                        {driverDetails.lead_status ? (
                                                             <Badge
                                                                 variant="outline"
                                                                 style={{
@@ -1940,12 +1954,26 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                             >
                                                                 {driverDetails.lead_status.name}
                                                             </Badge>
-                                                        </div>
+                                                        ) : (
+                                                            <span className="text-neutral-400 italic">Not Set</span>
                                                     )}
+                                                    </div>
                                                     {driverDetails.assigned_to && (
                                                         <div>
                                                             <p className="text-sm text-neutral-500">Assigned To</p>
                                                             <p className="font-medium">{driverDetails.assigned_to.name}</p>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.assigned_users && driverDetails.assigned_users.length > 0 && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Assigned Users</p>
+                                                            <div className="flex flex-wrap gap-2 mt-1">
+                                                                {driverDetails.assigned_users.map((user: any) => (
+                                                                    <Badge key={user.id} variant="secondary">
+                                                                        {user.name}
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                     )}
                                                     {driverDetails.current_stage && (
@@ -2323,7 +2351,9 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         campaign_id: driver.campaign?.id ? String(driver.campaign.id) : '',
         lead_source_id: driver.lead_source?.id ? String(driver.lead_source.id) : '',
         assigned_to: driver.assigned_to?.id ? String(driver.assigned_to.id) : '',
-        assigned_users: driver.assigned_users?.map((u) => u.id) || [],
+        assigned_users: (driver.assigned_users && Array.isArray(driver.assigned_users) && driver.assigned_users.length > 0) 
+            ? driver.assigned_users.map((u) => typeof u === 'object' ? u.id : u) 
+            : [],
         lead_status_id: driver.lead_status?.id ? String(driver.lead_status.id) : '',
         lead_stage_id: driver.lead_stage?.id ? String(driver.lead_stage.id) : '',
         current_stage_id: '',

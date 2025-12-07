@@ -425,11 +425,15 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
                                     },
                                     {
                                         header: 'Type',
-                                        accessor: (row) => (
-                                            <Badge variant={row.is_root ? 'default' : 'secondary'}>
-                                                {row.is_root ? 'Root' : 'Child'}
+                                        accessor: (row) => {
+                                            // Show "Root" only if is_root = true AND no parent_id
+                                            const isActualRoot = row.is_root && !row.parent_id;
+                                            return (
+                                                <Badge variant={isActualRoot ? 'default' : 'secondary'}>
+                                                    {isActualRoot ? 'Root' : 'Child'}
                                             </Badge>
-                                        ),
+                                            );
+                                        },
                                     },
                                 ]}
                                 actions={(row) => (

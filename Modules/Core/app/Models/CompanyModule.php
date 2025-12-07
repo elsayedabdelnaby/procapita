@@ -27,6 +27,18 @@ class CompanyModule extends Model
         ];
     }
 
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            // Set is_active to true by default if not set
+            if (! isset($model->is_active)) {
+                $model->is_active = true;
+            }
+        });
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
