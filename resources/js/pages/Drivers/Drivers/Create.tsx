@@ -88,7 +88,6 @@ export default function DriversCreate({
         riding_company_id: '',
         campaign_id: '',
         lead_source_id: '',
-        assigned_to: '',
         assigned_users: [] as number[],
         lead_status_id: '',
         lead_stage_id: '',
@@ -113,7 +112,7 @@ export default function DriversCreate({
             setData('campaign_id', '');
             setData('lead_source_id', '');
             setData('lead_status_id', '');
-            setData('assigned_to', '');
+            setData('assigned_users', []);
             setData('lead_stage_id', '');
         }
     }, [selectedCompany?.id, data.company_id]);
@@ -216,7 +215,7 @@ export default function DriversCreate({
                     .get(`/api/drivers/companies/${companyId}/users`)
                     .then((response) => {
                         setUsers(response.data);
-                        setData('assigned_to', '');
+                        setData('assigned_users', []);
                     })
                     .catch((error) => {
                         console.error('Error fetching users:', error);
@@ -538,7 +537,7 @@ export default function DriversCreate({
 
                             <div className="md:col-span-2">
                                 <Label>
-                                    Assigned To <span className="text-red-500">*</span>
+                                    Assigned Users <span className="text-red-500">*</span>
                                 </Label>
                                 {loadingUsers ? (
                                     <div className="mt-1">
@@ -559,7 +558,7 @@ export default function DriversCreate({
                                             label: user.name,
                                         }))}
                                         value={data.assigned_users}
-                                        onChange={(value) => setData('assigned_users', value)}
+                                        onChange={(value) => setData('assigned_users', value.map(v => typeof v === 'string' ? Number(v) : v))}
                                         placeholder="Select users..."
                                         className="mt-1"
                                         disabled={loadingUsers}
@@ -568,8 +567,8 @@ export default function DriversCreate({
                                 {errors.assigned_users && (
                                     <p className="text-sm text-red-500 mt-1">{errors.assigned_users}</p>
                                 )}
-                                {errors['assigned_users.*'] && (
-                                    <p className="text-sm text-red-500 mt-1">{errors['assigned_users.*']}</p>
+                                {(errors as Record<string, string>)['assigned_users.*'] && (
+                                    <p className="text-sm text-red-500 mt-1">{(errors as Record<string, string>)['assigned_users.*']}</p>
                                 )}
                             </div>
 
