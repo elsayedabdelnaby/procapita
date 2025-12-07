@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::table('campaigns', function (Blueprint $table) {
             $table->enum('budget_type', ['daily', 'total'])->default('total')->after('campaign_status_id');
             $table->decimal('daily_budget', 15, 2)->nullable()->after('budget_type');
+            
         });
     }
 
