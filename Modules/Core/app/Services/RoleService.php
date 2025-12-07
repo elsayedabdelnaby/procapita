@@ -51,9 +51,9 @@ class RoleService
     {
         $role = Role::findOrFail($id);
 
-        // Prevent making root role a child
-        if ($role->is_root && isset($data['parent_id']) && $data['parent_id'] !== null) {
-            throw new \Exception('Cannot assign a parent to a root role.');
+        // If role is root, keep is_root = true even if parent is assigned
+        if ($role->is_root && isset($data['parent_id'])) {
+            $data['is_root'] = true; // Keep root status
         }
 
         // Prevent circular references
@@ -131,30 +131,40 @@ class RoleService
     {
         $role = Role::findOrFail($roleId);
 
-        if ($role->is_root && $newParentId !== null) {
-            throw new \Exception('Cannot move a root role under another role.');
-        }
+        // If role is root, keep is_root = true even if moved under another role
+        $keepRootStatus = $role->is_root;
 
-        if ($newParentId !== null) {
-            $this->validateNoCircularReference($role, $newParentId);
-        }
-
-        $role->update(['parent_id' => $newParentId]);
-
-        return $role->fresh(['parent', 'children']);
-    }
-
-    protected function validateNoCircularReference(Role $role, int $newParentId): void
-    {
-        $newParent = Role::findOrFail($newParentId);
-
-        if ($newParent->id === $role->id) {
+        // Only prevent self-reference, allow moving to descendants
+        if ($newParentId !== null && $newParentId === $role->id) {
             throw new \Exception('A role cannot be its own parent.');
         }
 
-        if ($newParent->isDescendantOf($role)) {
-            throw new \Exception('Cannot create circular reference in role hierarchy.');
+        // If moving to a descendant, first move the descendant's children to the role's current parent
+        if ($newParentId !== null) {
+            $newParent = Role::findOrFail($newParentId);
+            
+            // Check if new parent is a descendant of the role being moved
+            if ($newParent->isDescendantOf($role)) {
+                // Move the new parent's children to the role's current parent before moving the role
+                $newParentChildren = $newParent->children;
+                $currentParentId = $role->parent_id;
+                
+                foreach ($newParentChildren as $child) {
+                    $child->update(['parent_id' => $currentParentId]);
+                    $child->updateHierarchy();
         }
+            }
+        }
+
+        // Update parent_id, but keep is_root = true if it was root
+        $updateData = ['parent_id' => $newParentId];
+        if ($keepRootStatus) {
+            $updateData['is_root'] = true;
+        }
+        
+        $role->update($updateData);
+
+        return $role->fresh(['parent', 'children']);
     }
 
     public function getSubordinateRoles(int $roleId): Collection

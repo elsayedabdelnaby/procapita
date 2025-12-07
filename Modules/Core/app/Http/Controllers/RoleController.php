@@ -176,5 +176,41 @@ class RoleController extends Controller
             'hierarchy' => $hierarchy,
         ]);
     }
+
+    public function move(int $company, int $role, Request $request)
+    {
+        try {
+            $roleModel = $this->roleService->getRoleById($role);
+            
+            if (! $roleModel || $roleModel->team_id !== $company) {
+                return response()->json(['error' => 'Role not found.'], 404);
+            }
+
+            $request->validate([
+                'parent_id' => ['nullable', 'integer', 'exists:roles,id'],
+            ]);
+
+            $newParentId = $request->input('parent_id');
+
+            // Validate that parent belongs to same company if provided
+            if ($newParentId) {
+                $parentRole = $this->roleService->getRoleById($newParentId);
+                if (! $parentRole || $parentRole->team_id !== $company) {
+                    return response()->json(['error' => 'Parent role must belong to the same company.'], 400);
+                }
+            }
+
+            $this->roleService->moveRole($role, $newParentId);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role moved successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+            ], 400);
+        }
+    }
 }
 

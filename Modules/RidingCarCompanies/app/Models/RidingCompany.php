@@ -56,6 +56,12 @@ class RidingCompany extends Model
             if (empty($model->slug)) {
                 $model->slug = static::generateUniqueSlug($model->name);
             }
+            // Set active to true by default if not set
+            // If active is not in the attributes array, set it to true
+            $attributes = $model->getAttributes();
+            if (! array_key_exists('active', $attributes)) {
+                $model->active = true;
+            }
         });
 
         static::updating(function ($model) {

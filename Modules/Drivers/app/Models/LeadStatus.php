@@ -42,6 +42,10 @@ class LeadStatus extends Model
             if (empty($model->slug)) {
                 $model->slug = static::generateUniqueSlug($model->name, $model->company_id);
             }
+            // Set active to true by default if not set
+            if (! isset($model->active)) {
+                $model->active = true;
+            }
         });
 
         static::updating(function ($model) {

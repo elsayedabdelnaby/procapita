@@ -30,7 +30,7 @@ export default function RidingCompaniesCreate({ companies }: RidingCompaniesCrea
         contact_email: '',
         contact_phone: '',
         api_settings: null,
-        active: true,
+        active: true, // Default to true, backend will handle if not set
     });
 
     // Set selected company on mount if available
@@ -206,7 +206,7 @@ export default function RidingCompaniesCreate({ companies }: RidingCompaniesCrea
                                         type="checkbox"
                                         id="active"
                                         name="active"
-                                        checked={data.active}
+                                        checked={data.active ?? true}
                                         onChange={(e) => setData('active', e.target.checked)}
                                         className="rounded border-gray-300"
                                     />

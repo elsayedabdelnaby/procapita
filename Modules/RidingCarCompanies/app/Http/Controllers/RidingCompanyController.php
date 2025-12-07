@@ -77,7 +77,14 @@ class RidingCompanyController extends Controller
             }
 
             $data['created_by'] = $user->id;
-            $data['active'] = $data['active'] ?? true;
+            
+            // Only set active if it's explicitly true, otherwise let Model boot method set it to true by default
+            if (isset($data['active']) && $data['active'] === true) {
+                // Keep it as true
+            } else {
+                // Remove active from data to let Model boot method set it to true
+                unset($data['active']);
+            }
 
             $this->ridingCompanyService->createRidingCompany($data);
 

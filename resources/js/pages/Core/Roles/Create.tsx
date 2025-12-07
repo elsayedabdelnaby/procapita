@@ -55,6 +55,15 @@ export default function RoleCreate({
         permissions: [] as number[],
     });
 
+    // Get parent_id from URL query parameter
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const parentId = urlParams.get('parent_id');
+        if (parentId) {
+            setData('parent_id', parentId);
+        }
+    }, []);
+
     // Update team_id when selectedCompany changes
     useEffect(() => {
         if (selectedCompany) {
@@ -184,6 +193,13 @@ export default function RoleCreate({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Validation: Must select at least one permission
+        if (!data.permissions || data.permissions.length === 0) {
+            alert('Please select at least one Permission.');
+            return;
+        }
+        
         const companyId = selectedCompany ? selectedCompany.id : company.id;
         post(`/core/companies/${companyId}/roles`);
     };
