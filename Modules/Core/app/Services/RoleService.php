@@ -56,9 +56,25 @@ class RoleService
             $data['is_root'] = true; // Keep root status
         }
 
-        // Prevent circular references
-        if (isset($data['parent_id'])) {
-            $this->validateNoCircularReference($role, $data['parent_id']);
+        // Only prevent self-reference, allow moving to descendants (like VtigerCRM)
+        if (isset($data['parent_id']) && $data['parent_id'] === $role->id) {
+            throw new \Exception('A role cannot be its own parent.');
+        }
+
+        // If moving to a descendant, first move the descendant's children to the role's current parent
+        if (isset($data['parent_id']) && $data['parent_id'] !== null) {
+            $newParent = Role::find($data['parent_id']);
+            
+            if ($newParent && $newParent->isDescendantOf($role)) {
+                // Move the new parent's children to the role's current parent before moving the role
+                $newParentChildren = $newParent->children;
+                $currentParentId = $role->parent_id;
+                
+                foreach ($newParentChildren as $child) {
+                    $child->update(['parent_id' => $currentParentId]);
+                    $child->updateHierarchy();
+                }
+            }
         }
 
         $role->update($data);

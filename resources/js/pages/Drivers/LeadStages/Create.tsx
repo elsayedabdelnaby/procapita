@@ -24,6 +24,13 @@ export default function LeadStagesCreate({ ridingCompanies: initialRidingCompani
     const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies);
     const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
 
+    // Initialize riding companies from props on mount
+    useEffect(() => {
+        if (initialRidingCompanies && initialRidingCompanies.length > 0) {
+            setRidingCompanies(initialRidingCompanies);
+        }
+    }, []);
+
     const { data, setData, post, processing, errors } = useForm({
         riding_company_id: '',
         name: '',
@@ -39,8 +46,8 @@ export default function LeadStagesCreate({ ridingCompanies: initialRidingCompani
     useEffect(() => {
         setLoadingRidingCompanies(true);
         
-        // If "All Companies" is selected (selectedCompany is null), load all riding companies
-        if (!selectedCompany) {
+        // If "All Companies" is selected (selectedCompany is null) and user is super admin, load all riding companies
+        if (!selectedCompany && page.props.auth?.user?.is_super_admin) {
             axios
                 .get('/api/drivers/riding-companies/all')
                 .then((response) => {
@@ -69,11 +76,11 @@ export default function LeadStagesCreate({ ridingCompanies: initialRidingCompani
                     setLoadingRidingCompanies(false);
                 });
         } else {
-            // If no selectedCompany, use initial riding companies
+            // If no selectedCompany or user is not super admin, use initial riding companies from controller
             setRidingCompanies(initialRidingCompanies);
             setLoadingRidingCompanies(false);
         }
-    }, [selectedCompany?.id]);
+    }, [selectedCompany?.id, initialRidingCompanies]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

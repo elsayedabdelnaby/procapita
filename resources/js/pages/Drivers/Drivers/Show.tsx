@@ -19,7 +19,8 @@ import {
     ChevronRight
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { formatDate } from '@/utils/date-format';
 
 interface RidingCompany {
     id: number;
@@ -85,6 +86,7 @@ interface Activity {
 interface Driver {
     id: number;
     uuid: string;
+    driver_num?: string;
     company_id?: number;
     full_name: string;
     phone: string;
@@ -99,6 +101,9 @@ interface Driver {
     };
     assigned_users?: AssignedUser[];
     lead_status?: LeadStatus;
+    lead_status_comment?: string;
+    next_follow_up?: string;
+    last_follow_up?: string;
     lead_stage?: {
         id: number;
         name: string;
@@ -137,9 +142,25 @@ interface Driver {
     updated_at: string;
 }
 
+interface FollowUp {
+    id: number;
+    created_time?: string;
+    user_name?: string;
+    riding_company?: string;
+    lead_stage?: string;
+    lead_status?: string;
+    lead_status_comment?: string;
+    notes?: string;
+    assigned_to_user?: {
+        id: number;
+        name: string;
+    };
+}
+
 interface DriversShowProps {
     driver: Driver;
     activities?: Activity[];
+    follow_ups?: FollowUp[];
     next_driver_id?: number;
     previous_driver_id?: number;
 }
@@ -147,10 +168,46 @@ interface DriversShowProps {
 export default function DriversShow({ 
     driver, 
     activities = [], 
+    follow_ups = [],
     next_driver_id, 
     previous_driver_id 
 }: DriversShowProps) {
-    const [activeTab, setActiveTab] = useState<'overview' | 'updates'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'updates' | 'followups'>('overview');
+    const [filteredIds, setFilteredIds] = useState<number[]>([]);
+    const [currentIndex, setCurrentIndex] = useState<number>(-1);
+    const [filteredNextId, setFilteredNextId] = useState<number | null>(null);
+    const [filteredPreviousId, setFilteredPreviousId] = useState<number | null>(null);
+
+    // Load filtered IDs from localStorage and find next/previous
+    useEffect(() => {
+        try {
+            const savedIds = localStorage.getItem('drivers_filtered_ids');
+            if (savedIds) {
+                const ids = JSON.parse(savedIds) as number[];
+                setFilteredIds(ids);
+                const index = ids.indexOf(driver.id);
+                setCurrentIndex(index);
+                
+                if (index !== -1) {
+                    // Find next driver ID from filtered list
+                    if (index < ids.length - 1) {
+                        setFilteredNextId(ids[index + 1]);
+                    } else {
+                        setFilteredNextId(null);
+                    }
+                    
+                    // Find previous driver ID from filtered list
+                    if (index > 0) {
+                        setFilteredPreviousId(ids[index - 1]);
+                    } else {
+                        setFilteredPreviousId(null);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error loading filtered IDs:', e);
+        }
+    }, [driver.id]);
 
     const getStatusBadge = (status: string) => {
         const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -205,15 +262,15 @@ export default function DriversShow({
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        {previous_driver_id && (
-                            <Link href={`/drivers/drivers/${previous_driver_id}`}>
+                        {(filteredPreviousId !== null ? filteredPreviousId : previous_driver_id) && (
+                            <Link href={`/drivers/drivers/${filteredPreviousId !== null ? filteredPreviousId : previous_driver_id}`}>
                                 <Button variant="outline" size="sm">
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
                             </Link>
                         )}
-                        {next_driver_id && (
-                            <Link href={`/drivers/drivers/${next_driver_id}`}>
+                        {(filteredNextId !== null ? filteredNextId : next_driver_id) && (
+                            <Link href={`/drivers/drivers/${filteredNextId !== null ? filteredNextId : next_driver_id}`}>
                                 <Button variant="outline" size="sm">
                                     <ChevronRight className="h-4 w-4" />
                                 </Button>
@@ -252,6 +309,18 @@ export default function DriversShow({
                             <div className="flex items-center gap-2">
                                 <Activity className="h-4 w-4" />
                                 Updates ({activities.length})
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('followups')}
+                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                activeTab === 'followups'
+                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                Follow-ups ({follow_ups.length})
                             </div>
                         </button>
                     </nav>
@@ -327,18 +396,45 @@ export default function DriversShow({
                                             {driver.lead_source?.name || <span className="text-neutral-400 italic">Not Set</span>}
                                         </p>
                                     </div>
+                                    {/* Lead Status Group with Green Border */}
+                                    <div className="rounded-lg border-2 border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-900/10 p-4 space-y-4">
+                                        <div>
+                                            <p className="text-sm text-neutral-500">Lead Status</p>
+                                            {driver.lead_status ? (
+                                                <Badge
+                                                    variant="outline"
+                                                    style={{
+                                                        borderColor: driver.lead_status.color || 'gray',
+                                                        color: driver.lead_status.color || 'gray',
+                                                    }}
+                                                >
+                                                    {driver.lead_status.name}
+                                                </Badge>
+                                            ) : (
+                                                <span className="text-neutral-400 italic">Not Set</span>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-neutral-500">Lead Status Comment</p>
+                                            {driver.lead_status_comment ? (
+                                                <p className="font-medium whitespace-pre-wrap">{driver.lead_status_comment}</p>
+                                            ) : (
+                                                <span className="text-neutral-400 italic">Not Set</span>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-neutral-500">Next Follow-up</p>
+                                            {driver.next_follow_up ? (
+                                                <p className="font-medium">{formatDate(driver.next_follow_up)}</p>
+                                            ) : (
+                                                <span className="text-neutral-400 italic">Not Set</span>
+                                            )}
+                                        </div>
+                                    </div>
                                     <div>
-                                        <p className="text-sm text-neutral-500">Lead Status</p>
-                                        {driver.lead_status ? (
-                                            <Badge
-                                                variant="outline"
-                                                style={{
-                                                    borderColor: driver.lead_status.color || 'gray',
-                                                    color: driver.lead_status.color || 'gray',
-                                                }}
-                                            >
-                                                {driver.lead_status.name}
-                                            </Badge>
+                                        <p className="text-sm text-neutral-500">Last Follow-up</p>
+                                        {driver.last_follow_up ? (
+                                            <p className="font-medium">{formatDate(driver.last_follow_up)}</p>
                                         ) : (
                                             <span className="text-neutral-400 italic">Not Set</span>
                                         )}
@@ -361,6 +457,10 @@ export default function DriversShow({
                                             </div>
                                         </div>
                                     )}
+                                    <div>
+                                        <p className="text-sm text-neutral-500">Driver Num</p>
+                                        <p className="font-medium">{driver.driver_num || driver.id}</p>
+                                    </div>
                                     {driver.current_stage && (
                                         <div>
                                             <p className="text-sm text-neutral-500">Current Stage</p>
@@ -524,6 +624,68 @@ export default function DriversShow({
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                    </Card>
+                )}
+
+                {activeTab === 'followups' && (
+                    <Card className="p-6">
+                        <h2 className="mb-4 text-lg font-semibold">Follow-ups</h2>
+                        {follow_ups.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status Comment</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {follow_ups.map((followUp) => (
+                                            <tr key={followUp.id} className="border-t hover:bg-muted/50 transition-colors">
+                                                <td className="px-4 py-3 text-sm">
+                                                    {followUp.created_time ? formatDate(followUp.created_time) + ' ' + new Date(followUp.created_time).toLocaleTimeString() : 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {followUp.user_name || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {followUp.riding_company || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {followUp.lead_stage || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {followUp.lead_status || 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {followUp.lead_status_comment ? (
+                                                        <div className="max-w-xs truncate" title={followUp.lead_status_comment}>
+                                                            {followUp.lead_status_comment}
+                                                        </div>
+                                                    ) : 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {followUp.notes ? (
+                                                        <div className="max-w-xs truncate" title={followUp.notes}>
+                                                            {followUp.notes}
+                                                        </div>
+                                                    ) : 'N/A'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="py-8 text-center text-neutral-500">
+                                No follow-ups found for this driver.
                             </div>
                         )}
                     </Card>

@@ -67,6 +67,12 @@ export interface User {
     is_super_admin?: boolean;
     is_company_admin?: boolean;
     company_id?: number;
+    company?: {
+        id: number;
+        name: string;
+        logo?: string;
+        logo_url?: string;
+    };
     permissions?: Permission[];
     [key: string]: unknown; // This allows for additional properties...
 }

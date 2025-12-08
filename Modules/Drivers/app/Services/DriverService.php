@@ -11,12 +11,30 @@ use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
 class DriverService
 {
-    public function getAllDrivers(?int $companyId = null): Collection
+    public function getAllDrivers(?int $companyId = null, ?\App\Models\User $user = null): Collection
     {
         $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'assignedUsers', 'leadStatus', 'leadStage', 'currentStage']);
 
         if ($companyId) {
             $query->where('company_id', $companyId);
+        }
+
+        // Filter by assigned_to or assigned_users if user is not super admin
+        if ($user && !$user->isSuperAdmin()) {
+            $subordinateUserIds = $user->getSubordinateUserIds();
+            
+            // Always include current user ID to ensure they see their own data
+            if (!in_array($user->id, $subordinateUserIds)) {
+                $subordinateUserIds[] = $user->id;
+            }
+            
+            // Filter by assigned_to OR assigned_users (multi-select)
+            $query->where(function ($q) use ($subordinateUserIds) {
+                $q->whereIn('assigned_to', $subordinateUserIds)
+                  ->orWhereHas('assignedUsers', function ($q) use ($subordinateUserIds) {
+                      $q->whereIn('users.id', $subordinateUserIds);
+                  });
+            });
         }
 
         return $query->orderBy('updated_at', 'desc')->get();
@@ -48,6 +66,9 @@ class DriverService
         if (isset($data['whatsapp_phone'])) {
             $data['whatsapp_phone'] = $this->reformatPhoneNumber($data['whatsapp_phone']);
         }
+
+        // Remove driver_num from data if present - it's auto-generated
+        unset($data['driver_num']);
 
         // Extract assigned_users if present
         $assignedUsers = [];
@@ -156,6 +177,9 @@ class DriverService
         if (isset($data['whatsapp_phone'])) {
             $data['whatsapp_phone'] = $this->reformatPhoneNumber($data['whatsapp_phone']);
         }
+
+        // Remove driver_num from data if present - it's auto-generated and read-only
+        unset($data['driver_num']);
 
         $driver = Driver::findOrFail($id);
 

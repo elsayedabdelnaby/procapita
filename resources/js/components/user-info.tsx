@@ -26,6 +26,20 @@ export function UserInfo({
                         {user.email}
                     </span>
                 )}
+                {user.company && (
+                    <div className="flex items-center gap-2 mt-1">
+                        {user.company.logo_url && (
+                            <img 
+                                src={user.company.logo_url} 
+                                alt={user.company.name}
+                                className="h-4 w-4 object-contain"
+                            />
+                        )}
+                        <span className="truncate text-xs text-muted-foreground">
+                            {user.company.name}
+                        </span>
+                    </div>
+                )}
             </div>
         </>
     );

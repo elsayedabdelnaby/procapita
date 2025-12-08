@@ -171,6 +171,84 @@ class User extends Authenticatable
         return $query->where('company_id', $companyId);
     }
 
+    /**
+     * Get all users that are below the current user in the role hierarchy
+     * This includes the current user and all users in subordinate roles
+     */
+    public function getSubordinateUserIds(): array
+    {
+        if ($this->isSuperAdmin()) {
+            // Super admin can see all users
+            return User::where('company_id', $this->company_id)
+                ->pluck('id')
+                ->toArray();
+        }
+
+        $userRoleIds = $this->roles()->pluck('id')->toArray();
+        
+        if (empty($userRoleIds)) {
+            // If user has no roles, they can only see themselves
+            return [$this->id];
+        }
+
+        // Get all subordinate roles (roles below user's roles in hierarchy)
+        $subordinateRoleIds = \Modules\Core\app\Models\Role::whereIn('id', $userRoleIds)
+            ->get()
+            ->flatMap(function ($role) {
+                return $this->getDescendantRoleIds($role);
+            })
+            ->unique()
+            ->toArray();
+
+        // Include user's own roles
+        $allRoleIds = array_unique(array_merge($userRoleIds, $subordinateRoleIds));
+
+        // Get all users with these roles (including current user)
+        $subordinateUserIds = User::whereHas('roles', function ($query) use ($allRoleIds) {
+            $query->whereIn('roles.id', $allRoleIds);
+        })
+        ->where('company_id', $this->company_id)
+        ->pluck('id')
+        ->toArray();
+
+        // Always include current user
+        if (!in_array($this->id, $subordinateUserIds)) {
+            $subordinateUserIds[] = $this->id;
+        }
+
+        return $subordinateUserIds;
+    }
+
+    /**
+     * Get all descendant role IDs for a given role
+     */
+    protected function getDescendantRoleIds(\Modules\Core\app\Models\Role $role): array
+    {
+        $roleIds = [];
+        
+        // Get direct children
+        $children = \Modules\Core\app\Models\Role::where('parent_id', $role->id)
+            ->where('team_id', $role->team_id)
+            ->get();
+        
+        foreach ($children as $child) {
+            $roleIds[] = $child->id;
+            // Recursively get descendants
+            $roleIds = array_merge($roleIds, $this->getDescendantRoleIds($child));
+        }
+        
+        return $roleIds;
+    }
+
+    /**
+     * Check if a user ID is a subordinate of the current user
+     */
+    public function isSubordinate(int $userId): bool
+    {
+        $subordinateIds = $this->getSubordinateUserIds();
+        return in_array($userId, $subordinateIds);
+    }
+
     protected static function boot(): void
     {
         parent::boot();

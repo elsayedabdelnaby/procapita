@@ -379,7 +379,7 @@ export function ImportModal({
                                     accept=".csv,.txt"
                                     onChange={handleFileSelect}
                                     ref={fileInputRef}
-                                    className="mt-1"
+                                    className="mt-1 border-green-200 dark:border-green-800 focus-visible:border-green-400 dark:focus-visible:border-green-600"
                                 />
                                 {file && (
                                     <p className="text-sm text-muted-foreground mt-1">

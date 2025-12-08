@@ -41,6 +41,26 @@ export default function Profile({
                         description="Update your name and email address"
                     />
 
+                    {/* Company Information */}
+                    {auth.user.company && (
+                        <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 p-4">
+                            <h3 className="text-sm font-semibold mb-3">Company Information</h3>
+                            <div className="flex items-center gap-3">
+                                {auth.user.company.logo_url && (
+                                    <img 
+                                        src={auth.user.company.logo_url} 
+                                        alt={auth.user.company.name}
+                                        className="h-12 w-12 object-contain rounded"
+                                    />
+                                )}
+                                <div>
+                                    <p className="text-sm font-medium">{auth.user.company.name}</p>
+                                    <p className="text-xs text-muted-foreground">Your Company</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <Form
                         {...ProfileController.update.form()}
                         options={{

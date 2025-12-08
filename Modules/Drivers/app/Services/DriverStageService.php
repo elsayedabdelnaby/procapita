@@ -7,12 +7,17 @@ use Modules\Drivers\app\Models\DriverStage;
 
 class DriverStageService
 {
-    public function getAllDriverStages(?int $driverId = null): Collection
+    public function getAllDriverStages(?int $driverId = null, ?int $companyId = null): Collection
     {
         $query = DriverStage::with(['driver', 'stageTemplate'])
-            ->whereHas('driver', function ($q) {
+            ->whereHas('driver', function ($q) use ($companyId) {
                 // Only show stages for non-deleted drivers
                 $q->whereNull('deleted_at');
+                
+                // Filter by company_id if provided
+                if ($companyId) {
+                    $q->where('company_id', $companyId);
+                }
             });
 
         if ($driverId) {

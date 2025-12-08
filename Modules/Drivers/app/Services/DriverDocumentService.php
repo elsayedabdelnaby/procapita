@@ -8,12 +8,17 @@ use Modules\Drivers\app\Models\DriverDocument;
 
 class DriverDocumentService
 {
-    public function getAllDriverDocuments(?int $driverId = null): Collection
+    public function getAllDriverDocuments(?int $driverId = null, ?int $companyId = null): Collection
     {
         $query = DriverDocument::with(['driver', 'documentTemplate', 'reviewer'])
-            ->whereHas('driver', function ($q) {
+            ->whereHas('driver', function ($q) use ($companyId) {
                 // Only show documents for non-deleted drivers
                 $q->whereNull('deleted_at');
+                
+                // Filter by company_id if provided
+                if ($companyId) {
+                    $q->where('company_id', $companyId);
+                }
             });
 
         if ($driverId) {

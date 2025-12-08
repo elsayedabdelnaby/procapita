@@ -116,6 +116,20 @@ class DriverUpdateRequest extends FormRequest
                 },
             ],
             'current_stage_id' => ['nullable', 'exists:riding_company_stage_templates,id'],
+            'lead_status_comment' => ['nullable', 'string'],
+            'next_follow_up' => [
+                'nullable',
+                'date',
+                function ($attribute, $value, $fail) {
+                    if ($value) {
+                        $selectedDate = \Carbon\Carbon::parse($value)->startOfDay();
+                        $today = \Carbon\Carbon::today();
+                        if ($selectedDate->lt($today)) {
+                            $fail('Next Follow-up date must be today or a future date.');
+                        }
+                    }
+                },
+            ],
             'notes' => ['nullable', 'string'],
         ];
 

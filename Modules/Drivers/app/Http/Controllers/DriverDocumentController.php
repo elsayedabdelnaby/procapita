@@ -24,12 +24,13 @@ class DriverDocumentController extends Controller
 
     public function index(Request $request): Response
     {
+        $companyId = $this->getCompanyId();
         #check if the driver_id is in the request
         if ($request->has('driver_id') && $request->input('driver_id') !== '') {
             $driverId = $request->input('driver_id');
-            $driverDocuments = $this->driverDocumentService->getAllDriverDocuments($driverId);
+            $driverDocuments = $this->driverDocumentService->getAllDriverDocuments($driverId, $companyId);
         } else {
-        $driverDocuments = $this->driverDocumentService->getAllDriverDocuments();
+        $driverDocuments = $this->driverDocumentService->getAllDriverDocuments(null, $companyId);
         }
         return Inertia::render('Drivers/DriverDocuments/Index', [
             'driverDocuments' => $driverDocuments,
@@ -459,7 +460,8 @@ class DriverDocumentController extends Controller
 
     public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $driverDocuments = $this->driverDocumentService->getAllDriverDocuments();
+        $companyId = $this->getCompanyId();
+        $driverDocuments = $this->driverDocumentService->getAllDriverDocuments(null, $companyId);
 
         $filename = 'driver_documents_export_' . date('Y-m-d_His') . '.csv';
         
