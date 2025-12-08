@@ -98,7 +98,7 @@ const ALL_FOLLOWUP_COLUMNS = [
     { id: 'riding_company', label: 'Riding Company', defaultVisible: true, defaultOrder: 6 },
     { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 7 },
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 7.5 },
-    { id: 'lead_status_comment', label: 'Lead Status Comment', defaultVisible: false, defaultOrder: 7.6 },
+    { id: 'lead_status_comment', label: 'Feedback Comment', defaultVisible: false, defaultOrder: 7.6 },
     { id: 'next_follow_up_drivers', label: 'Next Follow-up (Drivers)', defaultVisible: false, defaultOrder: 7.7 },
     { id: 'last_follow_up_drivers', label: 'Last Follow-up (Drivers)', defaultVisible: false, defaultOrder: 7.8 },
     { id: 'notes', label: 'Notes', defaultVisible: false, defaultOrder: 8 },

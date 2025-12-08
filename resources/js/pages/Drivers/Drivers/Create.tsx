@@ -8,6 +8,7 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { type SharedData } from '@/types';
+import { formatDate } from '@/utils/date-format';
 
 interface Company {
     id: number;
@@ -511,7 +512,7 @@ export default function DriversCreate({
                             </div>
 
                             <div>
-                                <Label htmlFor="lead_status_comment">Lead Status Comment</Label>
+                                <Label htmlFor="lead_status_comment">Feedback Comment</Label>
                                 <textarea
                                     id="lead_status_comment"
                                     name="lead_status_comment"
@@ -526,25 +527,88 @@ export default function DriversCreate({
                                 )}
                             </div>
 
-                            <div>
-                                <Label htmlFor="next_follow_up">Next Follow-up</Label>
-                                <input
-                                    type="date"
-                                    id="next_follow_up"
-                                    name="next_follow_up"
-                                    value={data.next_follow_up}
-                                    onChange={(e) => {
-                                        const selectedDate = e.target.value;
-                                        const today = new Date().toISOString().split('T')[0];
-                                        if (selectedDate && selectedDate < today) {
-                                            alert('Next Follow-up date must be today or a future date.');
-                                            return;
+                            <div className="relative cursor-pointer">
+                                <Label 
+                                    htmlFor="next_follow_up"
+                                    className="cursor-pointer"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        const dateInput = document.getElementById('create-next-follow-up') as HTMLInputElement;
+                                        if (dateInput) {
+                                            dateInput.showPicker?.() || dateInput.focus();
                                         }
-                                        setData('next_follow_up', selectedDate);
                                     }}
-                                    min={new Date().toISOString().split('T')[0]}
-                                    className="w-full rounded-md border px-3 py-2"
-                                />
+                                >
+                                    Next Follow-up
+                                </Label>
+                                <div className="relative">
+                                    <input
+                                        type="date"
+                                        id="create-next-follow-up"
+                                        name="next_follow_up"
+                                        value={data.next_follow_up}
+                                        onChange={(e) => {
+                                            const selectedDate = e.target.value;
+                                            const today = new Date().toISOString().split('T')[0];
+                                            if (selectedDate && selectedDate < today) {
+                                                alert('Next Follow-up date must be today or a future date.');
+                                                return;
+                                            }
+                                            setData('next_follow_up', selectedDate);
+                                        }}
+                                        min={new Date().toISOString().split('T')[0]}
+                                        className="w-full rounded-md border px-3 py-2 cursor-pointer"
+                                        onClick={(e) => {
+                                            const dateInput = e.target as HTMLInputElement;
+                                            dateInput.showPicker?.() || dateInput.focus();
+                                        }}
+                                        onFocus={(e) => {
+                                            e.target.showPicker?.();
+                                        }}
+                                        style={{ 
+                                            color: data.next_follow_up ? 'transparent' : 'transparent',
+                                            caretColor: 'transparent'
+                                        }}
+                                    />
+                                    {!data.next_follow_up && (
+                                        <div 
+                                            className="absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
+                                            style={{ 
+                                                color: '#6b7280',
+                                                fontSize: '0.875rem',
+                                                lineHeight: '1.25rem'
+                                            }}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                const dateInput = document.getElementById('create-next-follow-up') as HTMLInputElement;
+                                                if (dateInput) {
+                                                    dateInput.showPicker?.() || dateInput.focus();
+                                                }
+                                            }}
+                                        >
+                                            dd / mm / yyyy
+                                        </div>
+                                    )}
+                                    {data.next_follow_up && (
+                                        <div 
+                                            className="absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
+                                            style={{ 
+                                                color: 'inherit',
+                                                fontSize: '0.875rem',
+                                                lineHeight: '1.25rem'
+                                            }}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                const dateInput = document.getElementById('create-next-follow-up') as HTMLInputElement;
+                                                if (dateInput) {
+                                                    dateInput.showPicker?.() || dateInput.focus();
+                                                }
+                                            }}
+                                        >
+                                            {formatDate(data.next_follow_up)}
+                                        </div>
+                                    )}
+                                </div>
                                 {errors.next_follow_up && (
                                     <p className="text-sm text-red-500">{errors.next_follow_up}</p>
                                 )}

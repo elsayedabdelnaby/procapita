@@ -84,7 +84,7 @@ class DriverController extends Controller
                 'type' => 'picklist',
                 'options' => $leadStatuses->map(fn($ls) => ['value' => $ls->id, 'label' => $ls->name])->toArray(),
             ],
-            ['value' => 'lead_status_comment', 'label' => 'Lead Status Comment', 'type' => 'textarea'],
+            ['value' => 'lead_status_comment', 'label' => 'Feedback Comment', 'type' => 'textarea'],
             [
                 'value' => 'assigned_to',
                 'label' => 'Assigned To',
@@ -131,6 +131,7 @@ class DriverController extends Controller
                 ] : null,
                 'lead_status_comment' => $driver->lead_status_comment,
                 'next_follow_up' => $driver->next_follow_up ? $driver->next_follow_up->format('Y-m-d') : null,
+                'next_time' => $driver->next_time,
                 'last_follow_up' => $driver->last_follow_up ? $driver->last_follow_up->format('Y-m-d') : null,
                 'lead_stage' => $driver->leadStage ? [
                     'id' => $driver->leadStage->id,
@@ -316,6 +317,7 @@ class DriverController extends Controller
                 ] : null,
                 'lead_status_comment' => $driverModel->lead_status_comment,
                 'next_follow_up' => $driverModel->next_follow_up ? $driverModel->next_follow_up->format('Y-m-d') : null,
+                'next_time' => $driverModel->next_time,
                 'last_follow_up' => $driverModel->last_follow_up ? $driverModel->last_follow_up->format('Y-m-d') : null,
                 'lead_stage' => $driverModel->leadStage ? [
                     'id' => $driverModel->leadStage->id,
@@ -469,6 +471,7 @@ class DriverController extends Controller
                 ] : null,
                 'lead_status_comment' => $driverModel->lead_status_comment,
                 'next_follow_up' => $driverModel->next_follow_up ? $driverModel->next_follow_up->format('Y-m-d') : null,
+                'next_time' => $driverModel->next_time,
                 'last_follow_up' => $driverModel->last_follow_up ? $driverModel->last_follow_up->format('Y-m-d') : null,
                 'lead_stage' => $driverModel->leadStage ? [
                     'id' => $driverModel->leadStage->id,
@@ -563,6 +566,7 @@ class DriverController extends Controller
                 'lead_status_id' => $driverModel->lead_status_id,
                 'lead_status_comment' => $driverModel->lead_status_comment,
                 'next_follow_up' => $driverModel->next_follow_up ? $driverModel->next_follow_up->format('Y-m-d') : null,
+                'next_time' => $driverModel->next_time,
                 'last_follow_up' => $driverModel->last_follow_up ? $driverModel->last_follow_up->format('Y-m-d') : null,
                 'lead_stage_id' => $driverModel->lead_stage_id,
                 'current_stage_id' => $driverModel->current_stage_id,
@@ -677,7 +681,7 @@ class DriverController extends Controller
         $output = fopen('php://temp', 'r+');
 
         // Headers
-        fputcsv($output, ['ID', 'Full Name', 'Phone', 'WhatsApp', 'Email', 'Riding Company', 'Campaign', 'Lead Source', 'Lead Status', 'Lead Status Comment', 'Next Follow-up', 'Last Follow-up', 'Assigned To', 'Created At']);
+        fputcsv($output, ['ID', 'Full Name', 'Phone', 'WhatsApp', 'Email', 'Riding Company', 'Campaign', 'Lead Source', 'Lead Status', 'Feedback Comment', 'Next Follow-up', 'Next Time', 'Last Follow-up', 'Assigned To', 'Created At']);
 
         // Data
         foreach ($drivers as $driver) {
@@ -693,6 +697,7 @@ class DriverController extends Controller
                 $driver->leadStatus?->name ?? '',
                 $driver->lead_status_comment ?? '',
                 $driver->next_follow_up ? $driver->next_follow_up->format('Y-m-d') : '',
+                $driver->next_time ?? '',
                 $driver->last_follow_up ? $driver->last_follow_up->format('Y-m-d') : '',
                 $driver->assignedTo?->name ?? '',
                 $driver->created_at,
@@ -1412,6 +1417,7 @@ class DriverController extends Controller
                     }
                 },
             ],
+            'next_time' => ['nullable', 'string', 'max:10'],
             'assigned_to' => ['nullable', 'string'],
             'assigned_users' => ['nullable', 'array'],
             'assigned_users.*' => ['required', 'integer', 'exists:users,id'],
@@ -1465,6 +1471,9 @@ class DriverController extends Controller
         }
         if ($request->filled('next_follow_up') && ! in_array('next_follow_up', $clearFields)) {
             $updateData['next_follow_up'] = $request->next_follow_up;
+        }
+        if ($request->filled('next_time') && ! in_array('next_time', $clearFields)) {
+            $updateData['next_time'] = $request->next_time;
         }
         if ($request->filled('assigned_to') && ! in_array('assigned_to', $clearFields)) {
             $updateData['assigned_to'] = $request->assigned_to ? (int) $request->assigned_to : null;

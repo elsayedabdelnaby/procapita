@@ -129,6 +129,7 @@ class DriverStoreRequest extends FormRequest
                     }
                 },
             ],
+            'next_time' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
         ];
 

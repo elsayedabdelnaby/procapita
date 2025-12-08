@@ -7,6 +7,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm, router } from '@inertiajs/react';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
+import { formatDate } from '@/utils/date-format';
 
 interface Company {
     id: number;
@@ -59,6 +60,7 @@ interface Driver {
     lead_status_id?: number;
     lead_status_comment?: string;
     next_follow_up?: string;
+    next_time?: string;
     last_follow_up?: string;
     lead_stage_id?: number;
     current_stage_id?: number;
@@ -101,6 +103,7 @@ export default function DriversEdit({
         lead_status_id: driver.lead_status_id ? String(driver.lead_status_id) : '',
         lead_status_comment: driver.lead_status_comment || '',
         next_follow_up: driver.next_follow_up || '',
+        next_time: driver.next_time || '',
         last_follow_up: driver.last_follow_up || '',
         lead_stage_id: driver.lead_stage_id ? String(driver.lead_stage_id) : '',
         current_stage_id: driver.current_stage_id ? String(driver.current_stage_id) : '',
@@ -335,9 +338,9 @@ export default function DriversEdit({
                             </div>
 
                             {/* Lead Status Group with Green Border */}
-                            <div className="rounded-lg border-2 border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-900/10 p-4 space-y-4">
+                            <div className="rounded-lg border-2 border-green-500 dark:border-green-600 bg-green-100/50 dark:bg-green-900/30 p-4 grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label htmlFor="lead_status_id">Lead Status</Label>
+                                    <Label htmlFor="lead_status_id" className="font-bold text-green-700 dark:text-green-300">Lead Status</Label>
                                     <select
                                         id="lead_status_id"
                                         name="lead_status_id"
@@ -358,7 +361,7 @@ export default function DriversEdit({
                                 </div>
 
                                 <div>
-                                    <Label htmlFor="lead_status_comment">Lead Status Comment</Label>
+                                    <Label htmlFor="lead_status_comment" className="font-bold text-green-700 dark:text-green-300">Feedback Comment</Label>
                                     <textarea
                                         id="lead_status_comment"
                                         name="lead_status_comment"
@@ -374,35 +377,121 @@ export default function DriversEdit({
                                 </div>
 
                                 <div 
-                                    className="cursor-pointer"
-                                    onClick={() => {
+                                    className="cursor-pointer relative"
+                                    onClick={(e) => {
                                         const dateInput = document.getElementById('edit-next-follow-up') as HTMLInputElement;
-                                        if (dateInput) {
+                                        if (dateInput && e.target !== dateInput) {
                                             dateInput.showPicker?.() || dateInput.focus();
                                         }
                                     }}
                                 >
-                                    <Label htmlFor="next_follow_up">Next Follow-up</Label>
-                                    <input
-                                        type="date"
-                                        id="edit-next-follow-up"
-                                        name="next_follow_up"
-                                        value={data.next_follow_up}
-                                        onChange={(e) => {
-                                            const selectedDate = e.target.value;
-                                            const today = new Date().toISOString().split('T')[0];
-                                            if (selectedDate && selectedDate < today) {
-                                                alert('Next Follow-up date must be today or a future date.');
-                                                return;
+                                    <Label 
+                                        htmlFor="next_follow_up" 
+                                        className="font-bold text-green-700 dark:text-green-300 cursor-pointer block"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            const dateInput = document.getElementById('edit-next-follow-up') as HTMLInputElement;
+                                            if (dateInput) {
+                                                dateInput.showPicker?.() || dateInput.focus();
                                             }
-                                            setData('next_follow_up', selectedDate);
                                         }}
-                                        min={new Date().toISOString().split('T')[0]}
-                                        className="w-full rounded-md border px-3 py-2"
-                                        onClick={(e) => e.stopPropagation()}
-                                    />
+                                    >
+                                        Next Follow-up
+                                    </Label>
+                                    <div className="relative">
+                                        <input
+                                            type="date"
+                                            id="edit-next-follow-up"
+                                            name="next_follow_up"
+                                            value={data.next_follow_up}
+                                            onChange={(e) => {
+                                                const selectedDate = e.target.value;
+                                                const today = new Date().toISOString().split('T')[0];
+                                                if (selectedDate && selectedDate < today) {
+                                                    alert('Next Follow-up date must be today or a future date.');
+                                                    return;
+                                                }
+                                                setData('next_follow_up', selectedDate);
+                                            }}
+                                            min={new Date().toISOString().split('T')[0]}
+                                            className="w-full rounded-md border px-3 py-2 cursor-pointer"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const dateInput = e.target as HTMLInputElement;
+                                                dateInput.showPicker?.() || dateInput.focus();
+                                            }}
+                                            onFocus={(e) => {
+                                                e.target.showPicker?.();
+                                            }}
+                                            style={{ 
+                                                color: data.next_follow_up ? 'transparent' : 'transparent',
+                                                caretColor: 'transparent'
+                                            }}
+                                        />
+                                        {!data.next_follow_up && (
+                                            <div 
+                                                className="absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
+                                                style={{ 
+                                                    color: '#6b7280',
+                                                    fontSize: '0.875rem',
+                                                    lineHeight: '1.25rem'
+                                                }}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    const dateInput = document.getElementById('edit-next-follow-up') as HTMLInputElement;
+                                                    if (dateInput) {
+                                                        dateInput.showPicker?.() || dateInput.focus();
+                                                    }
+                                                }}
+                                            >
+                                                dd / mm / yyyy
+                                            </div>
+                                        )}
+                                        {data.next_follow_up && (
+                                            <div 
+                                                className="absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
+                                                style={{ 
+                                                    color: 'inherit',
+                                                    fontSize: '0.875rem',
+                                                    lineHeight: '1.25rem'
+                                                }}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    const dateInput = document.getElementById('edit-next-follow-up') as HTMLInputElement;
+                                                    if (dateInput) {
+                                                        dateInput.showPicker?.() || dateInput.focus();
+                                                    }
+                                                }}
+                                            >
+                                                {formatDate(data.next_follow_up)}
+                                            </div>
+                                        )}
+                                    </div>
                                     {errors.next_follow_up && (
                                         <p className="text-sm text-red-500">{errors.next_follow_up}</p>
+                                    )}
+                                </div>
+                                <div>
+                                    <Label htmlFor="next_time" className="font-bold text-green-700 dark:text-green-300">Next Time</Label>
+                                    <select
+                                        id="next_time"
+                                        name="next_time"
+                                        value={data.next_time || ''}
+                                        onChange={(e) => setData('next_time', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                    >
+                                        <option value="">Select Time</option>
+                                        {TIME_OPTIONS.map((time) => (
+                                            <option key={time} value={time}>
+                                                {time}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.next_time && (
+                                        <p className="text-sm text-red-500">{errors.next_time}</p>
                                     )}
                                 </div>
                             </div>
