@@ -109,7 +109,7 @@ export default function DriverFollowUpsShow({ followUp }: DriverFollowUpsShowPro
 
                             {followUp.lead_status_comment && (
                                 <div>
-                                    <p className="text-sm text-neutral-500">Lead Status Comment</p>
+                                    <p className="text-sm text-neutral-500">Feedback Comment</p>
                                     <p className="font-medium whitespace-pre-wrap">{followUp.lead_status_comment}</p>
                                 </div>
                             )}

@@ -391,7 +391,7 @@ export default function DriversMassEdit({
                                         onCheckedChange={(checked) => handleClearField('lead_status_comment', checked as boolean)}
                                     />
                                     <Label htmlFor="lead_status_comment" className="text-sm font-medium">
-                                        Lead Status Comment
+                                        Feedback Comment
                                     </Label>
                                 </div>
                                 <textarea

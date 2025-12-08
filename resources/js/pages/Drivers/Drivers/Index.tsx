@@ -75,6 +75,7 @@ interface Driver {
     lead_status?: LeadStatus;
     lead_status_comment?: string;
     next_follow_up?: string;
+    next_time?: string;
     last_follow_up?: string;
     lead_stage?: LeadStage;
     created_at: string;
@@ -116,8 +117,9 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'campaign', label: 'Campaign', defaultVisible: true, defaultOrder: 6 },
     { id: 'lead_source', label: 'Lead Source', defaultVisible: true, defaultOrder: 7 },
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 8 },
-    { id: 'lead_status_comment', label: 'Lead Status Comment', defaultVisible: false, defaultOrder: 8.5 },
+    { id: 'lead_status_comment', label: 'Feedback Comment', defaultVisible: false, defaultOrder: 8.5 },
     { id: 'next_follow_up', label: 'Next Follow-up', defaultVisible: false, defaultOrder: 8.6 },
+    { id: 'next_time', label: 'Next Time', defaultVisible: false, defaultOrder: 8.65 },
     { id: 'last_follow_up', label: 'Last Follow-up', defaultVisible: false, defaultOrder: 8.7 },
     { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 9 },
     { id: 'assigned_to', label: 'Assigned To', defaultVisible: true, defaultOrder: 10 },
@@ -125,6 +127,23 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'created_at', label: 'Created At', defaultVisible: false, defaultOrder: 12 },
     { id: 'updated_at', label: 'Updated At', defaultVisible: false, defaultOrder: 13 },
 ];
+
+// Generate time options from 08:00 AM to 11:30 PM in 30-minute intervals
+const generateTimeOptions = (): string[] => {
+    const times: string[] = [];
+    for (let hour = 8; hour <= 23; hour++) {
+        for (let minute = 0; minute < 60; minute += 30) {
+            if (hour === 23 && minute > 30) break; // Stop at 11:30 PM
+            const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const timeStr = `${hour12.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${ampm}`;
+            times.push(timeStr);
+        }
+    }
+    return times;
+};
+
+const TIME_OPTIONS = generateTimeOptions();
 
 export default function DriversIndex({ drivers = [], importAvailableFields, filterOptions = {} }: DriversIndexProps) {
     const page = usePage<SharedData>();
@@ -2082,7 +2101,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                     )}
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm text-neutral-500">Lead Status Comment</p>
+                                                        <p className="text-sm text-neutral-500">Feedback Comment</p>
                                                         {driverDetails.lead_status_comment ? (
                                                             <p className="font-medium whitespace-pre-wrap">{driverDetails.lead_status_comment}</p>
                                                         ) : (
@@ -2437,7 +2456,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status Comment</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Feedback Comment</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Notes</th>
                                                         </tr>
                                                     </thead>
@@ -2566,6 +2585,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         lead_status_id: driver.lead_status?.id ? String(driver.lead_status.id) : '',
         lead_status_comment: driver.lead_status_comment || '',
         next_follow_up: driver.next_follow_up || '',
+        next_time: driver.next_time || '',
         last_follow_up: driver.last_follow_up || '',
         lead_stage_id: driver.lead_stage?.id ? String(driver.lead_stage.id) : '',
         current_stage_id: '',
@@ -2587,6 +2607,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
             lead_status_id: data.lead_status_id || null,
             lead_status_comment: data.lead_status_comment || null,
             next_follow_up: data.next_follow_up || null,
+            next_time: data.next_time || null,
             lead_stage_id: data.lead_stage_id || null,
             current_stage_id: data.current_stage_id || null,
             notes: data.notes || null,
@@ -2773,9 +2794,9 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                             </Select>
                         </div>
                         {/* Lead Status Group with Green Border */}
-                        <div className="col-span-2 rounded-lg border-2 border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-900/10 p-4 space-y-4">
+                        <div className="col-span-2 rounded-lg border-2 border-green-500 dark:border-green-600 bg-green-100/50 dark:bg-green-900/30 p-4 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium mb-1">Lead Status</label>
+                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">Lead Status</label>
                                 <Select
                                     value={data.lead_status_id}
                                     onValueChange={(value) => setData('lead_status_id', value)}
@@ -2793,7 +2814,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                 </Select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-1">Lead Status Comment</label>
+                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">Feedback Comment</label>
                                 <textarea
                                     value={data.lead_status_comment}
                                     onChange={(e) => setData('lead_status_comment', e.target.value)}
@@ -2806,34 +2827,120 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                 )}
                             </div>
                             <div 
-                                className="cursor-pointer"
-                                onClick={() => {
+                                className="cursor-pointer relative"
+                                onClick={(e) => {
                                     const dateInput = document.getElementById('quick-edit-next-follow-up') as HTMLInputElement;
-                                    if (dateInput) {
+                                    if (dateInput && e.target !== dateInput && !(e.target as HTMLElement).closest('.date-display-overlay')) {
                                         dateInput.showPicker?.() || dateInput.focus();
                                     }
                                 }}
                             >
-                                <label className="block text-sm font-medium mb-1">Next Follow-up</label>
-                                <Input
-                                    type="date"
-                                    id="quick-edit-next-follow-up"
-                                    value={data.next_follow_up}
-                                    onChange={(e) => {
-                                        const selectedDate = e.target.value;
-                                        const today = new Date().toISOString().split('T')[0];
-                                        if (selectedDate && selectedDate < today) {
-                                            alert('Next Follow-up date must be today or a future date.');
-                                            return;
+                                <label 
+                                    className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300 cursor-pointer"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const dateInput = document.getElementById('quick-edit-next-follow-up') as HTMLInputElement;
+                                        if (dateInput) {
+                                            dateInput.showPicker?.() || dateInput.focus();
                                         }
-                                        setData('next_follow_up', selectedDate);
                                     }}
-                                    min={new Date().toISOString().split('T')[0]}
-                                    className={errors.next_follow_up ? 'border-red-500' : ''}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
+                                >
+                                    Next Follow-up
+                                </label>
+                                <div className="relative">
+                                    <Input
+                                        type="date"
+                                        id="quick-edit-next-follow-up"
+                                        value={data.next_follow_up}
+                                        onChange={(e) => {
+                                            const selectedDate = e.target.value;
+                                            const today = new Date().toISOString().split('T')[0];
+                                            if (selectedDate && selectedDate < today) {
+                                                alert('Next Follow-up date must be today or a future date.');
+                                                return;
+                                            }
+                                            setData('next_follow_up', selectedDate);
+                                        }}
+                                        min={new Date().toISOString().split('T')[0]}
+                                        className={`${errors.next_follow_up ? 'border-red-500' : ''} cursor-pointer`}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const dateInput = e.target as HTMLInputElement;
+                                            dateInput.showPicker?.() || dateInput.focus();
+                                        }}
+                                        onFocus={(e) => {
+                                            e.target.showPicker?.();
+                                        }}
+                                        style={{ 
+                                            color: data.next_follow_up ? 'transparent' : 'transparent',
+                                            caretColor: 'transparent'
+                                        }}
+                                    />
+                                    {!data.next_follow_up && (
+                                        <div 
+                                            className="date-display-overlay absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
+                                            style={{ 
+                                                color: '#6b7280',
+                                                fontSize: '0.875rem',
+                                                lineHeight: '1.25rem'
+                                            }}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                const dateInput = document.getElementById('quick-edit-next-follow-up') as HTMLInputElement;
+                                                if (dateInput) {
+                                                    dateInput.showPicker?.() || dateInput.focus();
+                                                }
+                                            }}
+                                        >
+                                            dd / mm / yyyy
+                                        </div>
+                                    )}
+                                    {data.next_follow_up && (
+                                        <div 
+                                            className="date-display-overlay absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
+                                            style={{ 
+                                                color: 'inherit',
+                                                fontSize: '0.875rem',
+                                                lineHeight: '1.25rem'
+                                            }}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                const dateInput = document.getElementById('quick-edit-next-follow-up') as HTMLInputElement;
+                                                if (dateInput) {
+                                                    dateInput.showPicker?.() || dateInput.focus();
+                                                }
+                                            }}
+                                        >
+                                            {formatDate(data.next_follow_up)}
+                                        </div>
+                                    )}
+                                </div>
                                 {errors.next_follow_up && (
                                     <p className="text-sm text-red-500 mt-1">{errors.next_follow_up}</p>
+                                )}
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">Next Time</label>
+                                <Select
+                                    value={data.next_time || ''}
+                                    onValueChange={(value) => setData('next_time', value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Time" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {TIME_OPTIONS.map((time) => (
+                                            <SelectItem key={time} value={time}>
+                                                {time}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.next_time && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.next_time}</p>
                                 )}
                             </div>
                         </div>

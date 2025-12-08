@@ -1,7 +1,7 @@
 /**
- * Format date to dd-mm-yyyy format
+ * Format date to dd / mm / yyyy format
  * @param date - Date string or Date object
- * @returns Formatted date string in dd-mm-yyyy format
+ * @returns Formatted date string in dd / mm / yyyy format
  */
 export function formatDate(date: string | Date | null | undefined): string {
     if (!date) return '-';
@@ -17,6 +17,6 @@ export function formatDate(date: string | Date | null | undefined): string {
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
     const year = dateObj.getFullYear();
     
-    return `${day}-${month}-${year}`;
+    return `${day} / ${month} / ${year}`;
 }
 

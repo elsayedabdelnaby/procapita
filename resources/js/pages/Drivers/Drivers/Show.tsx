@@ -415,7 +415,7 @@ export default function DriversShow({
                                             )}
                                         </div>
                                         <div>
-                                            <p className="text-sm text-neutral-500">Lead Status Comment</p>
+                                            <p className="text-sm text-neutral-500">Feedback Comment</p>
                                             {driver.lead_status_comment ? (
                                                 <p className="font-medium whitespace-pre-wrap">{driver.lead_status_comment}</p>
                                             ) : (
@@ -642,7 +642,7 @@ export default function DriversShow({
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status Comment</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Feedback Comment</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Notes</th>
                                         </tr>
                                     </thead>

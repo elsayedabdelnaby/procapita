@@ -37,6 +37,7 @@ class Driver extends Model
         'lead_status_id',
         'lead_status_comment',
         'next_follow_up',
+        'next_time',
         'last_follow_up',
         'lead_stage_id',
         'current_stage_id',
