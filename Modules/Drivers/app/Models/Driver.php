@@ -35,14 +35,21 @@ class Driver extends Model
         'lead_source_id',
         'assigned_to',
         'lead_status_id',
+        'lead_status_comment',
+        'next_follow_up',
+        'last_follow_up',
         'lead_stage_id',
         'current_stage_id',
         'notes',
+        'driver_num',
     ];
 
     protected function casts(): array
     {
-        return [];
+        return [
+            'next_follow_up' => 'date',
+            'last_follow_up' => 'date',
+        ];
     }
 
     protected static function boot(): void
@@ -52,6 +59,68 @@ class Driver extends Model
         static::creating(function ($model) {
             if (empty($model->uuid)) {
                 $model->uuid = (string) Str::uuid();
+            }
+        });
+
+        // Set driver_num to id after creation
+        static::created(function ($model) {
+            if (empty($model->driver_num)) {
+                $model->driver_num = (string) $model->id;
+                $model->saveQuietly(); // Save without triggering events
+            }
+        });
+
+        // Track changes to lead_status_id, riding_company_id, lead_stage_id, lead_status_comment, next_follow_up and create follow-up
+        static::updated(function ($driver) {
+            $changedFields = ['lead_status_id', 'riding_company_id', 'lead_stage_id', 'lead_status_comment', 'next_follow_up'];
+            $hasRelevantChange = false;
+            $shouldUpdateLastFollowUp = false;
+
+            foreach ($changedFields as $field) {
+                if ($driver->isDirty($field)) {
+                    $hasRelevantChange = true;
+                    $shouldUpdateLastFollowUp = true;
+                    break;
+                }
+            }
+
+            // Also check if notes changed
+            if ($driver->isDirty('notes')) {
+                $hasRelevantChange = true;
+            }
+
+            // Update last_follow_up if any relevant field changed
+            if ($shouldUpdateLastFollowUp) {
+                $driver->last_follow_up = now()->toDateString();
+                // Save without triggering events to avoid infinite loop
+                $driver->saveQuietly();
+            }
+
+            if ($hasRelevantChange) {
+                $user = \Illuminate\Support\Facades\Auth::user();
+                $userName = $user ? $user->name : 'System';
+                $userId = $user ? $user->id : null;
+
+                // Get current values
+                $ridingCompanyName = $driver->ridingCompany ? $driver->ridingCompany->name : null;
+                $leadStageName = $driver->leadStage ? $driver->leadStage->name : null;
+                $leadStatusName = $driver->leadStatus ? $driver->leadStatus->name : null;
+                $leadStatusComment = $driver->lead_status_comment;
+                $driverNum = $driver->driver_num ?? (string) $driver->id;
+
+                // Create follow-up record
+                DriverFollowUp::create([
+                    'driver_id' => $driver->id,
+                    'assigned_to' => $userId, // المستخدم الذي قام بالتغيير
+                    'user_name' => $userName,
+                    'created_time' => now(),
+                    'riding_company' => $ridingCompanyName,
+                    'lead_stage' => $leadStageName,
+                    'lead_status' => $leadStatusName,
+                    'lead_status_comment' => $leadStatusComment,
+                    'notes' => $driver->notes,
+                    'driver_num' => $driverNum,
+                ]);
             }
         });
 
@@ -193,6 +262,11 @@ class Driver extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(DriverDocument::class);
+    }
+
+    public function followUps(): HasMany
+    {
+        return $this->hasMany(DriverFollowUp::class);
     }
 
     // Scopes

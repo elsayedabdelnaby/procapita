@@ -19,6 +19,7 @@ import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { type SharedData } from '@/types';
 import axios from 'axios';
+import { formatDate } from '@/utils/date-format';
 
 interface Company {
     id: number;
@@ -60,6 +61,7 @@ interface User {
 interface Driver {
     id: number;
     uuid: string;
+    driver_num?: string;
     company_id?: number;
     full_name: string;
     phone: string;
@@ -71,6 +73,9 @@ interface Driver {
     assigned_to?: User;
     assigned_users?: User[];
     lead_status?: LeadStatus;
+    lead_status_comment?: string;
+    next_follow_up?: string;
+    last_follow_up?: string;
     lead_stage?: LeadStage;
     created_at: string;
     updated_at: string;
@@ -102,6 +107,7 @@ interface DriversIndexProps {
 // Define all available columns outside component to avoid hoisting issues
 const ALL_DRIVER_COLUMNS = [
     { id: 'actions', label: 'Actions', defaultVisible: true, defaultOrder: 0 },
+    { id: 'driver_num', label: 'Driver Num', defaultVisible: false, defaultOrder: 0.5 },
     { id: 'name', label: 'Name', defaultVisible: true, defaultOrder: 1 },
     { id: 'phone', label: 'Phone', defaultVisible: true, defaultOrder: 2 },
     { id: 'whatsapp', label: 'WhatsApp', defaultVisible: true, defaultOrder: 3 },
@@ -110,6 +116,9 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'campaign', label: 'Campaign', defaultVisible: true, defaultOrder: 6 },
     { id: 'lead_source', label: 'Lead Source', defaultVisible: true, defaultOrder: 7 },
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 8 },
+    { id: 'lead_status_comment', label: 'Lead Status Comment', defaultVisible: false, defaultOrder: 8.5 },
+    { id: 'next_follow_up', label: 'Next Follow-up', defaultVisible: false, defaultOrder: 8.6 },
+    { id: 'last_follow_up', label: 'Last Follow-up', defaultVisible: false, defaultOrder: 8.7 },
     { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 9 },
     { id: 'assigned_to', label: 'Assigned To', defaultVisible: true, defaultOrder: 10 },
     { id: 'uuid', label: 'UUID', defaultVisible: false, defaultOrder: 11 },
@@ -151,10 +160,6 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     const canDeleteDriver = () => {
         return hasPermission('drivers.drivers.delete');
     };
-
-    const canDeleteAllDrivers = () => {
-        return hasPermission('drivers.drivers.delete-all');
-    };
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [selectedDrivers, setSelectedDrivers] = useState<Set<number>>(new Set());
     const [massDeleteDialog, setMassDeleteDialog] = useState(false);
@@ -175,7 +180,8 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     const [phoneMousePosition, setPhoneMousePosition] = useState<{ x: number; y: number } | null>(null);
     const [whatsappMousePosition, setWhatsappMousePosition] = useState<{ x: number; y: number } | null>(null);
     const [emailMousePosition, setEmailMousePosition] = useState<{ x: number; y: number } | null>(null);
-    const [viewDialogTab, setViewDialogTab] = useState<'overview' | 'updates'>('overview');
+    const [viewDialogTab, setViewDialogTab] = useState<'overview' | 'updates' | 'followups'>('overview');
+    const [driverFollowUps, setDriverFollowUps] = useState<any[]>([]);
     const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const emailHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const lastClickTimeRef = useRef<number>(0);
@@ -204,20 +210,42 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     };
 
     const savedColumns = loadColumnPreferences();
-    const initialColumns = (savedColumns && Array.isArray(savedColumns) && savedColumns.length > 0) 
-        ? savedColumns 
-        : ALL_DRIVER_COLUMNS.map(col => ({
-            id: col.id,
-            visible: col.defaultVisible,
-            order: col.defaultOrder,
-        }));
+    
+    // Merge saved columns with new columns to ensure all columns are present
+    const mergeColumns = (saved: Array<{ id: string; visible: boolean; order: number }> | null) => {
+        if (!saved || !Array.isArray(saved)) {
+            return ALL_DRIVER_COLUMNS.map(col => ({
+                id: col.id,
+                visible: col.defaultVisible,
+                order: col.defaultOrder,
+            }));
+        }
+        
+        // Create a map of saved columns
+        const savedMap = new Map(saved.map(col => [col.id, col]));
+        
+        // Merge: use saved settings if exists, otherwise use defaults
+        return ALL_DRIVER_COLUMNS.map(col => {
+            const savedCol = savedMap.get(col.id);
+            if (savedCol) {
+                return {
+                    id: col.id,
+                    visible: savedCol.visible !== undefined ? savedCol.visible : col.defaultVisible,
+                    order: savedCol.order !== undefined ? savedCol.order : col.defaultOrder,
+                };
+            }
+            return {
+                id: col.id,
+                visible: col.defaultVisible,
+                order: col.defaultOrder,
+            };
+        });
+    };
+    
+    const initialColumns = mergeColumns(savedColumns);
 
     const [columns, setColumns] = useState<Array<{ id: string; visible: boolean; order: number }>>(
-        Array.isArray(initialColumns) ? initialColumns : ALL_DRIVER_COLUMNS.map(col => ({
-            id: col.id,
-            visible: col.defaultVisible,
-            order: col.defaultOrder,
-        }))
+        initialColumns
     );
     const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
 
@@ -247,6 +275,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         campaign_id: null,
         lead_source_id: null,
         lead_status_id: null,
+        lead_status_comment: '',
         lead_stage_id: null,
         assigned_to: null,
     });
@@ -383,6 +412,16 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                         return false;
                     }
                 } else if (driver.lead_status?.id !== filters.lead_status_id) {
+                    return false;
+                }
+            }
+            // Lead Status Comment filter
+            if (filters.lead_status_comment) {
+                if (filters.lead_status_comment === 'is_empty') {
+                    if (driver.lead_status_comment && driver.lead_status_comment.trim() !== '') {
+                        return false;
+                    }
+                } else if (!driver.lead_status_comment || !driver.lead_status_comment.toLowerCase().includes(String(filters.lead_status_comment).toLowerCase())) {
                     return false;
                 }
             }
@@ -548,6 +587,18 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                         aValue = a.lead_status?.name || '';
                         bValue = b.lead_status?.name || '';
                         break;
+                    case 'lead_status_comment':
+                        aValue = a.lead_status_comment || '';
+                        bValue = b.lead_status_comment || '';
+                        break;
+                    case 'next_follow_up':
+                        aValue = a.next_follow_up || '';
+                        bValue = b.next_follow_up || '';
+                        break;
+                    case 'last_follow_up':
+                        aValue = a.last_follow_up || '';
+                        bValue = b.last_follow_up || '';
+                        break;
                     case 'lead_stage':
                         aValue = a.lead_stage?.name || '';
                         bValue = b.lead_stage?.name || '';
@@ -608,7 +659,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         setShowAllDrivers(false);
     };
 
-    // Update handleSelectAll to use paginatedDrivers
+    // Handle select all in current page only
     const handleSelectAll = useCallback((checked: boolean) => {
         setSelectedDrivers((prevSelected) => {
             const newSelected = new Set(prevSelected);
@@ -622,6 +673,17 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
             return newSelected;
         });
     }, [paginatedDrivers]);
+
+    // Handle select all visible records (all filtered/sorted records)
+    const handleSelectAllVisible = useCallback(() => {
+        if (sortedAndFilteredDrivers && Array.isArray(sortedAndFilteredDrivers)) {
+            setSelectedDrivers((prevSelected) => {
+                const newSelected = new Set(prevSelected);
+                sortedAndFilteredDrivers.forEach((d) => newSelected.add(d.id));
+                return newSelected;
+            });
+        }
+    }, [sortedAndFilteredDrivers]);
 
     // Update isAllSelected and isIndeterminate to use paginatedDrivers
     const isAllSelected = useMemo(() => {
@@ -902,6 +964,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                 const data = await response.json();
                 setDriverDetails(data.driver);
                 setDriverActivities(data.activities || []);
+                setDriverFollowUps(data.follow_ups || []);
             } else {
                 const errorText = await response.text();
                 let errorData;
@@ -1081,7 +1144,14 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                             type="button"
                             variant="outline"
                             onClick={() => {
-                                window.location.href = '/drivers/drivers/export';
+                                if (selectedDrivers.size > 0) {
+                                    // Export selected drivers
+                                    const ids = Array.from(selectedDrivers);
+                                    window.location.href = `/drivers/drivers/export?ids=${ids.join(',')}`;
+                                } else {
+                                    // Export all visible drivers
+                                    window.location.href = '/drivers/drivers/export';
+                                }
                             }}
                         >
                                 Export
@@ -1093,30 +1163,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                         >
                                 Import
                             </Button>
-                        {canDeleteAllDrivers() && safeDrivers.length > 0 && (
-                            <Button
-                                type="button"
-                                variant="destructive"
-                                onClick={() => {
-                                    if (confirm(`Are you sure you want to delete ALL ${safeDrivers.length} driver(s)? This action cannot be undone.`)) {
-                                        const allIds = safeDrivers.map(d => d.id);
-                                        router.post('/drivers/drivers/mass-delete', {
-                                            ids: allIds,
-                                        }, {
-                                            onSuccess: () => {
-                                                router.reload({ only: ['drivers'] });
-                                            },
-                                        });
-                                    }
-                                }}
-                            >
-                                Delete All
-                            </Button>
-                        )}
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                                Total: {sortedAndFilteredDrivers?.length || 0} driver(s)
-                            </span>
+                        <div className="flex items-center gap-2 ml-auto">
                             <Link href="/drivers/drivers/create">
                                 <Button>Create Driver</Button>
                             </Link>
@@ -1161,23 +1208,56 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                             {/* Table Controls Bar */}
                             <div className="mb-4 flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                                        Showing {paginatedDrivers?.length || 0} of {sortedAndFilteredDrivers?.length || 0} driver(s)
-                                    </span>
+                                    {isAllSelected && sortedAndFilteredDrivers && sortedAndFilteredDrivers.length > 0 && (
+                                        <button
+                                            onClick={handleSelectAllVisible}
+                                            className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                                        >
+                                            Select all {sortedAndFilteredDrivers.length} driver(s)
+                                        </button>
+                                    )}
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm text-neutral-600 dark:text-neutral-400">Rows per page:</span>
-                                    <Select value={pageSize.toString()} onValueChange={(value) => handlePageSizeChange(parseInt(value, 10))}>
-                                        <SelectTrigger className="w-20">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="10">10</SelectItem>
-                                            <SelectItem value="25">25</SelectItem>
-                                            <SelectItem value="50">50</SelectItem>
-                                            <SelectItem value="100">100</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handlePageChange(currentPage - 1)}
+                                            disabled={currentPage === 1}
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                            Previous
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handlePageChange(currentPage + 1)}
+                                            disabled={currentPage === totalPages}
+                                        >
+                                            Next
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-neutral-600 dark:text-neutral-400">Rows per page:</span>
+                                        <Select value={pageSize.toString()} onValueChange={(value) => handlePageSizeChange(parseInt(value, 10))}>
+                                            <SelectTrigger className="w-20">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="10">10</SelectItem>
+                                                <SelectItem value="25">25</SelectItem>
+                                                <SelectItem value="50">50</SelectItem>
+                                                <SelectItem value="100">100</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="text-sm text-neutral-600 dark:text-neutral-400">
+                                        Page {currentPage} of {totalPages}
+                                    </div>
+                                    <div className="text-sm text-neutral-600 dark:text-neutral-400">
+                                        Total: {sortedAndFilteredDrivers?.length || 0} driver(s)
+                                    </div>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                             <Button variant="outline" size="sm">
@@ -1205,8 +1285,38 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                 </div>
                             </div>
 
-                            <div className="overflow-x-auto rounded-lg border">
-                                <table className="w-full">
+                            <div className="relative">
+                                <div className="overflow-x-auto overflow-y-visible rounded-lg border" style={{ 
+                                    scrollbarWidth: 'thin', 
+                                    scrollbarColor: '#cbd5e1 transparent',
+                                    maxHeight: 'calc(100vh - 400px)',
+                                    overflowY: 'auto'
+                                }}>
+                                    <style>{`
+                                        div[class*="overflow-x-auto"]::-webkit-scrollbar {
+                                            height: 12px;
+                                            width: 12px;
+                                        }
+                                        div[class*="overflow-x-auto"]::-webkit-scrollbar:horizontal {
+                                            position: sticky;
+                                            bottom: 0;
+                                            z-index: 10;
+                                        }
+                                        div[class*="overflow-x-auto"]::-webkit-scrollbar-track {
+                                            background: transparent;
+                                        }
+                                        div[class*="overflow-x-auto"]::-webkit-scrollbar-thumb {
+                                            background-color: #cbd5e1;
+                                            border-radius: 6px;
+                                        }
+                                        div[class*="overflow-x-auto"]::-webkit-scrollbar-thumb:hover {
+                                            background-color: #94a3b8;
+                                        }
+                                        div[class*="overflow-x-auto"]::-webkit-scrollbar-corner {
+                                            background: transparent;
+                                        }
+                                    `}</style>
+                                    <table className="w-full">
                                     <thead className="bg-neutral-50 dark:bg-neutral-900">
                                         <tr>
                                             <th className="px-4 py-3 text-left w-12">
@@ -1313,6 +1423,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                   col.id === 'riding_company' ? 'riding_company' :
                                                                   col.id === 'lead_source' ? 'lead_source_id' :
                                                                   col.id === 'lead_status' ? 'lead_status_id' :
+                                                                  col.id === 'lead_status_comment' ? 'lead_status_comment' :
                                                                   col.id === 'lead_stage' ? 'lead_stage_id' :
                                                                   col.id === 'assigned_to' ? 'assigned_to' :
                                                                   col.id === 'campaign' ? 'campaign_id' :
@@ -1443,6 +1554,13 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                         // Set a timeout to navigate after a short delay
                                                         // This allows us to cancel if a double click happens
                                                         clickTimeoutRef.current = setTimeout(() => {
+                                                            // Save filtered driver IDs to localStorage for navigation
+                                                            const filteredIds = filteredDrivers.map(d => d.id);
+                                                            try {
+                                                                localStorage.setItem('drivers_filtered_ids', JSON.stringify(filteredIds));
+                                                            } catch (e) {
+                                                                console.error('Error saving filtered IDs:', e);
+                                                            }
                                                             router.visit(`/drivers/drivers/${driver.id}`);
                                                         }, 300);
                                                         
@@ -1521,6 +1639,9 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                         // Render cell content based on column id
                                                         let cellContent: React.ReactNode = '';
                                                         switch (col.id) {
+                                                            case 'driver_num':
+                                                                cellContent = driver.driver_num || driver.id;
+                                                                break;
                                                             case 'name':
                                                                 cellContent = driver.full_name || '-';
                                                                 break;
@@ -1711,6 +1832,23 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                             case 'lead_status':
                                                                 cellContent = driver.lead_status?.name || '-';
                                                                 break;
+                                                            case 'lead_status_comment':
+                                                                cellContent = driver.lead_status_comment ? (
+                                                                    <div className="max-w-xs truncate" title={driver.lead_status_comment}>
+                                                                        {driver.lead_status_comment}
+                                                                    </div>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'next_follow_up':
+                                                                cellContent = driver.next_follow_up ? (
+                                                                    <span>{formatDate(driver.next_follow_up)}</span>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'last_follow_up':
+                                                                cellContent = driver.last_follow_up ? (
+                                                                    <span>{formatDate(driver.last_follow_up)}</span>
+                                                                ) : '-';
+                                                                break;
                                                             case 'lead_stage':
                                                                 cellContent = driver.lead_stage?.name || '-';
                                                                 break;
@@ -1735,10 +1873,10 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                 cellContent = driver.uuid || '-';
                                                                 break;
                                                             case 'created_at':
-                                                                cellContent = driver.created_at ? new Date(driver.created_at).toLocaleDateString() : '-';
+                                                                cellContent = driver.created_at ? formatDate(driver.created_at) : '-';
                                                                 break;
                                                             case 'updated_at':
-                                                                cellContent = driver.updated_at ? new Date(driver.updated_at).toLocaleDateString() : '-';
+                                                                cellContent = driver.updated_at ? formatDate(driver.updated_at) : '-';
                                                                 break;
                                                             default:
                                                                 cellContent = '-';
@@ -1753,35 +1891,10 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                             ))
                                         )}
                                     </tbody>
-                                </table>
+                                    </table>
+                                </div>
                             </div>
 
-                            {/* Pagination Controls */}
-                            <div className="mt-4 flex items-center justify-between">
-                                <div className="text-sm text-neutral-600 dark:text-neutral-400">
-                                    Page {currentPage} of {totalPages}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handlePageChange(currentPage - 1)}
-                                        disabled={currentPage === 1}
-                                    >
-                                        <ChevronLeft className="h-4 w-4" />
-                                        Previous
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handlePageChange(currentPage + 1)}
-                                        disabled={currentPage === totalPages}
-                                    >
-                                        Next
-                                        <ChevronRight className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </div>
                         </>
                     ) : (
                         <div className="text-center py-12 text-neutral-500">
@@ -1868,6 +1981,16 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                 <Activity className="h-4 w-4" />
                                                 Updates ({driverActivities.length})
                                             </div>
+                                        </button>
+                                        <button
+                                            onClick={() => setViewDialogTab('followups')}
+                                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                                viewDialogTab === 'followups'
+                                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                                            }`}
+                                        >
+                                            Follow-ups ({driverFollowUps.length})
                                         </button>
                                     </nav>
                                 </div>
@@ -1957,6 +2080,30 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                         ) : (
                                                             <span className="text-neutral-400 italic">Not Set</span>
                                                     )}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-neutral-500">Lead Status Comment</p>
+                                                        {driverDetails.lead_status_comment ? (
+                                                            <p className="font-medium whitespace-pre-wrap">{driverDetails.lead_status_comment}</p>
+                                                        ) : (
+                                                            <span className="text-neutral-400 italic">Not Set</span>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-neutral-500">Next Follow-up</p>
+                                                        {driverDetails.next_follow_up ? (
+                                                            <p className="font-medium">{formatDate(driverDetails.next_follow_up)}</p>
+                                                        ) : (
+                                                            <span className="text-neutral-400 italic">Not Set</span>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-neutral-500">Last Follow-up</p>
+                                                        {driverDetails.last_follow_up ? (
+                                                            <p className="font-medium">{formatDate(driverDetails.last_follow_up)}</p>
+                                                        ) : (
+                                                            <span className="text-neutral-400 italic">Not Set</span>
+                                                        )}
                                                     </div>
                                                     {driverDetails.assigned_to && (
                                                         <div>
@@ -2066,7 +2213,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                     <p className="font-medium">{stage.stage_template?.name || 'Unknown Stage'}</p>
                                                                     {stage.completed_at && (
                                                                         <p className="text-xs text-neutral-500">
-                                                                            Completed: {new Date(stage.completed_at).toLocaleDateString()}
+                                                                            Completed: {formatDate(stage.completed_at)}
                                                                         </p>
                                                                     )}
                                                                 </div>
@@ -2276,6 +2423,68 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                         <ActivityLog activities={driverActivities} />
                                     </Card>
                                 )}
+
+                                {viewDialogTab === 'followups' && (
+                                    <Card className="p-6">
+                                        <h2 className="mb-4 text-lg font-semibold">Follow-ups</h2>
+                                        {driverFollowUps.length > 0 ? (
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full">
+                                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                                        <tr>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status Comment</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Notes</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {driverFollowUps.map((followUp) => (
+                                                            <tr key={followUp.id} className="border-t hover:bg-muted/50 transition-colors">
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    {followUp.created_time ? formatDate(followUp.created_time) + ' ' + new Date(followUp.created_time).toLocaleTimeString() : 'N/A'}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    {followUp.user_name || 'N/A'}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    {followUp.riding_company || 'N/A'}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    {followUp.lead_stage || 'N/A'}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    {followUp.lead_status || 'N/A'}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    {followUp.lead_status_comment ? (
+                                                                        <div className="max-w-xs truncate" title={followUp.lead_status_comment}>
+                                                                            {followUp.lead_status_comment}
+                                                                        </div>
+                                                                    ) : 'N/A'}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    {followUp.notes ? (
+                                                                        <div className="max-w-xs truncate" title={followUp.notes}>
+                                                                            {followUp.notes}
+                                                                        </div>
+                                                                    ) : 'N/A'}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ) : (
+                                            <div className="py-8 text-center text-neutral-500">
+                                                No follow-ups found for this driver.
+                                            </div>
+                                        )}
+                                    </Card>
+                                )}
                             </div>
                         ) : (
                             <div className="py-8 text-center">
@@ -2355,9 +2564,12 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
             ? driver.assigned_users.map((u) => typeof u === 'object' ? u.id : u) 
             : [],
         lead_status_id: driver.lead_status?.id ? String(driver.lead_status.id) : '',
+        lead_status_comment: driver.lead_status_comment || '',
+        next_follow_up: driver.next_follow_up || '',
+        last_follow_up: driver.last_follow_up || '',
         lead_stage_id: driver.lead_stage?.id ? String(driver.lead_stage.id) : '',
         current_stage_id: '',
-        notes: '',
+        notes: driver.notes || '',
     });
 
     // Transform data before submitting - convert empty strings to null
@@ -2373,6 +2585,8 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
             assigned_to: data.assigned_to || null,
             assigned_users: data.assigned_users && data.assigned_users.length > 0 ? data.assigned_users : null,
             lead_status_id: data.lead_status_id || null,
+            lead_status_comment: data.lead_status_comment || null,
+            next_follow_up: data.next_follow_up || null,
             lead_stage_id: data.lead_stage_id || null,
             current_stage_id: data.current_stage_id || null,
             notes: data.notes || null,
@@ -2558,23 +2772,80 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Lead Status</label>
-                            <Select
-                                value={data.lead_status_id}
-                                onValueChange={(value) => setData('lead_status_id', value)}
+                        {/* Lead Status Group with Green Border */}
+                        <div className="col-span-2 rounded-lg border-2 border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-900/10 p-4 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Lead Status</label>
+                                <Select
+                                    value={data.lead_status_id}
+                                    onValueChange={(value) => setData('lead_status_id', value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Lead Status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {filterOptions.leadStatuses?.map((status) => (
+                                            <SelectItem key={status.id} value={String(status.id)}>
+                                                {status.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Lead Status Comment</label>
+                                <textarea
+                                    value={data.lead_status_comment}
+                                    onChange={(e) => setData('lead_status_comment', e.target.value)}
+                                    rows={3}
+                                    className={`w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y ${errors.lead_status_comment ? 'border-red-500' : ''}`}
+                                    placeholder="Enter lead status comment..."
+                                />
+                                {errors.lead_status_comment && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.lead_status_comment}</p>
+                                )}
+                            </div>
+                            <div 
+                                className="cursor-pointer"
+                                onClick={() => {
+                                    const dateInput = document.getElementById('quick-edit-next-follow-up') as HTMLInputElement;
+                                    if (dateInput) {
+                                        dateInput.showPicker?.() || dateInput.focus();
+                                    }
+                                }}
                             >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Lead Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {filterOptions.leadStatuses?.map((status) => (
-                                        <SelectItem key={status.id} value={String(status.id)}>
-                                            {status.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                <label className="block text-sm font-medium mb-1">Next Follow-up</label>
+                                <Input
+                                    type="date"
+                                    id="quick-edit-next-follow-up"
+                                    value={data.next_follow_up}
+                                    onChange={(e) => {
+                                        const selectedDate = e.target.value;
+                                        const today = new Date().toISOString().split('T')[0];
+                                        if (selectedDate && selectedDate < today) {
+                                            alert('Next Follow-up date must be today or a future date.');
+                                            return;
+                                        }
+                                        setData('next_follow_up', selectedDate);
+                                    }}
+                                    min={new Date().toISOString().split('T')[0]}
+                                    className={errors.next_follow_up ? 'border-red-500' : ''}
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                                {errors.next_follow_up && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.next_follow_up}</p>
+                                )}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Last Follow-up</label>
+                            <Input
+                                type="date"
+                                value={data.last_follow_up}
+                                disabled
+                                className="bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
+                            />
+                            <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically updated</p>
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-1">Lead Stage</label>
@@ -2620,6 +2891,19 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                             )}
                             {errors['assigned_users.*'] && (
                                 <p className="text-sm text-red-500 mt-1">{errors['assigned_users.*']}</p>
+                            )}
+                        </div>
+                        <div className="col-span-2">
+                            <label className="block text-sm font-medium mb-1">Notes</label>
+                            <textarea
+                                value={data.notes}
+                                onChange={(e) => setData('notes', e.target.value)}
+                                rows={4}
+                                className={`w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y ${errors.notes ? 'border-red-500' : ''}`}
+                                placeholder="Enter notes..."
+                            />
+                            {errors.notes && (
+                                <p className="text-sm text-red-500 mt-1">{errors.notes}</p>
                             )}
                         </div>
                     </div>

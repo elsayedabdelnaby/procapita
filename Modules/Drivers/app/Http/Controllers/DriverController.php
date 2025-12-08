@@ -31,7 +31,7 @@ class DriverController extends Controller
         $user = Auth::user();
         $companyId = $this->getCompanyId();
 
-        $drivers = $this->driverService->getAllDrivers($companyId);
+        $drivers = $this->driverService->getAllDrivers($companyId, $user);
 
         // Prepare import available fields with types and options
         $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get(['id', 'name']) : collect();
@@ -41,7 +41,13 @@ class DriverController extends Controller
         $campaigns = Campaign::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('name')->get(['id', 'name']);
         $leadSources = LeadSource::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get(['id', 'name']);
         $leadStatuses = LeadStatus::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->ordered()->get(['id', 'name']);
+        // Get users - for non-super admin, only show subordinate users
+        if ($user->isSuperAdmin()) {
         $users = User::when($companyId, fn($q) => $q->where('company_id', $companyId))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        } else {
+            $subordinateUserIds = $user->getSubordinateUserIds();
+            $users = User::whereIn('id', $subordinateUserIds)->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        }
 
         $importAvailableFields = [
             ['value' => 'full_name', 'label' => 'Full Name', 'type' => 'text'],
@@ -78,6 +84,7 @@ class DriverController extends Controller
                 'type' => 'picklist',
                 'options' => $leadStatuses->map(fn($ls) => ['value' => $ls->id, 'label' => $ls->name])->toArray(),
             ],
+            ['value' => 'lead_status_comment', 'label' => 'Lead Status Comment', 'type' => 'textarea'],
             [
                 'value' => 'assigned_to',
                 'label' => 'Assigned To',
@@ -91,6 +98,7 @@ class DriverController extends Controller
             'drivers' => $drivers->map(fn($driver) => [
                 'id' => $driver->id,
                 'uuid' => $driver->uuid,
+                'driver_num' => $driver->driver_num ?? (string) $driver->id,
                 'company_id' => $driver->company_id,
                 'full_name' => $driver->full_name,
                 'phone' => $driver->phone,
@@ -121,6 +129,9 @@ class DriverController extends Controller
                     'name' => $driver->leadStatus->name,
                     'color' => $driver->leadStatus->color,
                 ] : null,
+                'lead_status_comment' => $driver->lead_status_comment,
+                'next_follow_up' => $driver->next_follow_up ? $driver->next_follow_up->format('Y-m-d') : null,
+                'last_follow_up' => $driver->last_follow_up ? $driver->last_follow_up->format('Y-m-d') : null,
                 'lead_stage' => $driver->leadStage ? [
                     'id' => $driver->leadStage->id,
                     'name' => $driver->leadStage->name,
@@ -188,6 +199,9 @@ class DriverController extends Controller
                     $data['lead_stage_id'] = (int) $data['lead_stage_id'];
                 }
             }
+
+            // Remove driver_num from data if present - it's auto-generated
+            unset($data['driver_num']);
 
             $this->driverService->createDriver($data);
 
@@ -259,10 +273,17 @@ class DriverController extends Controller
                 ];
             });
 
+        // Get follow-ups for this driver
+        $followUps = \Modules\Drivers\app\Models\DriverFollowUp::where('driver_id', $driverModel->id)
+            ->with('assignedTo')
+            ->orderBy('created_time', 'desc')
+            ->get();
+
         return Inertia::render('Drivers/Drivers/Show', [
             'driver' => [
                 'id' => $driverModel->id,
                 'uuid' => $driverModel->uuid,
+                'driver_num' => $driverModel->driver_num ?? (string) $driverModel->id,
                 'company_id' => $driverModel->company_id,
                 'full_name' => $driverModel->full_name,
                 'phone' => $driverModel->phone,
@@ -293,6 +314,9 @@ class DriverController extends Controller
                     'name' => $driverModel->leadStatus->name,
                     'color' => $driverModel->leadStatus->color,
                 ] : null,
+                'lead_status_comment' => $driverModel->lead_status_comment,
+                'next_follow_up' => $driverModel->next_follow_up ? $driverModel->next_follow_up->format('Y-m-d') : null,
+                'last_follow_up' => $driverModel->last_follow_up ? $driverModel->last_follow_up->format('Y-m-d') : null,
                 'lead_stage' => $driverModel->leadStage ? [
                     'id' => $driverModel->leadStage->id,
                     'name' => $driverModel->leadStage->name,
@@ -335,6 +359,20 @@ class DriverController extends Controller
                 'updated_at' => $driverModel->updated_at,
             ],
             'activities' => $activities,
+            'follow_ups' => $followUps->map(fn($followUp) => [
+                'id' => $followUp->id,
+                'created_time' => $followUp->created_time?->toISOString(),
+                'user_name' => $followUp->user_name,
+                'riding_company' => $followUp->riding_company,
+                'lead_stage' => $followUp->lead_stage,
+                'lead_status' => $followUp->lead_status,
+                'lead_status_comment' => $followUp->lead_status_comment,
+                'notes' => $followUp->notes,
+                'assigned_to_user' => $followUp->assignedTo ? [
+                    'id' => $followUp->assignedTo->id,
+                    'name' => $followUp->assignedTo->name,
+                ] : null,
+            ]),
             'next_driver_id' => $nextDriver?->id,
             'previous_driver_id' => $previousDriver?->id,
         ]);
@@ -357,6 +395,12 @@ class DriverController extends Controller
 
         $stagesProgress = $driverModel->getStagesProgress();
         $stagesStatus = $driverModel->getStagesStatus();
+        
+        // Get follow-ups for this driver
+        $followUps = \Modules\Drivers\app\Models\DriverFollowUp::where('driver_id', $driverModel->id)
+            ->with('assignedTo')
+            ->orderBy('created_time', 'desc')
+            ->get();
         $nextStage = $driverModel->getNextStage();
 
         // Load activity logs with relationship names
@@ -423,6 +467,9 @@ class DriverController extends Controller
                     'name' => $driverModel->leadStatus->name,
                     'color' => $driverModel->leadStatus->color,
                 ] : null,
+                'lead_status_comment' => $driverModel->lead_status_comment,
+                'next_follow_up' => $driverModel->next_follow_up ? $driverModel->next_follow_up->format('Y-m-d') : null,
+                'last_follow_up' => $driverModel->last_follow_up ? $driverModel->last_follow_up->format('Y-m-d') : null,
                 'lead_stage' => $driverModel->leadStage ? [
                     'id' => $driverModel->leadStage->id,
                     'name' => $driverModel->leadStage->name,
@@ -465,6 +512,20 @@ class DriverController extends Controller
                 'updated_at' => $driverModel->updated_at,
             ],
             'activities' => $activities,
+            'follow_ups' => $followUps->map(fn($followUp) => [
+                'id' => $followUp->id,
+                'created_time' => $followUp->created_time?->toISOString(),
+                'user_name' => $followUp->user_name,
+                'riding_company' => $followUp->riding_company,
+                'lead_stage' => $followUp->lead_stage,
+                'lead_status' => $followUp->lead_status,
+                'lead_status_comment' => $followUp->lead_status_comment,
+                'notes' => $followUp->notes,
+                'assigned_to_user' => $followUp->assignedTo ? [
+                    'id' => $followUp->assignedTo->id,
+                    'name' => $followUp->assignedTo->name,
+                ] : null,
+            ]),
         ]);
     }
 
@@ -500,6 +561,9 @@ class DriverController extends Controller
                 'assigned_to' => $driverModel->assigned_to,
                 'assigned_users' => $driverModel->assignedUsers->pluck('id')->toArray(),
                 'lead_status_id' => $driverModel->lead_status_id,
+                'lead_status_comment' => $driverModel->lead_status_comment,
+                'next_follow_up' => $driverModel->next_follow_up ? $driverModel->next_follow_up->format('Y-m-d') : null,
+                'last_follow_up' => $driverModel->last_follow_up ? $driverModel->last_follow_up->format('Y-m-d') : null,
                 'lead_stage_id' => $driverModel->lead_stage_id,
                 'current_stage_id' => $driverModel->current_stage_id,
                 'notes' => $driverModel->notes,
@@ -585,11 +649,23 @@ class DriverController extends Controller
         }
     }
 
-    public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $user = Auth::user();
         $companyId = $this->getCompanyId();
+        
+        // Check if specific IDs are requested
+        $ids = $request->input('ids');
+        if ($ids) {
+            // Export selected drivers only
+            $idsArray = is_array($ids) ? $ids : explode(',', $ids);
+            $drivers = Driver::whereIn('id', $idsArray)
+                ->with(['ridingCompany', 'campaign', 'leadSource', 'leadStatus', 'assignedTo'])
+                ->get();
+        } else {
+            // Export all visible drivers
         $drivers = $this->driverService->getAllDrivers($companyId);
+        }
 
         // Create CSV
         $filename = 'drivers_export_' . date('Y-m-d_His') . '.csv';
@@ -601,7 +677,7 @@ class DriverController extends Controller
         $output = fopen('php://temp', 'r+');
 
         // Headers
-        fputcsv($output, ['ID', 'Full Name', 'Phone', 'WhatsApp', 'Email', 'Riding Company', 'Campaign', 'Lead Source', 'Lead Status', 'Assigned To', 'Created At']);
+        fputcsv($output, ['ID', 'Full Name', 'Phone', 'WhatsApp', 'Email', 'Riding Company', 'Campaign', 'Lead Source', 'Lead Status', 'Lead Status Comment', 'Next Follow-up', 'Last Follow-up', 'Assigned To', 'Created At']);
 
         // Data
         foreach ($drivers as $driver) {
@@ -615,6 +691,9 @@ class DriverController extends Controller
                 $driver->campaign?->name ?? '',
                 $driver->leadSource?->name ?? '',
                 $driver->leadStatus?->name ?? '',
+                $driver->lead_status_comment ?? '',
+                $driver->next_follow_up ? $driver->next_follow_up->format('Y-m-d') : '',
+                $driver->last_follow_up ? $driver->last_follow_up->format('Y-m-d') : '',
                 $driver->assignedTo?->name ?? '',
                 $driver->created_at,
             ]);
@@ -750,6 +829,11 @@ class DriverController extends Controller
 
                         $value = isset($row[$columnIndex]) ? trim($row[$columnIndex]) : null;
 
+                        // Skip driver_num field - it's auto-generated
+                        if ($field === 'driver_num') {
+                            continue;
+                        }
+
                         // Handle default values
                         if ((empty($value) || $value === '') && isset($defaultValues[$csvHeader])) {
                             $value = $defaultValues[$csvHeader];
@@ -780,28 +864,44 @@ class DriverController extends Controller
                     }
 
                     // Ensure company_id is set - it's required in the database
-                    // Always use the current user's company_id automatically
+                    // Always use the current user's company_id automatically (restricted to user's company)
                     if (empty($data['company_id'])) {
                         // Use user's company_id if available
                         if ($user->company_id) {
                             $data['company_id'] = $user->company_id;
                         } elseif ($user->isSuperAdmin()) {
-                            // For super admin without company_id, try to get first company
-                            $firstCompany = Company::first();
-                            if ($firstCompany) {
-                                $data['company_id'] = $firstCompany->id;
+                            // For super admin, use selected company from session
+                            if ($companyId) {
+                                $data['company_id'] = $companyId;
                             } else {
-                                $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": No company found in the system. Please create a company first.";
+                                $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": Please select a company from the sidebar to import drivers.";
                                 continue;
                             }
                         } else {
                             $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": Unable to determine company_id. Please ensure your user account has a company assigned.";
                             continue;
                         }
+                    } else {
+                        // Ensure user can only import to their own company
+                        if (!$user->isSuperAdmin() && $data['company_id'] != $user->company_id) {
+                            $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": You can only import drivers to your own company.";
+                            continue;
+                        }
                     }
                     
-                    // Ensure assigned_to is set - if not provided, use current user
-                    if (empty($data['assigned_to'])) {
+                    // Validate and set assigned_to
+                    // User can assign to themselves or users below them in hierarchy
+                    if (isset($data['assigned_to']) && !empty($data['assigned_to'])) {
+                        $assignedUserId = $data['assigned_to'];
+                        
+                        // Check if assigned user is a subordinate or the current user
+                        if (!$user->isSuperAdmin() && !$user->isSubordinate($assignedUserId)) {
+                            // If user is not subordinate, still allow import but assign to current user
+                            // The record will be created but won't be visible to the importing user
+                            $data['assigned_to'] = $user->id;
+                        }
+                    } else {
+                        // If not provided, use current user
                         $data['assigned_to'] = $user->id;
                     }
 
@@ -818,8 +918,16 @@ class DriverController extends Controller
                     }
 
                     // Validate required fields
-                    if (empty($data['full_name']) || empty($data['phone'])) {
-                        $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": Missing required fields (full_name or phone)";
+                    $missingFields = [];
+                    if (empty($data['full_name'])) {
+                        $missingFields[] = 'Full Name';
+                    }
+                    if (empty($data['phone'])) {
+                        $missingFields[] = 'Phone';
+                    }
+                    
+                    if (!empty($missingFields)) {
+                        $errors[] = "Row " . ($lineNumber + ($hasHeader ? 2 : 1)) . ": Missing required fields (" . implode(', ', $missingFields) . ")";
                         continue;
                     }
 
@@ -832,6 +940,9 @@ class DriverController extends Controller
                             $data['company_id'] = $companyId;
                         }
                     }
+
+                    // Remove driver_num from data if present - it's auto-generated
+                    unset($data['driver_num']);
 
                     if ($existing) {
                         if ($duplicateHandling === 'skip') {
@@ -1287,6 +1398,20 @@ class DriverController extends Controller
             'campaign_id' => ['nullable', 'string'],
             'lead_source_id' => ['nullable', 'string'],
             'lead_status_id' => ['nullable', 'string'],
+            'lead_status_comment' => ['nullable', 'string'],
+            'next_follow_up' => [
+                'nullable',
+                'date',
+                function ($attribute, $value, $fail) {
+                    if ($value) {
+                        $selectedDate = \Carbon\Carbon::parse($value)->startOfDay();
+                        $today = \Carbon\Carbon::today();
+                        if ($selectedDate->lt($today)) {
+                            $fail('Next Follow-up date must be today or a future date.');
+                        }
+                    }
+                },
+            ],
             'assigned_to' => ['nullable', 'string'],
             'assigned_users' => ['nullable', 'array'],
             'assigned_users.*' => ['required', 'integer', 'exists:users,id'],
@@ -1335,6 +1460,12 @@ class DriverController extends Controller
         if ($request->filled('lead_status_id') && ! in_array('lead_status_id', $clearFields)) {
             $updateData['lead_status_id'] = $request->lead_status_id ? (int) $request->lead_status_id : null;
         }
+        if ($request->filled('lead_status_comment') && ! in_array('lead_status_comment', $clearFields)) {
+            $updateData['lead_status_comment'] = $request->lead_status_comment;
+        }
+        if ($request->filled('next_follow_up') && ! in_array('next_follow_up', $clearFields)) {
+            $updateData['next_follow_up'] = $request->next_follow_up;
+        }
         if ($request->filled('assigned_to') && ! in_array('assigned_to', $clearFields)) {
             $updateData['assigned_to'] = $request->assigned_to ? (int) $request->assigned_to : null;
         }
@@ -1343,9 +1474,17 @@ class DriverController extends Controller
         if (in_array('assigned_users', $clearFields)) {
             foreach ($drivers as $driver) {
                 $driver->assignedUsers()->sync([]);
+                // Also clear assigned_to when clearing assigned_users
+                if (!isset($updateData['assigned_to'])) {
+                    $driver->update(['assigned_to' => null]);
+                }
             }
         } elseif ($request->filled('assigned_users') && is_array($request->assigned_users)) {
             $assignedUsers = array_filter(array_map('intval', $request->assigned_users));
+            // Set assigned_to to the first user in assigned_users if not explicitly set
+            if (!isset($updateData['assigned_to']) && !empty($assignedUsers)) {
+                $updateData['assigned_to'] = $assignedUsers[0];
+            }
             foreach ($drivers as $driver) {
                 $driver->assignedUsers()->sync($assignedUsers);
             }
@@ -1367,7 +1506,10 @@ class DriverController extends Controller
 
         // Update all drivers with the same data
         if (! empty($updateData)) {
-            Driver::whereIn('id', $request->ids)->update($updateData);
+            // Use individual updates to trigger events (for follow-up creation)
+            foreach ($drivers as $driver) {
+                $driver->update($updateData);
+            }
         }
 
         $count = $drivers->count();

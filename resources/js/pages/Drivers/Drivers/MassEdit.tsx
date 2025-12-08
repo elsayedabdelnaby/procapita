@@ -90,6 +90,8 @@ export default function DriversMassEdit({
         assigned_to: '',
         assigned_users: [] as number[],
         lead_status_id: '',
+        lead_status_comment: '',
+        next_follow_up: '',
         notes: '',
     });
 
@@ -385,11 +387,110 @@ export default function DriversMassEdit({
                             <div className="space-y-2">
                                 <div className="flex items-center gap-2">
                                     <Checkbox
+                                        checked={clearFields.has('lead_status_comment')}
+                                        onCheckedChange={(checked) => handleClearField('lead_status_comment', checked as boolean)}
+                                    />
+                                    <Label htmlFor="lead_status_comment" className="text-sm font-medium">
+                                        Lead Status Comment
+                                    </Label>
+                                </div>
+                                <textarea
+                                    id="lead_status_comment"
+                                    value={data.lead_status_comment}
+                                    onChange={(e) => setData('lead_status_comment', e.target.value)}
+                                    disabled={clearFields.has('lead_status_comment')}
+                                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+                                    rows={3}
+                                    placeholder="-- Keep existing --"
+                                />
+                                {errors.lead_status_comment && (
+                                    <p className="text-sm text-red-500">{errors.lead_status_comment}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        checked={clearFields.has('next_follow_up')}
+                                        onCheckedChange={(checked) => handleClearField('next_follow_up', checked as boolean)}
+                                    />
+                                    <Label htmlFor="next_follow_up" className="text-sm font-medium">
+                                        Next Follow-up
+                                    </Label>
+                                </div>
+                                <Input
+                                    type="date"
+                                    id="next_follow_up"
+                                    value={data.next_follow_up}
+                                    onChange={(e) => {
+                                        const selectedDate = e.target.value;
+                                        const today = new Date().toISOString().split('T')[0];
+                                        if (selectedDate && selectedDate < today) {
+                                            alert('Next Follow-up date must be today or a future date.');
+                                            return;
+                                        }
+                                        setData('next_follow_up', selectedDate);
+                                    }}
+                                    min={new Date().toISOString().split('T')[0]}
+                                    disabled={clearFields.has('next_follow_up')}
+                                    className="w-full"
+                                />
+                                {errors.next_follow_up && (
+                                    <p className="text-sm text-red-500">{errors.next_follow_up}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="last_follow_up" className="text-sm font-medium">
+                                    Last Follow-up
+                                </Label>
+                                <Input
+                                    type="date"
+                                    id="last_follow_up"
+                                    value=""
+                                    disabled
+                                    className="w-full bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
+                                />
+                                <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically updated</p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        checked={clearFields.has('assigned_to')}
+                                        onCheckedChange={(checked) => handleClearField('assigned_to', checked as boolean)}
+                                    />
+                                    <Label htmlFor="assigned_to" className="text-sm font-medium">
+                                        Assigned To (Single)
+                                    </Label>
+                                </div>
+                                <select
+                                    id="assigned_to"
+                                    value={data.assigned_to}
+                                    onChange={(e) => setData('assigned_to', e.target.value)}
+                                    disabled={loadingUsers || clearFields.has('assigned_to')}
+                                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+                                >
+                                    <option value="">-- Keep existing --</option>
+                                    {users.map((user) => (
+                                        <option key={user.id} value={user.id}>
+                                            {user.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.assigned_to && (
+                                    <p className="text-sm text-red-500">{errors.assigned_to}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
                                         checked={clearFields.has('assigned_users')}
                                         onCheckedChange={(checked) => handleClearField('assigned_users', checked as boolean)}
                                     />
                                     <Label htmlFor="assigned_users" className="text-sm font-medium">
-                                        Assigned To
+                                        Assigned Users (Multiple)
                                     </Label>
                                 </div>
                                 <MultiSelect
@@ -398,7 +499,13 @@ export default function DriversMassEdit({
                                         label: user.name,
                                     }))}
                                     value={data.assigned_users || []}
-                                    onChange={(value) => setData('assigned_users', value)}
+                                    onChange={(value) => {
+                                        setData('assigned_users', value);
+                                        // Auto-set assigned_to to first user if not set
+                                        if (value && value.length > 0 && !data.assigned_to) {
+                                            setData('assigned_to', String(value[0]));
+                                        }
+                                    }}
                                     placeholder="-- Keep existing --"
                                     disabled={loadingUsers || clearFields.has('assigned_users')}
                                 />

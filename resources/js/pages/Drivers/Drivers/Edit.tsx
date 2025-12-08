@@ -57,6 +57,9 @@ interface Driver {
     assigned_to?: number;
     assigned_users?: number[];
     lead_status_id?: number;
+    lead_status_comment?: string;
+    next_follow_up?: string;
+    last_follow_up?: string;
     lead_stage_id?: number;
     current_stage_id?: number;
     notes?: string;
@@ -96,6 +99,9 @@ export default function DriversEdit({
         assigned_to: driver.assigned_to ? String(driver.assigned_to) : '',
         assigned_users: driver.assigned_users || [],
         lead_status_id: driver.lead_status_id ? String(driver.lead_status_id) : '',
+        lead_status_comment: driver.lead_status_comment || '',
+        next_follow_up: driver.next_follow_up || '',
+        last_follow_up: driver.last_follow_up || '',
         lead_stage_id: driver.lead_stage_id ? String(driver.lead_stage_id) : '',
         current_stage_id: driver.current_stage_id ? String(driver.current_stage_id) : '',
         notes: driver.notes || '',
@@ -200,7 +206,7 @@ export default function DriversEdit({
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
                             {companies && companies.length > 0 && (
-                                <div className="md:col-span-2">
+                                <div>
                                     <Label htmlFor="company_id">
                                         Company <span className="text-red-500">*</span>
                                     </Label>
@@ -225,7 +231,6 @@ export default function DriversEdit({
                                 </div>
                             )}
 
-                            <div className="md:col-span-2">
                                 <FormField
                                     label="Full Name"
                                     name="full_name"
@@ -234,7 +239,6 @@ export default function DriversEdit({
                                     error={errors.full_name}
                                     required
                                 />
-                            </div>
 
                             <FormField
                                 label="Phone"
@@ -330,25 +334,90 @@ export default function DriversEdit({
                                 )}
                             </div>
 
-                            <div>
-                                <Label htmlFor="lead_status_id">Lead Status</Label>
-                                <select
-                                    id="lead_status_id"
-                                    name="lead_status_id"
-                                    value={data.lead_status_id}
-                                    onChange={(e) => setData('lead_status_id', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
+                            {/* Lead Status Group with Green Border */}
+                            <div className="rounded-lg border-2 border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-900/10 p-4 space-y-4">
+                                <div>
+                                    <Label htmlFor="lead_status_id">Lead Status</Label>
+                                    <select
+                                        id="lead_status_id"
+                                        name="lead_status_id"
+                                        value={data.lead_status_id}
+                                        onChange={(e) => setData('lead_status_id', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                    >
+                                        <option value="">Select a lead status</option>
+                                        {leadStatuses.map((status) => (
+                                            <option key={status.id} value={String(status.id)}>
+                                                {status.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.lead_status_id && (
+                                        <p className="text-sm text-red-500">{errors.lead_status_id}</p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <Label htmlFor="lead_status_comment">Lead Status Comment</Label>
+                                    <textarea
+                                        id="lead_status_comment"
+                                        name="lead_status_comment"
+                                        value={data.lead_status_comment}
+                                        onChange={(e) => setData('lead_status_comment', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        rows={3}
+                                        placeholder="Enter lead status comment..."
+                                    />
+                                    {errors.lead_status_comment && (
+                                        <p className="text-sm text-red-500">{errors.lead_status_comment}</p>
+                                    )}
+                                </div>
+
+                                <div 
+                                    className="cursor-pointer"
+                                    onClick={() => {
+                                        const dateInput = document.getElementById('edit-next-follow-up') as HTMLInputElement;
+                                        if (dateInput) {
+                                            dateInput.showPicker?.() || dateInput.focus();
+                                        }
+                                    }}
                                 >
-                                    <option value="">Select a lead status</option>
-                                    {leadStatuses.map((status) => (
-                                        <option key={status.id} value={String(status.id)}>
-                                            {status.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.lead_status_id && (
-                                    <p className="text-sm text-red-500">{errors.lead_status_id}</p>
-                                )}
+                                    <Label htmlFor="next_follow_up">Next Follow-up</Label>
+                                    <input
+                                        type="date"
+                                        id="edit-next-follow-up"
+                                        name="next_follow_up"
+                                        value={data.next_follow_up}
+                                        onChange={(e) => {
+                                            const selectedDate = e.target.value;
+                                            const today = new Date().toISOString().split('T')[0];
+                                            if (selectedDate && selectedDate < today) {
+                                                alert('Next Follow-up date must be today or a future date.');
+                                                return;
+                                            }
+                                            setData('next_follow_up', selectedDate);
+                                        }}
+                                        min={new Date().toISOString().split('T')[0]}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        onClick={(e) => e.stopPropagation()}
+                                    />
+                                    {errors.next_follow_up && (
+                                        <p className="text-sm text-red-500">{errors.next_follow_up}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <Label htmlFor="last_follow_up">Last Follow-up</Label>
+                                <input
+                                    type="date"
+                                    id="last_follow_up"
+                                    name="last_follow_up"
+                                    value={data.last_follow_up}
+                                    disabled
+                                    className="w-full rounded-md border px-3 py-2 bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
+                                />
+                                <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically updated</p>
                             </div>
 
                             <div>
@@ -379,7 +448,7 @@ export default function DriversEdit({
                                 )}
                             </div>
 
-                            <div className="md:col-span-2">
+                            <div>
                                 <Label htmlFor="assigned_users">
                                     Assigned To <span className="text-red-500">*</span>
                                 </Label>
@@ -401,7 +470,7 @@ export default function DriversEdit({
                                 )}
                             </div>
 
-                            <div className="md:col-span-2">
+                            <div>
                                 <Label htmlFor="notes">Notes</Label>
                                 <textarea
                                     id="notes"

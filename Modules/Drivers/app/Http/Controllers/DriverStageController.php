@@ -21,7 +21,8 @@ class DriverStageController extends Controller
 
     public function index(): Response
     {
-        $driverStages = $this->driverStageService->getAllDriverStages();
+        $companyId = $this->getCompanyId();
+        $driverStages = $this->driverStageService->getAllDriverStages(null, $companyId);
 
         return Inertia::render('Drivers/DriverStages/Index', [
             'driverStages' => $driverStages,
@@ -187,7 +188,8 @@ class DriverStageController extends Controller
 
     public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $driverStages = $this->driverStageService->getAllDriverStages();
+        $companyId = $this->getCompanyId();
+        $driverStages = $this->driverStageService->getAllDriverStages(null, $companyId);
 
         $filename = 'driver_stages_export_' . date('Y-m-d_His') . '.csv';
         

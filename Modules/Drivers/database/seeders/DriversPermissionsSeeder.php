@@ -16,6 +16,7 @@ class DriversPermissionsSeeder extends Seeder
             'leadstages' => ['create', 'read', 'update', 'delete', 'toggle-active', 'export', 'import'],
             'driverstages' => ['create', 'read', 'update', 'delete', 'complete', 'reject', 'export'],
             'driverdocuments' => ['create', 'read', 'update', 'delete', 'upload', 'approve', 'reject', 'download', 'export', 'set-pending', 'set-approved', 'set-rejected', 'view', 'replace', 'delete-file'],
+            'driverfollowups' => ['create', 'read', 'update', 'delete'],
         ];
 
         $createdPermissions = [];

@@ -15,7 +15,8 @@ export default function AppLogo() {
     const companies = Array.isArray(props.companies) ? props.companies : [];
     
     // Determine which company to show
-    const currentCompany = selectedCompany || (auth?.user?.company_id ? companies.find(c => c?.id === auth.user.company_id) : null);
+    // Priority: selectedCompany > auth.user.company > companies.find by company_id
+    const currentCompany = selectedCompany || auth?.user?.company || (auth?.user?.company_id ? companies.find(c => c?.id === auth.user.company_id) : null);
     const companyName = currentCompany?.name || null;
     
     // Convert company name to logo filename
@@ -37,7 +38,7 @@ export default function AppLogo() {
     const logoPath = useMemo(() => {
         if (!currentCompany) return null;
         
-        // Strategy 1: Use logo_url if available (from database)
+        // Strategy 1: Use logo_url if available (from database - this is the preferred method)
         if (currentCompany.logo_url) {
             return currentCompany.logo_url;
         }
@@ -52,9 +53,10 @@ export default function AppLogo() {
             if (currentCompany.logo.startsWith('/logos/') || currentCompany.logo.startsWith('logos/')) {
                 return currentCompany.logo.startsWith('/') ? currentCompany.logo : `/${currentCompany.logo}`;
             }
-            // If it's a storage path
+            // If it's a storage path, convert to URL
             if (currentCompany.logo.startsWith('storage/') || currentCompany.logo.startsWith('/storage/')) {
-                return currentCompany.logo.startsWith('/') ? currentCompany.logo : `/${currentCompany.logo}`;
+                const cleanPath = currentCompany.logo.startsWith('/') ? currentCompany.logo.substring(1) : currentCompany.logo;
+                return `/storage/${cleanPath}`;
             }
         }
         

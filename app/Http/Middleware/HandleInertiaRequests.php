@@ -150,7 +150,7 @@ class HandleInertiaRequests extends Middleware
             }
             
             // Load permissions through roles and direct permissions
-            $user->load(['roles.permissions', 'permissions']);
+            $user->load(['roles.permissions', 'permissions', 'company']);
             
             // Get all permissions (from roles + direct)
             $allPermissions = $user->getAllPermissions();
@@ -169,6 +169,12 @@ class HandleInertiaRequests extends Middleware
                     'is_super_admin' => $user->is_super_admin ?? false,
                     'is_company_admin' => $user->is_company_admin ?? false,
                     'company_id' => $user->company_id,
+                    'company' => $user->company ? [
+                        'id' => $user->company->id,
+                        'name' => $user->company->name,
+                        'logo' => $user->company->logo,
+                        'logo_url' => $user->company->logo_url,
+                    ] : null,
                     'permissions' => $allPermissions->map(fn($p) => [
                         'id' => $p->id,
                         'name' => $p->name,
@@ -415,6 +421,15 @@ class HandleInertiaRequests extends Middleware
                     'icon' => 'FileText',
                 'permission_module' => 'drivers',
                 'permission_entity' => 'driverdocuments',
+                ];
+
+            // Driver Follow-ups
+                $driversItems[] = [
+                    'title' => 'Follow-ups',
+                    'href' => '/drivers/driver-follow-ups',
+                    'icon' => 'History',
+                'permission_module' => 'drivers',
+                'permission_entity' => 'driverfollowups',
                 ];
 
             // Only add Drivers group if there are items

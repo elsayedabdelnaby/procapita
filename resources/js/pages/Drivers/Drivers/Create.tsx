@@ -90,6 +90,9 @@ export default function DriversCreate({
         lead_source_id: '',
         assigned_users: [] as number[],
         lead_status_id: '',
+        lead_status_comment: '',
+        next_follow_up: '',
+        last_follow_up: '',
         lead_stage_id: '',
         current_stage_id: '',
         notes: '',
@@ -505,6 +508,59 @@ export default function DriversCreate({
                                 {errors.lead_status_id && (
                                     <p className="text-sm text-red-500">{errors.lead_status_id}</p>
                                 )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="lead_status_comment">Lead Status Comment</Label>
+                                <textarea
+                                    id="lead_status_comment"
+                                    name="lead_status_comment"
+                                    value={data.lead_status_comment}
+                                    onChange={(e) => setData('lead_status_comment', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    rows={3}
+                                    placeholder="Enter lead status comment..."
+                                />
+                                {errors.lead_status_comment && (
+                                    <p className="text-sm text-red-500">{errors.lead_status_comment}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="next_follow_up">Next Follow-up</Label>
+                                <input
+                                    type="date"
+                                    id="next_follow_up"
+                                    name="next_follow_up"
+                                    value={data.next_follow_up}
+                                    onChange={(e) => {
+                                        const selectedDate = e.target.value;
+                                        const today = new Date().toISOString().split('T')[0];
+                                        if (selectedDate && selectedDate < today) {
+                                            alert('Next Follow-up date must be today or a future date.');
+                                            return;
+                                        }
+                                        setData('next_follow_up', selectedDate);
+                                    }}
+                                    min={new Date().toISOString().split('T')[0]}
+                                    className="w-full rounded-md border px-3 py-2"
+                                />
+                                {errors.next_follow_up && (
+                                    <p className="text-sm text-red-500">{errors.next_follow_up}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="last_follow_up">Last Follow-up</Label>
+                                <input
+                                    type="date"
+                                    id="last_follow_up"
+                                    name="last_follow_up"
+                                    value={data.last_follow_up}
+                                    disabled
+                                    className="w-full rounded-md border px-3 py-2 bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
+                                />
+                                <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically updated</p>
                             </div>
 
                             <div>

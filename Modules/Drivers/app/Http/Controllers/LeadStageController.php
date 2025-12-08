@@ -35,14 +35,9 @@ class LeadStageController extends Controller
     public function create(): Response
     {
         $user = Auth::user();
-        $companyId = $user->isSuperAdmin() ? session('selected_company_id', null) : $user->company_id;
+        $companyId = $this->getCompanyId();
         
-        $ridingCompanies = $user->isSuperAdmin() 
-            ? RidingCompany::when($companyId, fn($q) => $q->where('company_id', $companyId))
-                ->active()
-                ->orderBy('name')
-                ->get()
-            : RidingCompany::when($user->company_id, fn($q) => $q->where('company_id', $user->company_id))
+        $ridingCompanies = RidingCompany::when($companyId, fn($q) => $q->where('company_id', $companyId))
                 ->active()
                 ->orderBy('name')
                 ->get();
@@ -130,10 +125,8 @@ class LeadStageController extends Controller
             abort(404, 'Lead stage not found.');
         }
 
-        $user = Auth::user();
-        $ridingCompanies = $user->isSuperAdmin() 
-            ? RidingCompany::active()->orderBy('name')->get() 
-            : RidingCompany::when($user->company_id, fn($q) => $q->where('company_id', $user->company_id))
+        $companyId = $this->getCompanyId();
+        $ridingCompanies = RidingCompany::when($companyId, fn($q) => $q->where('company_id', $companyId))
                 ->active()
                 ->orderBy('name')
                 ->get();

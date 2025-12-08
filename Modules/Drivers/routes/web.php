@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Drivers\app\Http\Controllers\DriverController;
 use Modules\Drivers\app\Http\Controllers\DriverDocumentController;
+use Modules\Drivers\app\Http\Controllers\DriverFollowUpController;
 use Modules\Drivers\app\Http\Controllers\DriverStageController;
 use Modules\Drivers\app\Http\Controllers\LeadSourceController;
 use Modules\Drivers\app\Http\Controllers\LeadStatusController;
@@ -263,5 +264,36 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.driverdocuments.set-pending,drivers.driverdocuments.set-approved,drivers.driverdocuments.set-rejected'])->group(function () {
         Route::post('driver-documents/{driverDocument}/update-status', [DriverDocumentController::class, 'updateStatus'])->name('driverdocuments.update-status');
+    });
+
+    // Driver Follow-ups Management
+    Route::middleware(['permission:drivers.driverfollowups.create'])->group(function () {
+        Route::get('driver-follow-ups/create', [DriverFollowUpController::class, 'create'])->name('driverfollowups.create');
+        Route::post('driver-follow-ups', [DriverFollowUpController::class, 'store'])->name('driverfollowups.store');
+    });
+
+    Route::middleware(['permission:drivers.driverfollowups.read'])->group(function () {
+        Route::get('driver-follow-ups', [DriverFollowUpController::class, 'index'])->name('driverfollowups.index');
+        Route::get('driver-follow-ups/export', [DriverFollowUpController::class, 'export'])->name('driverfollowups.export');
+        Route::get('driver-follow-ups/{driverFollowUp}', [DriverFollowUpController::class, 'show'])->name('driverfollowups.show');
+    });
+
+    // Mass edit route - must be before driver-follow-ups/{driverFollowUp} route to avoid route matching conflicts
+    Route::middleware(['permission:drivers.driverfollowups.mass-edit'])->group(function () {
+        Route::get('driver-follow-ups/mass-edit', [DriverFollowUpController::class, 'massEdit'])->name('driverfollowups.mass-edit');
+        Route::post('driver-follow-ups/mass-update', [DriverFollowUpController::class, 'massUpdate'])->name('driverfollowups.mass-update');
+    });
+
+    Route::middleware(['permission:drivers.driverfollowups.update'])->group(function () {
+        Route::get('driver-follow-ups/{driverFollowUp}/edit', [DriverFollowUpController::class, 'edit'])->name('driverfollowups.edit');
+        Route::put('driver-follow-ups/{driverFollowUp}', [DriverFollowUpController::class, 'update'])->name('driverfollowups.update');
+    });
+
+    Route::middleware(['permission:drivers.driverfollowups.delete'])->group(function () {
+        Route::delete('driver-follow-ups/{driverFollowUp}', [DriverFollowUpController::class, 'destroy'])->name('driverfollowups.destroy');
+    });
+
+    Route::middleware(['permission:drivers.driverfollowups.mass-delete'])->group(function () {
+        Route::post('driver-follow-ups/mass-delete', [DriverFollowUpController::class, 'massDelete'])->name('driverfollowups.mass-delete');
     });
 });
