@@ -380,7 +380,7 @@ export default function DriversEdit({
                                     className="cursor-pointer relative"
                                     onClick={(e) => {
                                         const dateInput = document.getElementById('edit-next-follow-up') as HTMLInputElement;
-                                        if (dateInput && e.target !== dateInput) {
+                                        if (dateInput && e.target !== dateInput && !(e.target as HTMLElement).closest('.date-display-overlay')) {
                                             dateInput.showPicker?.() || dateInput.focus();
                                         }
                                     }}
@@ -431,7 +431,7 @@ export default function DriversEdit({
                                         />
                                         {!data.next_follow_up && (
                                             <div 
-                                                className="absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
+                                                className="date-display-overlay absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
                                                 style={{ 
                                                     color: '#6b7280',
                                                     fontSize: '0.875rem',
@@ -451,7 +451,7 @@ export default function DriversEdit({
                                         )}
                                         {data.next_follow_up && (
                                             <div 
-                                                className="absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
+                                                className="date-display-overlay absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
                                                 style={{ 
                                                     color: 'inherit',
                                                     fontSize: '0.875rem',

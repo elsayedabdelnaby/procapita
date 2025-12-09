@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMe
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router, usePage, useForm } from '@inertiajs/react';
-import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown, User, Mail, CheckCircle2, FileText, Activity, Settings2, GripVertical, ChevronLeft, ChevronRight, Upload, Edit } from 'lucide-react';
+import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown, User, Mail, CheckCircle2, FileText, Activity, Settings2, GripVertical, ChevronLeft, ChevronRight, Upload, Edit, Users, UserPlus, Calendar, AlertCircle } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { type SharedData } from '@/types';
 import axios from 'axios';
@@ -284,6 +284,9 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     const [pageSize, setPageSize] = useState(loadPageSize());
     const [currentPage, setCurrentPage] = useState(1);
 
+    // Active tab state for notification buttons
+    const [activeTab, setActiveTab] = useState<'all' | 'new' | 'today' | 'overdue'>('all');
+
     // Filter states
     const [filters, setFilters] = useState<Record<string, string | number | null | 'is_empty'>>({
         full_name: '',
@@ -340,12 +343,65 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         setSelectedDrivers(newSelected);
     };
 
-    // Filter drivers based on active filters
+    // Calculate counts for notification buttons
+    const notificationCounts = useMemo(() => {
+        if (!safeDrivers || safeDrivers.length === 0) {
+            return { all: 0, new: 0, today: 0, overdue: 0 };
+        }
+        
+        const today = new Date().toISOString().split('T')[0];
+        
+        return {
+            all: safeDrivers.length,
+            new: safeDrivers.filter(d => {
+                // Include drivers with no lead_status or lead_status name is "New"
+                return !d.lead_status?.id || d.lead_status?.name?.toLowerCase() === 'new';
+            }).length,
+            today: safeDrivers.filter(d => {
+                if (!d.next_follow_up) return false;
+                const followUpDate = new Date(d.next_follow_up).toISOString().split('T')[0];
+                return followUpDate === today;
+            }).length,
+            overdue: safeDrivers.filter(d => {
+                if (!d.next_follow_up) return false;
+                const followUpDate = new Date(d.next_follow_up).toISOString().split('T')[0];
+                return followUpDate < today;
+            }).length,
+        };
+    }, [safeDrivers]);
+
+    // Filter drivers based on active filters and active tab
     const filteredDrivers = useMemo(() => {
         if (!safeDrivers || safeDrivers.length === 0) {
             return [];
         }
-        return safeDrivers.filter((driver) => {
+        
+        // First apply tab filter
+        let tabFiltered = safeDrivers;
+        const today = new Date().toISOString().split('T')[0];
+        
+        if (activeTab === 'new') {
+            tabFiltered = safeDrivers.filter(d => {
+                // Include drivers with no lead_status or lead_status name is "New"
+                return !d.lead_status?.id || d.lead_status?.name?.toLowerCase() === 'new';
+            });
+        } else if (activeTab === 'today') {
+            tabFiltered = safeDrivers.filter(d => {
+                if (!d.next_follow_up) return false;
+                const followUpDate = new Date(d.next_follow_up).toISOString().split('T')[0];
+                return followUpDate === today;
+            });
+        } else if (activeTab === 'overdue') {
+            tabFiltered = safeDrivers.filter(d => {
+                if (!d.next_follow_up) return false;
+                const followUpDate = new Date(d.next_follow_up).toISOString().split('T')[0];
+                return followUpDate < today;
+            });
+        }
+        // 'all' doesn't need filtering
+        
+        // Then apply other filters
+        return tabFiltered.filter((driver) => {
             // Full name filter
             if (filters.full_name) {
                 if (filters.full_name === 'is_empty') {
@@ -466,7 +522,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
             }
             return true;
         });
-    }, [drivers, filters]);
+    }, [safeDrivers, filters, activeTab]);
 
     // Save column preferences to localStorage
     useEffect(() => {
@@ -1193,6 +1249,112 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                 <Card className="p-6">
                     {safeDrivers.length > 0 ? (
                         <>
+                            {/* Notification Buttons */}
+                            <div className="mb-6 flex items-center gap-4 flex-wrap">
+                                <button
+                                    onClick={() => {
+                                        setActiveTab('all');
+                                        setCurrentPage(1);
+                                    }}
+                                    className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                                        activeTab === 'all'
+                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md'
+                                            : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
+                                    }`}
+                                >
+                                    <Users className={`h-5 w-5 ${activeTab === 'all' ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
+                                    <span className={`font-medium ${activeTab === 'all' ? 'text-blue-700 dark:text-blue-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                                        All Drivers
+                                    </span>
+                                    {notificationCounts.all > 0 && (
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                            activeTab === 'all'
+                                                ? 'bg-blue-600 text-white'
+                                                : 'bg-blue-500 text-white animate-pulse'
+                                        }`}>
+                                            {notificationCounts.all}
+                                        </span>
+                                    )}
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setActiveTab('new');
+                                        setCurrentPage(1);
+                                    }}
+                                    className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                                        activeTab === 'new'
+                                            ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-md'
+                                            : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
+                                    }`}
+                                >
+                                    <UserPlus className={`h-5 w-5 ${activeTab === 'new' ? 'text-green-600 dark:text-green-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
+                                    <span className={`font-medium ${activeTab === 'new' ? 'text-green-700 dark:text-green-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                                        New Drivers
+                                    </span>
+                                    {notificationCounts.new > 0 && (
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                            activeTab === 'new'
+                                                ? 'bg-green-600 text-white'
+                                                : 'bg-green-500 text-white animate-pulse'
+                                        }`}>
+                                            {notificationCounts.new}
+                                        </span>
+                                    )}
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setActiveTab('today');
+                                        setCurrentPage(1);
+                                    }}
+                                    className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                                        activeTab === 'today'
+                                            ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 shadow-md'
+                                            : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
+                                    }`}
+                                >
+                                    <Calendar className={`h-5 w-5 ${activeTab === 'today' ? 'text-yellow-600 dark:text-yellow-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
+                                    <span className={`font-medium ${activeTab === 'today' ? 'text-yellow-700 dark:text-yellow-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                                        Today Follow-up
+                                    </span>
+                                    {notificationCounts.today > 0 && (
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                            activeTab === 'today'
+                                                ? 'bg-yellow-600 text-white'
+                                                : 'bg-yellow-500 text-white animate-pulse'
+                                        }`}>
+                                            {notificationCounts.today}
+                                        </span>
+                                    )}
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setActiveTab('overdue');
+                                        setCurrentPage(1);
+                                    }}
+                                    className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                                        activeTab === 'overdue'
+                                            ? 'border-red-500 bg-red-50 dark:bg-red-900/20 shadow-md'
+                                            : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
+                                    }`}
+                                >
+                                    <AlertCircle className={`h-5 w-5 ${activeTab === 'overdue' ? 'text-red-600 dark:text-red-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
+                                    <span className={`font-medium ${activeTab === 'overdue' ? 'text-red-700 dark:text-red-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                                        Overdue
+                                    </span>
+                                    {notificationCounts.overdue > 0 && (
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                            activeTab === 'overdue'
+                                                ? 'bg-red-600 text-white'
+                                                : 'bg-red-500 text-white animate-pulse'
+                                        }`}>
+                                            {notificationCounts.overdue}
+                                        </span>
+                                    )}
+                                </button>
+                            </div>
                             {/* Mass Actions Bar */}
                             {selectedDrivers.size > 0 && (
                                 <div className="mb-4 p-3 bg-muted rounded-md flex items-center justify-between">
@@ -1309,7 +1471,8 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                     scrollbarWidth: 'thin', 
                                     scrollbarColor: '#cbd5e1 transparent',
                                     maxHeight: 'calc(100vh - 400px)',
-                                    overflowY: 'auto'
+                                    overflowY: 'auto',
+                                    position: 'relative'
                                 }}>
                                     <style>{`
                                         div[class*="overflow-x-auto"]::-webkit-scrollbar {
@@ -1336,7 +1499,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                         }
                                     `}</style>
                                     <table className="w-full">
-                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                    <thead className="bg-neutral-50 dark:bg-neutral-900 sticky top-0 z-20">
                                         <tr>
                                             <th className="px-4 py-3 text-left w-12">
                                                 <Checkbox

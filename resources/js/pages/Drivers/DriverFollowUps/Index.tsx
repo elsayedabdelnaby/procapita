@@ -1027,10 +1027,11 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
 
                             <div className="relative">
                                 <div className="overflow-x-auto overflow-y-visible rounded-lg border" style={{ 
-                                    scrollbarWidth: 'thin', 
+                                    scrollbarWidth: 'thin',
                                     scrollbarColor: '#cbd5e1 transparent',
                                     maxHeight: 'calc(100vh - 400px)',
-                                    overflowY: 'auto'
+                                    overflowY: 'auto',
+                                    position: 'relative'
                                 }}>
                                     <style>{`
                                         div[class*="overflow-x-auto"]::-webkit-scrollbar {
@@ -1057,7 +1058,7 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                         }
                                     `}</style>
                                     <table className="w-full">
-                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                    <thead className="bg-neutral-50 dark:bg-neutral-900 sticky top-0 z-20">
                                         <tr>
                                             <th className="px-4 py-3 text-left w-12">
                                                 <Checkbox
