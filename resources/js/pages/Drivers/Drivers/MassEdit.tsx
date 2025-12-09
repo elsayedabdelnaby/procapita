@@ -10,6 +10,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
+import { formatDate } from '@/utils/date-format';
 
 interface Company {
     id: number;
@@ -414,27 +415,105 @@ export default function DriversMassEdit({
                                         checked={clearFields.has('next_follow_up')}
                                         onCheckedChange={(checked) => handleClearField('next_follow_up', checked as boolean)}
                                     />
-                                    <Label htmlFor="next_follow_up" className="text-sm font-medium">
+                                    <Label 
+                                        htmlFor="next_follow_up" 
+                                        className="text-sm font-medium cursor-pointer"
+                                        onClick={(e) => {
+                                            if (clearFields.has('next_follow_up')) return;
+                                            e.preventDefault();
+                                            const dateInput = document.getElementById('mass-edit-next-follow-up') as HTMLInputElement;
+                                            if (dateInput) {
+                                                dateInput.showPicker?.() || dateInput.focus();
+                                            }
+                                        }}
+                                    >
                                         Next Follow-up
                                     </Label>
                                 </div>
-                                <Input
-                                    type="date"
-                                    id="next_follow_up"
-                                    value={data.next_follow_up}
-                                    onChange={(e) => {
-                                        const selectedDate = e.target.value;
-                                        const today = new Date().toISOString().split('T')[0];
-                                        if (selectedDate && selectedDate < today) {
-                                            alert('Next Follow-up date must be today or a future date.');
-                                            return;
+                                <div 
+                                    className="relative cursor-pointer"
+                                    onClick={(e) => {
+                                        if (clearFields.has('next_follow_up')) return;
+                                        const dateInput = document.getElementById('mass-edit-next-follow-up') as HTMLInputElement;
+                                        if (dateInput && e.target !== dateInput && !(e.target as HTMLElement).closest('.date-display-overlay')) {
+                                            dateInput.showPicker?.() || dateInput.focus();
                                         }
-                                        setData('next_follow_up', selectedDate);
                                     }}
-                                    min={new Date().toISOString().split('T')[0]}
-                                    disabled={clearFields.has('next_follow_up')}
-                                    className="w-full"
-                                />
+                                >
+                                    <div className="relative">
+                                        <Input
+                                            type="date"
+                                            id="mass-edit-next-follow-up"
+                                            value={data.next_follow_up}
+                                            onChange={(e) => {
+                                                const selectedDate = e.target.value;
+                                                const today = new Date().toISOString().split('T')[0];
+                                                if (selectedDate && selectedDate < today) {
+                                                    alert('Next Follow-up date must be today or a future date.');
+                                                    return;
+                                                }
+                                                setData('next_follow_up', selectedDate);
+                                            }}
+                                            min={new Date().toISOString().split('T')[0]}
+                                            disabled={clearFields.has('next_follow_up')}
+                                            className={`w-full cursor-pointer ${clearFields.has('next_follow_up') ? 'opacity-50' : ''}`}
+                                            onClick={(e) => {
+                                                if (clearFields.has('next_follow_up')) return;
+                                                e.stopPropagation();
+                                                const dateInput = e.target as HTMLInputElement;
+                                                dateInput.showPicker?.() || dateInput.focus();
+                                            }}
+                                            onFocus={(e) => {
+                                                if (clearFields.has('next_follow_up')) return;
+                                                e.target.showPicker?.();
+                                            }}
+                                            style={{ 
+                                                color: data.next_follow_up ? 'transparent' : 'transparent',
+                                                caretColor: 'transparent'
+                                            }}
+                                        />
+                                        {!clearFields.has('next_follow_up') && !data.next_follow_up && (
+                                            <div 
+                                                className="date-display-overlay absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
+                                                style={{ 
+                                                    color: '#6b7280',
+                                                    fontSize: '0.875rem',
+                                                    lineHeight: '1.25rem'
+                                                }}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    const dateInput = document.getElementById('mass-edit-next-follow-up') as HTMLInputElement;
+                                                    if (dateInput) {
+                                                        dateInput.showPicker?.() || dateInput.focus();
+                                                    }
+                                                }}
+                                            >
+                                                dd / mm / yyyy
+                                            </div>
+                                        )}
+                                        {!clearFields.has('next_follow_up') && data.next_follow_up && (
+                                            <div 
+                                                className="date-display-overlay absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
+                                                style={{ 
+                                                    color: 'inherit',
+                                                    fontSize: '0.875rem',
+                                                    lineHeight: '1.25rem'
+                                                }}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    const dateInput = document.getElementById('mass-edit-next-follow-up') as HTMLInputElement;
+                                                    if (dateInput) {
+                                                        dateInput.showPicker?.() || dateInput.focus();
+                                                    }
+                                                }}
+                                            >
+                                                {formatDate(data.next_follow_up)}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                                 {errors.next_follow_up && (
                                     <p className="text-sm text-red-500">{errors.next_follow_up}</p>
                                 )}
