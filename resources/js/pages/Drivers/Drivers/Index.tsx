@@ -20,6 +20,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { type SharedData } from '@/types';
 import axios from 'axios';
 import { formatDate } from '@/utils/date-format';
+import { WhatsAppWindow } from '@/components/whatsapp/whatsapp-window';
 
 interface Company {
     id: number;
@@ -150,6 +151,46 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     
     // Ensure drivers is always an array
     const safeDrivers = Array.isArray(drivers) ? drivers : [];
+    
+    // Get selected company from page props (the company selected from under the logo)
+    const selectedCompany = page.props.selectedCompany;
+    const companyId = selectedCompany?.id || null;
+    
+    // Debug: Log to help troubleshoot
+    if (!companyId) {
+        console.log('No company selected. Selected company:', selectedCompany);
+    }
+    
+    // Get driver phone numbers assigned to current user (both phone and whatsapp_phone)
+    const userDriverPhoneNumbers = useMemo(() => {
+        const user = page.props.auth?.user;
+        if (!user) return [];
+        
+        const phoneNumbers: string[] = [];
+        
+        // If super admin or company admin, show all drivers
+        if (user.is_super_admin || user.is_company_admin) {
+            safeDrivers.forEach(d => {
+                if (d.phone) phoneNumbers.push(d.phone);
+                if (d.whatsapp_phone) phoneNumbers.push(d.whatsapp_phone);
+            });
+        } else {
+            // Otherwise, show only drivers assigned to this user
+            safeDrivers
+                .filter(driver => {
+                    // Check if driver is assigned to this user
+                    const assignedUsers = driver.assigned_users || [];
+                    return assignedUsers.some((u: any) => u.id === user.id);
+                })
+                .forEach(d => {
+                    if (d.phone) phoneNumbers.push(d.phone);
+                    if (d.whatsapp_phone) phoneNumbers.push(d.whatsapp_phone);
+                });
+        }
+        
+        // Remove duplicates
+        return [...new Set(phoneNumbers)];
+    }, [safeDrivers, page.props.auth?.user]);
     const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; driver: Driver | null }>({
         open: false,
         driver: null,
@@ -193,6 +234,12 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     const [viewingDriver, setViewingDriver] = useState<Driver | null>(null);
     const [driverDetails, setDriverDetails] = useState<any>(null);
     const [driverActivities, setDriverActivities] = useState<any[]>([]);
+    
+    // WhatsApp Window states
+    const [whatsappWindowOpen, setWhatsappWindowOpen] = useState(false);
+    const [selectedDriverForWhatsApp, setSelectedDriverForWhatsApp] = useState<string | null>(null);
+    const [whatsappFloating, setWhatsappFloating] = useState(false);
+    const [whatsappWindowWidth, setWhatsappWindowWidth] = useState(384); // Default: 96 * 4 = 384px (w-96)
     const [loadingDetails, setLoadingDetails] = useState(false);
     const [hoveredPhone, setHoveredPhone] = useState<string | null>(null);
     const [hoveredEmail, setHoveredEmail] = useState<string | null>(null);
@@ -1203,10 +1250,13 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     };
 
     return (
-        <AppLayout>
+        <>
+            <AppLayout>
             <Head title="Drivers" />
 
-            <div className="p-6">
+            <div className={`p-6 ${whatsappWindowOpen && !whatsappFloating ? 'pr-0' : ''}`}>
+                <div className={`flex gap-0 ${whatsappWindowOpen && !whatsappFloating ? 'flex-row' : ''}`}>
+                    <div className={`${whatsappWindowOpen && !whatsappFloating ? 'flex-1 min-w-0' : 'w-full'}`}>
                 <div className="mb-6 flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold">Drivers</h1>
@@ -1239,6 +1289,24 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                 Import
                             </Button>
                         <div className="flex items-center gap-2 ml-auto">
+                            {companyId && (
+                                <Button
+                                    type="button"
+                                    variant={whatsappWindowOpen ? "default" : "outline"}
+                                    onClick={() => {
+                                        if (whatsappWindowOpen) {
+                                            setWhatsappWindowOpen(false);
+                                            setWhatsappFloating(false);
+                                        } else {
+                                            setWhatsappWindowOpen(true);
+                                        }
+                                    }}
+                                    className={whatsappWindowOpen ? "bg-[#25d366] hover:bg-[#20ba5a] text-white border-[#25d366]" : "border-[#25d366] text-[#25d366] hover:bg-[#25d366] hover:text-white"}
+                                >
+                                    <MessageCircle className="h-4 w-4 mr-2" />
+                                    {whatsappWindowOpen ? 'Hide WhatsApp' : 'Open WhatsApp Chats'}
+                                </Button>
+                            )}
                             <Link href="/drivers/drivers/create">
                                 <Button>Create Driver</Button>
                             </Link>
@@ -1875,14 +1943,19 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                                 >
                                                                                     <Phone className="h-5 w-5" />
                                                                                 </a>
-                                                                                <a
-                                                                                    href={`https://wa.me/${formatPhoneForWhatsApp(driver.phone)}`}
-                                                                                    target="_blank"
-                                                                                    rel="noopener noreferrer"
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.preventDefault();
+                                                                                        e.stopPropagation();
+                                                                                        // Use phone directly (not whatsapp_phone)
+                                                                                        setSelectedDriverForWhatsApp(driver.phone);
+                                                                                        setWhatsappWindowOpen(true);
+                                                                                        setWhatsappFloating(false); // Ensure it opens in side panel, not floating
+                                                                                    }}
                                                                                     className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
                                                                                 >
                                                                                     <MessageCircle className="h-5 w-5" />
-                                                                                </a>
+                                                                                </button>
                                                                             </div>
                                                                         )}
                                                                     </div>
@@ -1936,14 +2009,21 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                                 >
                                                                                     <Phone className="h-5 w-5" />
                                                                                 </a>
-                                                                                <a
-                                                                                    href={`https://wa.me/${formatPhoneForWhatsApp(driver.whatsapp_phone)}`}
-                                                                                    target="_blank"
-                                                                                    rel="noopener noreferrer"
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.preventDefault();
+                                                                                        e.stopPropagation();
+                                                                                        // Use whatsapp_phone directly
+                                                                                        if (driver.whatsapp_phone) {
+                                                                                            setSelectedDriverForWhatsApp(driver.whatsapp_phone);
+                                                                                            setWhatsappWindowOpen(true);
+                                                                                            setWhatsappFloating(false); // Ensure it opens in side panel, not floating
+                                                                                        }
+                                                                                    }}
                                                                                     className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
                                                                                 >
                                                                                     <MessageCircle className="h-5 w-5" />
-                                                                                </a>
+                                                                                </button>
                                                                             </div>
                                                                         )}
                                                                     </div>
@@ -2706,8 +2786,78 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                         })()}
                     </DialogContent>
                 </Dialog>
+                    </div>
+                    
+                    {/* WhatsApp Window - Side Panel */}
+                    {companyId && whatsappWindowOpen && !whatsappFloating && (
+                        <div 
+                            className="flex-shrink-0 h-[calc(100vh-8rem)] border-l border-neutral-200 dark:border-neutral-700 relative group"
+                            style={{ width: `${whatsappWindowWidth}px`, minWidth: '300px', maxWidth: '80vw' }}
+                        >
+                            {/* Resize Handle - Left Side */}
+                            <div
+                                className="absolute left-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-500 cursor-col-resize z-10 transition-colors"
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const startX = e.clientX;
+                                    const startWidth = whatsappWindowWidth;
+                                    
+                                    const handleMouseMove = (moveEvent: MouseEvent) => {
+                                        const diff = startX - moveEvent.clientX; // Inverted because we're resizing from left
+                                        const newWidth = Math.max(300, Math.min(window.innerWidth * 0.8, startWidth + diff));
+                                        setWhatsappWindowWidth(newWidth);
+                                    };
+                                    
+                                    const handleMouseUp = () => {
+                                        document.removeEventListener('mousemove', handleMouseMove);
+                                        document.removeEventListener('mouseup', handleMouseUp);
+                                        document.body.style.cursor = '';
+                                        document.body.style.userSelect = '';
+                                    };
+                                    
+                                    document.addEventListener('mousemove', handleMouseMove);
+                                    document.addEventListener('mouseup', handleMouseUp);
+                                    document.body.style.cursor = 'col-resize';
+                                    document.body.style.userSelect = 'none';
+                                }}
+                                title="Drag to resize"
+                            />
+                            <WhatsAppWindow
+                                companyId={companyId}
+                                driverPhoneNumbers={userDriverPhoneNumbers}
+                                isOpen={whatsappWindowOpen}
+                                onClose={() => {
+                                    setWhatsappWindowOpen(false);
+                                    setSelectedDriverForWhatsApp(null);
+                                }}
+                                initialChatPhone={selectedDriverForWhatsApp || undefined}
+                                isFloating={whatsappFloating}
+                                onToggleFloating={() => setWhatsappFloating(!whatsappFloating)}
+                            />
+                        </div>
+                    )}
+                </div>
             </div>
         </AppLayout>
+        
+        {/* WhatsApp Window - Floating */}
+        {companyId && whatsappWindowOpen && whatsappFloating && (
+            <WhatsAppWindow
+                companyId={companyId}
+                driverPhoneNumbers={userDriverPhoneNumbers}
+                isOpen={whatsappWindowOpen}
+                onClose={() => {
+                    setWhatsappWindowOpen(false);
+                    setSelectedDriverForWhatsApp(null);
+                    setWhatsappFloating(false);
+                }}
+                initialChatPhone={selectedDriverForWhatsApp || undefined}
+                isFloating={whatsappFloating}
+                onToggleFloating={() => setWhatsappFloating(!whatsappFloating)}
+            />
+        )}
+        </>
     );
 }
 
@@ -2758,27 +2908,29 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
     // Transform data before submitting - convert empty strings to null
     transform((data) => {
         const transformed: any = {
-            full_name: data.full_name,
-            phone: data.phone,
+            full_name: data.full_name || '',
+            phone: data.phone || '',
             whatsapp_phone: data.whatsapp_phone || null,
             email: data.email || null,
-            riding_company_id: data.riding_company_id || null,
-            campaign_id: data.campaign_id || null,
-            lead_source_id: data.lead_source_id || null,
-            assigned_to: data.assigned_to || null,
-            assigned_users: data.assigned_users && data.assigned_users.length > 0 ? data.assigned_users : null,
-            lead_status_id: data.lead_status_id || null,
+            riding_company_id: data.riding_company_id ? Number(data.riding_company_id) : null,
+            campaign_id: data.campaign_id ? Number(data.campaign_id) : null,
+            lead_source_id: data.lead_source_id ? Number(data.lead_source_id) : null,
+            assigned_to: data.assigned_to ? Number(data.assigned_to) : null,
+            assigned_users: data.assigned_users && Array.isArray(data.assigned_users) && data.assigned_users.length > 0 
+                ? data.assigned_users.map((id: any) => Number(id)) 
+                : null,
+            lead_status_id: data.lead_status_id ? Number(data.lead_status_id) : null,
             lead_status_comment: data.lead_status_comment || null,
             next_follow_up: data.next_follow_up || null,
             next_time: data.next_time || null,
-            lead_stage_id: data.lead_stage_id || null,
+            lead_stage_id: data.lead_stage_id ? Number(data.lead_stage_id) : null,
             current_stage_id: data.current_stage_id || null,
             notes: data.notes || null,
         };
         
         // Add company_id only for super admin
         if (isSuperAdmin && data.company_id) {
-            transformed.company_id = data.company_id;
+            transformed.company_id = Number(data.company_id);
         }
         
         return transformed;
@@ -2838,10 +2990,17 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
             preserveScroll: true,
             onSuccess: () => {
                 onOpenChange(false);
-                router.reload({ only: ['drivers'] });
+                router.reload({ only: ['drivers', 'filterOptions', 'importAvailableFields'] });
             },
             onError: (errors) => {
                 console.error('Error updating driver:', errors);
+                // Show error message to user
+                if (errors && typeof errors === 'object') {
+                    const errorMessages = Object.values(errors).flat();
+                    alert('Error saving driver: ' + errorMessages.join(', '));
+                } else {
+                    alert('Error saving driver. Please try again.');
+                }
             },
         });
     };
