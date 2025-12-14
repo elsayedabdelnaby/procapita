@@ -2,13 +2,14 @@ import { ActivityLog } from '@/components/core/activity-log';
 import { DataTable } from '@/components/core/data-table';
 import { DeleteDialog } from '@/components/core/delete-dialog';
 import { RoleTree } from '@/components/core/role-tree';
+import { WhatsAppLinkDeviceTab } from '@/components/whatsapp/whatsapp-link-device-tab';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Company, CoreUser, Role } from '@/types/core';
 import { Head, Link, router } from '@inertiajs/react';
-import { Activity, Building2, Mail, MapPin, Network, Phone, ShieldCheck, Users as UsersIcon } from 'lucide-react';
+import { Activity, Building2, Mail, MapPin, MessageCircle, Network, Phone, ShieldCheck, Users as UsersIcon } from 'lucide-react';
 import { useState } from 'react';
 
 interface CompanyShowProps {
@@ -42,7 +43,7 @@ interface CompanyShowProps {
 
 export default function CompanyShow({ company, statistics, users, roles, roleHierarchy, activities = [] }: CompanyShowProps) {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'roles' | 'hierarchy' | 'updates'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'roles' | 'hierarchy' | 'updates' | 'whatsapp'>('overview');
     const [deleteUserDialog, setDeleteUserDialog] = useState<{ open: boolean; user: CoreUser | null }>({
         open: false,
         user: null,
@@ -185,6 +186,19 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
                             <div className="flex items-center gap-2">
                                 <Activity className="h-4 w-4" />
                                 Updates ({activities.length})
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('whatsapp')}
+                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                activeTab === 'whatsapp'
+                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <MessageCircle className="h-4 w-4" />
+                                WhatsApp Link Device
                             </div>
                         </button>
                     </nav>
@@ -500,6 +514,12 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Activity Log</h2>
                         <ActivityLog activities={activities} />
+                    </Card>
+                )}
+
+                {activeTab === 'whatsapp' && (
+                    <Card className="p-6">
+                        <WhatsAppLinkDeviceTab companyId={company.id} />
                     </Card>
                 )}
             </div>

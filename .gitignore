@@ -10,6 +10,7 @@
 /storage/*.key
 /storage/pail
 /vendor
+/whatsapp-service/node_modules
 .DS_Store
 .env
 .env.backup
