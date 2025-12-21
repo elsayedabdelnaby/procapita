@@ -21,6 +21,7 @@ class RidingCompanyIntegrationSetting extends Model
         'active',
         'facebook_access_token',
         'facebook_user_id',
+        'facebook_user_name',
         'facebook_page_id',
         'facebook_form_id',
         'facebook_field_mapping',

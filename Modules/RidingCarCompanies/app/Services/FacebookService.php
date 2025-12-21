@@ -50,7 +50,9 @@ class FacebookService
             'redirect_uri' => $this->redirectUri,
             'state' => $state ?? bin2hex(random_bytes(16)),
             // User Delegated Access - المستخدم يوافق على إعطاء صلاحيات لصفحاته
-            'scope' => 'pages_show_list,pages_read_engagement,leads_retrieval,manage_pages,read_insights',
+            // Updated to use valid Facebook permissions (manage_pages and read_insights are deprecated)
+            // Note: Some permissions may require App Review for production use
+            'scope' => 'pages_show_list,pages_read_engagement,leads_retrieval',
             'response_type' => 'code',
             'auth_type' => 'rerequest', // لإعادة طلب الصلاحيات إذا لزم الأمر
         ];

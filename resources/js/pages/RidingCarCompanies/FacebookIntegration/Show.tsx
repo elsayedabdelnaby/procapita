@@ -24,6 +24,7 @@ interface FacebookIntegrationProps {
         facebook_form_id: string | null;
         facebook_field_mapping: Record<string, string> | null;
         has_access_token: boolean;
+        facebook_user_name?: string | null;
     };
 }
 
@@ -170,9 +171,15 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
             const data = await response.json();
             if (data.success && data.pages) {
                 setPages(data.pages);
+                if (data.pages.length === 0) {
+                    alert('No Facebook pages found. Make sure you have pages associated with your Facebook account.');
+                }
+            } else {
+                alert(data.error || 'Failed to load Facebook pages. Please try reconnecting your account.');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error loading pages:', error);
+            alert('Error loading pages: ' + (error.message || 'Unknown error'));
         } finally {
             setLoadingPages(false);
         }
@@ -195,9 +202,15 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
             const data = await response.json();
             if (data.success && data.forms) {
                 setForms(data.forms);
+                if (data.forms.length === 0) {
+                    alert('No lead forms found for this page. Make sure you have created Lead Ads forms in Facebook Ads Manager.');
+                }
+            } else {
+                alert(data.error || 'Failed to load forms. Please try selecting a different page.');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error loading forms:', error);
+            alert('Error loading forms: ' + (error.message || 'Unknown error'));
         } finally {
             setLoadingForms(false);
         }
@@ -220,9 +233,15 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
             const data = await response.json();
             if (data.success && data.fields) {
                 setFormFields(data.fields);
+                if (data.fields.length === 0) {
+                    alert('No fields found in this form. The form might be empty or there was an error loading it.');
+                }
+            } else {
+                alert(data.error || 'Failed to load form fields. Please try selecting a different form.');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error loading form fields:', error);
+            alert('Error loading form fields: ' + (error.message || 'Unknown error'));
         } finally {
             setLoadingFields(false);
         }
@@ -295,12 +314,13 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         }
     };
 
-    // Driver fields for mapping
+    // Driver fields for mapping - all available fields
     const driverFields = [
-        { value: 'full_name', label: 'Name' },
-        { value: 'phone', label: 'Phone' },
-        { value: 'whatsapp_phone', label: 'WhatsApp' },
-        { value: 'email', label: 'Email' },
+        { value: 'full_name', label: 'Full Name', required: true },
+        { value: 'phone', label: 'Phone', required: true },
+        { value: 'whatsapp_phone', label: 'WhatsApp Phone', required: false },
+        { value: 'email', label: 'Email', required: false },
+        { value: 'notes', label: 'Notes', required: false },
     ];
 
     return (
@@ -372,13 +392,23 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                 {hasToken ? (
                                     <div className="space-y-2">
                                         <div className="flex items-center gap-2">
-                                            <div className="flex-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-800 rounded-md">
-                                                Facebook Account Connected
+                                            <div className="flex-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-800 rounded-md flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                                <span>
+                                                    {integration.facebook_user_name 
+                                                        ? `Connected as ${integration.facebook_user_name}`
+                                                        : 'Facebook Account Connected'}
+                                                </span>
                                             </div>
                                             <Button variant="outline" size="sm" onClick={handleConnectFacebook}>
                                                 Reconnect
                                             </Button>
                                         </div>
+                                        {integration.facebook_user_id && (
+                                            <p className="text-xs text-neutral-500">
+                                                User ID: {integration.facebook_user_id}
+                                            </p>
+                                        )}
                                         <p className="text-xs text-neutral-500">
                                             Facebook Lead Ads (1.1.8) is a secure partner. Your credentials are encrypted and can be removed at any time.
                                         </p>
@@ -507,54 +537,91 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                             <div className="grid grid-cols-2 gap-6">
                                 {/* Facebook Form Fields */}
                                 <div>
-                                    <Label className="text-base font-medium mb-3 block">+ from Facebook Form</Label>
-                                    <div className="space-y-2">
+                                    <Label className="text-base font-medium mb-3 block">Facebook Form Fields</Label>
+                                    <div className="space-y-3">
                                         {loadingFields ? (
                                             <div className="flex items-center justify-center py-8">
                                                 <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
                                             </div>
                                         ) : formFields.length > 0 ? (
-                                            formFields.map((field, index) => (
-                                                <div key={field.key} className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-md">
-                                                    <p className="text-sm font-medium">{index + 1}. {field.label}</p>
-                                                    <p className="text-xs text-neutral-500 mt-1">Key: {field.key}</p>
+                                            formFields.map((field) => (
+                                                <div key={field.key} className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="flex-1">
+                                                            <p className="text-sm font-medium">{field.label}</p>
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <Badge variant="outline" className="text-xs">
+                                                                    {field.type}
+                                                                </Badge>
+                                                                <p className="text-xs text-neutral-500">Key: {field.key}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             ))
                                         ) : (
-                                            <p className="text-sm text-neutral-500">No fields found. Please select a form first.</p>
+                                            <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 text-center">
+                                                <p className="text-sm text-neutral-500">No fields found. Please select a form first.</p>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
 
-                                {/* CRM Driver Fields */}
+                                {/* CRM Driver Fields Mapping */}
                                 <div>
-                                    <Label className="text-base font-medium mb-3 block">+ CRM Drivers Fields</Label>
-                                    <div className="space-y-2">
-                                        {formFields.map((field, index) => (
-                                            <div key={field.key} className="space-y-1">
-                                                <Label className="text-sm">{driverFields[index]?.label || `Field ${index + 1}`}</Label>
-                                                <Select
-                                                    value={fieldMapping[field.key] || ''}
-                                                    onValueChange={(value) => {
-                                                        setFieldMapping({
-                                                            ...fieldMapping,
-                                                            [field.key]: value,
-                                                        });
-                                                    }}
-                                                >
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Select field..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {driverFields.map((driverField) => (
-                                                            <SelectItem key={driverField.value} value={driverField.value}>
-                                                                {driverField.label}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                    <Label className="text-base font-medium mb-3 block">Map to CRM Driver Fields</Label>
+                                    <div className="space-y-3">
+                                        {formFields.length > 0 ? (
+                                            formFields.map((field) => {
+                                                const mappedField = fieldMapping[field.key];
+                                                const driverField = driverFields.find(f => f.value === mappedField);
+                                                return (
+                                                    <div key={field.key} className="space-y-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <Label className="text-sm font-medium flex-1">
+                                                                {field.label}
+                                                                {driverField?.required && (
+                                                                    <span className="text-red-500 ml-1">*</span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
+                                                        <Select
+                                                            value={mappedField || ''}
+                                                            onValueChange={(value) => {
+                                                                setFieldMapping({
+                                                                    ...fieldMapping,
+                                                                    [field.key]: value,
+                                                                });
+                                                            }}
+                                                        >
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Select CRM field..." />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="">-- Don't map --</SelectItem>
+                                                                {driverFields.map((driverField) => (
+                                                                    <SelectItem key={driverField.value} value={driverField.value}>
+                                                                        {driverField.label}
+                                                                        {driverField.required && (
+                                                                            <span className="text-red-500 ml-1">*</span>
+                                                                        )}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        {mappedField && (
+                                                            <p className="text-xs text-green-600 dark:text-green-400">
+                                                                ✓ Mapped to {driverField?.label || mappedField}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
+                                        ) : (
+                                            <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 text-center">
+                                                <p className="text-sm text-neutral-500">Select a form to see mapping options.</p>
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
                                 </div>
                             </div>

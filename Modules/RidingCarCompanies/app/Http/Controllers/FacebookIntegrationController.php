@@ -50,6 +50,7 @@ class FacebookIntegrationController extends Controller
                 'type' => $integration->type,
                 'active' => $integration->active,
                 'facebook_user_id' => $integration->facebook_user_id,
+                'facebook_user_name' => $integration->facebook_user_name,
                 'facebook_page_id' => $integration->facebook_page_id,
                 'facebook_form_id' => $integration->facebook_form_id,
                 'facebook_field_mapping' => $integration->facebook_field_mapping ?? [],
@@ -217,6 +218,7 @@ class FacebookIntegrationController extends Controller
             [
                 'facebook_access_token' => $accessToken, // User Delegated Access Token
                 'facebook_user_id' => $userInfo['success'] ? ($userInfo['data']['id'] ?? null) : null,
+                'facebook_user_name' => $userInfo['success'] ? ($userInfo['data']['name'] ?? null) : null,
                 'facebook_token_expires_at' => $expiresIn ? now()->addSeconds($expiresIn) : null,
                 'active' => true,
             ]
