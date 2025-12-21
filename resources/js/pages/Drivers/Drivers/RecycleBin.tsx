@@ -1115,14 +1115,6 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                         aValue = (a as any).notes || '';
                         bValue = (b as any).notes || '';
                         break;
-                    case 'next_follow_up':
-                        aValue = (a as any).next_follow_up || '';
-                        bValue = (b as any).next_follow_up || '';
-                        break;
-                    case 'last_follow_up':
-                        aValue = (a as any).last_follow_up || '';
-                        bValue = (b as any).last_follow_up || '';
-                        break;
                     case 'assigned_time':
                         aValue = (a as any).assigned_time || '';
                         bValue = (b as any).assigned_time || '';
@@ -2898,12 +2890,6 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                                                         {(driver as any).notes}
                                                                     </div>
                                                                 ) : '-';
-                                                                break;
-                                                            case 'next_follow_up':
-                                                                cellContent = (driver as any).next_follow_up ? formatDate((driver as any).next_follow_up) : '-';
-                                                                break;
-                                                            case 'last_follow_up':
-                                                                cellContent = (driver as any).last_follow_up ? formatDate((driver as any).last_follow_up) : '-';
                                                                 break;
                                                             case 'assigned_time':
                                                                 cellContent = (driver as any).assigned_time ? formatDate((driver as any).assigned_time) : '-';
