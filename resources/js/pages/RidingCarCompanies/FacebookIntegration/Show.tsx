@@ -10,41 +10,9 @@ import { Facebook, CheckCircle2, AlertCircle, Loader2, RefreshCw } from 'lucide-
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 
-// Configure axios to include CSRF token
+// Configure axios defaults
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 axios.defaults.withCredentials = true;
-
-// Get CSRF token from meta tag or cookie (called dynamically)
-const getCsrfToken = (): string => {
-    // Try meta tag first (most reliable)
-    const metaTag = document.querySelector('meta[name="csrf-token"]');
-    if (metaTag) {
-        const token = metaTag.getAttribute('content');
-        if (token) {
-            return token;
-        }
-    }
-    
-    // Fallback to cookie (Laravel sets XSRF-TOKEN cookie)
-    const cookies = document.cookie.split(';');
-    for (let cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'XSRF-TOKEN') {
-            return decodeURIComponent(value);
-        }
-    }
-    
-    return '';
-};
-
-// Create axios interceptor to add CSRF token to each request
-axios.interceptors.request.use((config) => {
-    const token = getCsrfToken();
-    if (token) {
-        config.headers['X-CSRF-TOKEN'] = token;
-    }
-    return config;
-});
 
 interface FacebookIntegrationProps {
     ridingCompany: {
@@ -88,6 +56,55 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
     const [loadingFields, setLoadingFields] = useState(false);
     const [syncing, setSyncing] = useState(false);
 
+    // Get CSRF token helper function
+    const getCsrfToken = (): string => {
+        // Try meta tag first (most reliable)
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        if (metaTag) {
+            const token = metaTag.getAttribute('content');
+            if (token) {
+                return token;
+            }
+        }
+        
+        // Fallback to cookie (Laravel sets XSRF-TOKEN cookie)
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'XSRF-TOKEN') {
+                return decodeURIComponent(value);
+            }
+        }
+        
+        return '';
+    };
+
+    // Setup axios interceptor on component mount to add CSRF token to all requests
+    useEffect(() => {
+        const interceptor = axios.interceptors.request.use((config) => {
+            const token = getCsrfToken();
+            if (token && !config.headers['X-CSRF-TOKEN']) {
+                config.headers['X-CSRF-TOKEN'] = token;
+            }
+            return config;
+        });
+
+        // Cleanup interceptor on unmount
+        return () => {
+            axios.interceptors.request.eject(interceptor);
+        };
+    }, []);
+
+    // Helper function to make axios requests with CSRF token
+    const axiosPost = async (url: string, data?: any) => {
+        const token = getCsrfToken();
+        return axios.post(url, data, {
+            headers: {
+                'X-CSRF-TOKEN': token,
+            },
+        });
+    };
+
     // Determine current step based on integration state
     useEffect(() => {
         if (!hasToken) {
@@ -123,7 +140,23 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
     const handleConnectFacebook = async () => {
         setConnecting(true);
         try {
-            const response = await axios.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/oauth-url`);
+            // Get fresh CSRF token
+            const csrfToken = getCsrfToken();
+            if (!csrfToken) {
+                alert('CSRF token not found. Please refresh the page and try again.');
+                setConnecting(false);
+                return;
+            }
+
+            const response = await axios.post(
+                `/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/oauth-url`,
+                {},
+                {
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                }
+            );
 
             if (response.data.success && response.data.url) {
                 // Open Facebook OAuth in a popup window
@@ -196,7 +229,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
     const loadPages = async () => {
         setLoadingPages(true);
         try {
-            const response = await axios.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/pages`);
+            const response = await axiosPost(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/pages`);
 
             if (response.data.success && response.data.pages) {
                 setPages(response.data.pages);
@@ -220,7 +253,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         
         setLoadingForms(true);
         try {
-            const response = await axios.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/forms`, {
+            const response = await axiosPost(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/forms`, {
                 page_id: selectedPageId,
             });
 
@@ -246,7 +279,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         
         setLoadingFields(true);
         try {
-            const response = await axios.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/form-fields`, {
+            const response = await axiosPost(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/form-fields`, {
                 form_id: selectedFormId,
                 page_id: selectedPageId,
             });
@@ -313,7 +346,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
     const handleSyncLeads = async () => {
         setSyncing(true);
         try {
-            const response = await axios.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/sync-leads`);
+            const response = await axiosPost(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/sync-leads`);
 
             if (response.data.success) {
                 alert(response.data.message || 'Leads synced successfully!');
@@ -355,7 +388,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
 
                 {/* Progress Steps */}
                 <div className="flex items-center gap-2 text-sm">
-                    <div className={`flex items-center gap-2 ${currentStep === 'setup' ? 'text-blue-600 font-semibold' : currentStep !== 'setup' ? 'text-green-600' : 'text-neutral-500'}`}>
+                    <div className={`flex items-center gap-2 ${currentStep === 'setup' ? 'text-blue-600 font-semibold' : hasToken ? 'text-green-600' : 'text-neutral-500'}`}>
                         {currentStep !== 'setup' && hasToken ? (
                             <CheckCircle2 className="h-4 w-4" />
                         ) : (
