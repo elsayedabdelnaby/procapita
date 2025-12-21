@@ -10,6 +10,42 @@ import { Facebook, CheckCircle2, AlertCircle, Loader2, RefreshCw } from 'lucide-
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 
+// Configure axios to include CSRF token
+axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+axios.defaults.withCredentials = true;
+
+// Get CSRF token from meta tag or cookie (called dynamically)
+const getCsrfToken = (): string => {
+    // Try meta tag first (most reliable)
+    const metaTag = document.querySelector('meta[name="csrf-token"]');
+    if (metaTag) {
+        const token = metaTag.getAttribute('content');
+        if (token) {
+            return token;
+        }
+    }
+    
+    // Fallback to cookie (Laravel sets XSRF-TOKEN cookie)
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'XSRF-TOKEN') {
+            return decodeURIComponent(value);
+        }
+    }
+    
+    return '';
+};
+
+// Create axios interceptor to add CSRF token to each request
+axios.interceptors.request.use((config) => {
+    const token = getCsrfToken();
+    if (token) {
+        config.headers['X-CSRF-TOKEN'] = token;
+    }
+    return config;
+});
+
 interface FacebookIntegrationProps {
     ridingCompany: {
         id: number;
@@ -160,26 +196,20 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
     const loadPages = async () => {
         setLoadingPages(true);
         try {
-            const response = await fetch(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/pages`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                },
-            });
+            const response = await axios.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/pages`);
 
-            const data = await response.json();
-            if (data.success && data.pages) {
-                setPages(data.pages);
-                if (data.pages.length === 0) {
+            if (response.data.success && response.data.pages) {
+                setPages(response.data.pages);
+                if (response.data.pages.length === 0) {
                     alert('No Facebook pages found. Make sure you have pages associated with your Facebook account.');
                 }
             } else {
-                alert(data.error || 'Failed to load Facebook pages. Please try reconnecting your account.');
+                alert(response.data.error || 'Failed to load Facebook pages. Please try reconnecting your account.');
             }
         } catch (error: any) {
             console.error('Error loading pages:', error);
-            alert('Error loading pages: ' + (error.message || 'Unknown error'));
+            const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'Unknown error';
+            alert('Error loading pages: ' + errorMessage);
         } finally {
             setLoadingPages(false);
         }
@@ -190,27 +220,22 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         
         setLoadingForms(true);
         try {
-            const response = await fetch(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/forms`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                },
-                body: JSON.stringify({ page_id: selectedPageId }),
+            const response = await axios.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/forms`, {
+                page_id: selectedPageId,
             });
 
-            const data = await response.json();
-            if (data.success && data.forms) {
-                setForms(data.forms);
-                if (data.forms.length === 0) {
+            if (response.data.success && response.data.forms) {
+                setForms(response.data.forms);
+                if (response.data.forms.length === 0) {
                     alert('No lead forms found for this page. Make sure you have created Lead Ads forms in Facebook Ads Manager.');
                 }
             } else {
-                alert(data.error || 'Failed to load forms. Please try selecting a different page.');
+                alert(response.data.error || 'Failed to load forms. Please try selecting a different page.');
             }
         } catch (error: any) {
             console.error('Error loading forms:', error);
-            alert('Error loading forms: ' + (error.message || 'Unknown error'));
+            const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'Unknown error';
+            alert('Error loading forms: ' + errorMessage);
         } finally {
             setLoadingForms(false);
         }
@@ -221,27 +246,23 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         
         setLoadingFields(true);
         try {
-            const response = await fetch(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/form-fields`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                },
-                body: JSON.stringify({ form_id: selectedFormId, page_id: selectedPageId }),
+            const response = await axios.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/form-fields`, {
+                form_id: selectedFormId,
+                page_id: selectedPageId,
             });
 
-            const data = await response.json();
-            if (data.success && data.fields) {
-                setFormFields(data.fields);
-                if (data.fields.length === 0) {
+            if (response.data.success && response.data.fields) {
+                setFormFields(response.data.fields);
+                if (response.data.fields.length === 0) {
                     alert('No fields found in this form. The form might be empty or there was an error loading it.');
                 }
             } else {
-                alert(data.error || 'Failed to load form fields. Please try selecting a different form.');
+                alert(response.data.error || 'Failed to load form fields. Please try selecting a different form.');
             }
         } catch (error: any) {
             console.error('Error loading form fields:', error);
-            alert('Error loading form fields: ' + (error.message || 'Unknown error'));
+            const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'Unknown error';
+            alert('Error loading form fields: ' + errorMessage);
         } finally {
             setLoadingFields(false);
         }
@@ -292,23 +313,17 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
     const handleSyncLeads = async () => {
         setSyncing(true);
         try {
-            const response = await fetch(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/sync-leads`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                },
-            });
+            const response = await axios.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/sync-leads`);
 
-            const data = await response.json();
-            if (data.success) {
-                alert(data.message || 'Leads synced successfully!');
+            if (response.data.success) {
+                alert(response.data.message || 'Leads synced successfully!');
             } else {
-                alert(data.error || 'Failed to sync leads');
+                alert(response.data.error || 'Failed to sync leads');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error syncing leads:', error);
-            alert('Error syncing leads');
+            const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'Unknown error';
+            alert('Error syncing leads: ' + errorMessage);
         } finally {
             setSyncing(false);
         }
