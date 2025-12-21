@@ -61,8 +61,8 @@ class CompanyController extends Controller
         // Set team context for Spatie Permission to load roles correctly
         setPermissionsTeamId($id);
 
-        // Load company users with roles
-        $users = $company->users()->with('roles')->get();
+        // Load company users with roles and riding company
+        $users = $company->users()->with('roles', 'ridingCompany')->get();
 
         // Load company roles with hierarchy, ordered by level (lowest first)
         $roles = $company->roles()
@@ -106,6 +106,20 @@ class CompanyController extends Controller
                 ];
             });
 
+        // Load riding companies for this company
+        $ridingCompanies = [];
+        if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+            $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $id)
+                ->orderBy('name')
+                ->get()
+                ->map(function ($ridingCompany) {
+                    return [
+                        'id' => $ridingCompany->id,
+                        'name' => $ridingCompany->name,
+                    ];
+                });
+        }
+
         return Inertia::render('Core/Companies/Show', [
             'company' => $company->load('users', 'roles'),
             'statistics' => $statistics,
@@ -113,6 +127,7 @@ class CompanyController extends Controller
             'roles' => $roles,
             'roleHierarchy' => $roleHierarchy,
             'activities' => $activities,
+            'ridingCompanies' => $ridingCompanies,
         ]);
     }
 

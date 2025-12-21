@@ -2,12 +2,14 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Company, Role } from '@/types/core';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { type SharedData } from '@/types';
 import axios from 'axios';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface RidingCompany {
@@ -15,28 +17,44 @@ interface RidingCompany {
     name: string;
 }
 
+interface Permission {
+    id: number;
+    name: string;
+    action?: string;
+    module_name?: string | null;
+    entity_name?: string | null;
+}
+
 interface UserCreateProps {
     companies?: Company[];
     roles: Role[];
     company?: Company;
     ridingCompanies?: RidingCompany[];
+    permissions?: Record<string, Record<string, Permission[]>>;
+    defaultRidingCompanyId?: string | number;
 }
 
-export default function UserCreate({ companies, roles, company, ridingCompanies: initialRidingCompanies = [] }: UserCreateProps) {
+export default function UserCreate({ companies, roles, company, ridingCompanies: initialRidingCompanies = [], permissions = {}, defaultRidingCompanyId }: UserCreateProps) {
     const page = usePage<SharedData>();
     const { selectedCompany } = page.props;
     
     const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies);
     const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
+    const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
+    const [expandedEntities, setExpandedEntities] = useState<Record<string, boolean>>({});
+    const [showCompanyAdminConfirm, setShowCompanyAdminConfirm] = useState(false);
 
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         email: '',
+        mobile1: '',
+        mobile2: '',
         password: '',
         password_confirmation: '',
         company_id: selectedCompany ? String(selectedCompany.id) : (company?.id || ''),
-        riding_company_id: '',
+        riding_company_id: defaultRidingCompanyId ? String(defaultRidingCompanyId) : '',
         roles: [] as number[],
+        permissions: [] as number[],
         is_company_admin: false,
         is_active: true,
     });
@@ -94,8 +112,48 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
         }
     }, [selectedCompany?.id, company?.id]);
 
+    // When is_company_admin is checked, clear riding_company_id
+    const handleCompanyAdminChange = (checked: boolean) => {
+        if (checked && data.riding_company_id) {
+            // Clear riding company when setting as company admin
+            setData('riding_company_id', '');
+        }
+        setData('is_company_admin', checked);
+    };
+
+    // When riding_company_id is selected, uncheck is_company_admin
+    const handleRidingCompanyChange = (value: string) => {
+        if (value && data.is_company_admin) {
+            // Uncheck company admin when selecting a riding company
+            setData('is_company_admin', false);
+        }
+        setData('riding_company_id', value);
+    };
+
+    // Get company name for confirmation dialog
+    const getCompanyName = () => {
+        if (selectedCompany) return selectedCompany.name;
+        if (company) return company.name;
+        if (companies && data.company_id) {
+            const comp = companies.find(c => c.id === Number(data.company_id));
+            return comp?.name || '';
+        }
+        return '';
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Check if company admin is selected - show confirmation
+        if (data.is_company_admin) {
+            setShowCompanyAdminConfirm(true);
+            return;
+        }
+        
+        submitForm();
+    };
+
+    const submitForm = () => {
         if (company) {
             post(`/core/companies/${company.id}/users`);
         } else {
@@ -103,11 +161,69 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
         }
     };
 
+    const handleCompanyAdminConfirm = () => {
+        setShowCompanyAdminConfirm(false);
+        submitForm();
+    };
+
     const handleRoleToggle = (roleId: number, checked: boolean) => {
         if (checked) {
+            // If selecting a role, clear all direct permissions
+            setData('permissions', []);
             setData('roles', [...data.roles, roleId]);
         } else {
             setData('roles', data.roles.filter((id) => id !== roleId));
+        }
+    };
+
+    const handlePermissionToggle = (permissionId: number, checked: boolean) => {
+        if (checked) {
+            // If selecting a direct permission, clear all roles
+            setData('roles', []);
+            setData('permissions', [...(data.permissions || []), permissionId]);
+        } else {
+            setData('permissions', (data.permissions || []).filter((id) => id !== permissionId));
+        }
+    };
+
+    const toggleModule = (moduleName: string) => {
+        setExpandedModules((prev) => ({
+            ...prev,
+            [moduleName]: !prev[moduleName],
+        }));
+    };
+
+    const toggleEntity = (moduleName: string, entityName: string) => {
+        const key = `${moduleName}-${entityName}`;
+        setExpandedEntities((prev) => ({
+            ...prev,
+            [key]: !prev[key],
+        }));
+    };
+
+    const handleSelectAllModule = (moduleName: string, checked: boolean) => {
+        const modulePermissions = Object.values(permissions[moduleName] || {})
+            .flat()
+            .map((p) => p.id);
+        
+        if (checked) {
+            // If selecting permissions, clear all roles
+            setData('roles', []);
+            setData('permissions', [...new Set([...(data.permissions || []), ...modulePermissions])]);
+        } else {
+            setData('permissions', (data.permissions || []).filter((id) => !modulePermissions.includes(id)));
+        }
+    };
+
+    const handleSelectAllEntity = (moduleName: string, entityName: string, checked: boolean) => {
+        const entityPermissions = (permissions[moduleName]?.[entityName] || []).map((p) => p.id);
+        
+        if (checked) {
+            // If selecting permissions, clear all roles
+            setData('roles', []);
+            setData('permissions', [...new Set([...(data.permissions || []), ...entityPermissions])]);
+        } else {
+            setData('permissions', (data.permissions || []).filter((id) => !entityPermissions.includes(id)));
         }
     };
 
@@ -144,6 +260,23 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                                 onChange={(e) => setData('email', e.target.value)}
                                 error={errors.email}
                                 required
+                            />
+
+                            <FormField
+                                label="Mobile 1"
+                                name="mobile1"
+                                value={data.mobile1}
+                                onChange={(e) => setData('mobile1', e.target.value)}
+                                error={errors.mobile1}
+                                required
+                            />
+
+                            <FormField
+                                label="Mobile 2"
+                                name="mobile2"
+                                value={data.mobile2}
+                                onChange={(e) => setData('mobile2', e.target.value)}
+                                error={errors.mobile2}
                             />
 
                             <FormField
@@ -204,7 +337,7 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                                     id="riding_company_id"
                                     name="riding_company_id"
                                     value={data.riding_company_id}
-                                    onChange={(e) => setData('riding_company_id', e.target.value)}
+                                    onChange={(e) => handleRidingCompanyChange(e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
                                     disabled={loadingRidingCompanies || !data.company_id}
                                 >
@@ -212,7 +345,7 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                                         {loadingRidingCompanies
                                             ? 'Loading...'
                                             : !data.company_id
-                                              ? 'اختر company أولاً'
+                                              ? 'Select company first'
                                               : 'Select a riding company (optional)'}
                                     </option>
                                     {ridingCompanies.map((ridingCompany) => (
@@ -234,10 +367,20 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
 
                         <div className="space-y-4">
                             <h2 className="text-lg font-semibold">Roles & Permissions</h2>
+                            
+                            <div className="rounded-md bg-blue-50 p-4 dark:bg-blue-900/20">
+                                <p className="text-sm text-blue-900 dark:text-blue-100">
+                                    <strong>Choose one of the following:</strong>
+                                </p>
+                                <ul className="mt-2 list-disc list-inside text-sm text-blue-900 dark:text-blue-100 space-y-1">
+                                    <li><strong>Assign Roles:</strong> User will inherit permissions from selected roles (hierarchy-based)</li>
+                                    <li><strong>Direct Permissions:</strong> User will have specific permissions assigned directly (outside hierarchy)</li>
+                                </ul>
+                            </div>
 
                             {roles && roles.length > 0 ? (
                                 <div className="space-y-2">
-                                    <Label>Assign Roles</Label>
+                                    <Label>Assign Roles (from hierarchy)</Label>
                                     <div className="space-y-2 rounded-md border p-4">
                                         {roles.map((role) => (
                                             <div key={role.id} className="flex items-center space-x-2">
@@ -272,12 +415,215 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                                 </p>
                             )}
 
+                            {Object.keys(permissions).length > 0 && (
+                                <div className="space-y-2">
+                                    <Label>Direct Permissions (outside hierarchy)</Label>
+                                    <div className="max-h-[600px] space-y-2 overflow-y-auto rounded-md border p-4">
+                                        {Object.entries(permissions).map(([moduleName, entities]) => {
+                                            const modulePermissions = Object.values(entities)
+                                                .flat()
+                                                .map((p) => p.id);
+                                            const allModuleSelected =
+                                                modulePermissions.length > 0 &&
+                                                modulePermissions.every((id) =>
+                                                    data.permissions?.includes(id)
+                                                );
+                                            const isModuleExpanded = expandedModules[moduleName] ?? false;
+
+                                            return (
+                                                <div
+                                                    key={moduleName}
+                                                    className="rounded-md border border-neutral-200 dark:border-neutral-800"
+                                                >
+                                                    <div
+                                                        className="flex items-center gap-2 border-b bg-neutral-50 p-3 dark:bg-neutral-900/50"
+                                                        onClick={() => toggleModule(moduleName)}
+                                                    >
+                                                        <button
+                                                            type="button"
+                                                            className="flex items-center justify-center"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleModule(moduleName);
+                                                            }}
+                                                        >
+                                                            {isModuleExpanded ? (
+                                                                <ChevronDown className="h-4 w-4" />
+                                                            ) : (
+                                                                <ChevronRight className="h-4 w-4" />
+                                                            )}
+                                                        </button>
+                                                        <Checkbox
+                                                            id={`module-${moduleName}`}
+                                                            checked={allModuleSelected}
+                                                            onCheckedChange={(checked) =>
+                                                                handleSelectAllModule(
+                                                                    moduleName,
+                                                                    checked as boolean
+                                                                )
+                                                            }
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                        <Label
+                                                            htmlFor={`module-${moduleName}`}
+                                                            className="flex-1 cursor-pointer text-base font-semibold capitalize"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleModule(moduleName);
+                                                            }}
+                                                        >
+                                                            {moduleName} Module
+                                                        </Label>
+                                                        <span className="text-xs text-neutral-500">
+                                                            ({modulePermissions.length} permissions)
+                                                        </span>
+                                                    </div>
+
+                                                    {isModuleExpanded && (
+                                                        <div className="p-3 space-y-3">
+                                                            {Object.entries(entities).map(
+                                                                ([entityName, entityPermissions]) => {
+                                                                    const entityPermissionIds =
+                                                                        entityPermissions.map(
+                                                                            (p) => p.id
+                                                                        );
+                                                                    const allEntitySelected =
+                                                                        entityPermissionIds.length > 0 &&
+                                                                        entityPermissionIds.every((id) =>
+                                                                            data.permissions?.includes(id)
+                                                                        );
+                                                                    const entityKey = `${moduleName}-${entityName}`;
+                                                                    const isEntityExpanded =
+                                                                        expandedEntities[entityKey] ?? true;
+
+                                                                    return (
+                                                                        <div
+                                                                            key={entityName}
+                                                                            className="rounded-md border border-neutral-200 dark:border-neutral-800"
+                                                                        >
+                                                                            <div
+                                                                                className="flex items-center gap-2 bg-neutral-50/50 p-2 dark:bg-neutral-900/30"
+                                                                                onClick={() =>
+                                                                                    toggleEntity(
+                                                                                        moduleName,
+                                                                                        entityName
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="flex items-center justify-center"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        toggleEntity(
+                                                                                            moduleName,
+                                                                                            entityName
+                                                                                        );
+                                                                                    }}
+                                                                                >
+                                                                                    {isEntityExpanded ? (
+                                                                                        <ChevronDown className="h-4 w-4" />
+                                                                                    ) : (
+                                                                                        <ChevronRight className="h-4 w-4" />
+                                                                                    )}
+                                                                                </button>
+                                                                                <Checkbox
+                                                                                    id={`entity-${moduleName}-${entityName}`}
+                                                                                    checked={
+                                                                                        allEntitySelected
+                                                                                    }
+                                                                                    onCheckedChange={(
+                                                                                        checked
+                                                                                    ) =>
+                                                                                        handleSelectAllEntity(
+                                                                                            moduleName,
+                                                                                            entityName,
+                                                                                            checked as boolean
+                                                                                        )
+                                                                                    }
+                                                                                    onClick={(e) =>
+                                                                                        e.stopPropagation()
+                                                                                    }
+                                                                                />
+                                                                                <Label
+                                                                                    htmlFor={`entity-${moduleName}-${entityName}`}
+                                                                                    className="flex-1 cursor-pointer font-medium capitalize"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        toggleEntity(
+                                                                                            moduleName,
+                                                                                            entityName
+                                                                                        );
+                                                                                    }}
+                                                                                >
+                                                                                    {entityName}
+                                                                                </Label>
+                                                                                <span className="text-xs text-neutral-500">
+                                                                                    ({entityPermissionIds.length}{' '}
+                                                                                    permissions)
+                                                                                </span>
+                                                                            </div>
+
+                                                                            {isEntityExpanded && (
+                                                                                <div className="p-3 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+                                                                                    {entityPermissions.map(
+                                                                                        (permission) => (
+                                                                                            <div
+                                                                                                key={
+                                                                                                    permission.id
+                                                                                                }
+                                                                                                className="flex items-center gap-2"
+                                                                                            >
+                                                                                                <Checkbox
+                                                                                                    id={`permission-${permission.id}`}
+                                                                                                    checked={data.permissions?.includes(
+                                                                                                        permission.id
+                                                                                                    )}
+                                                                                                    onCheckedChange={(
+                                                                                                        checked
+                                                                                                    ) =>
+                                                                                                        handlePermissionToggle(
+                                                                                                            permission.id,
+                                                                                                            checked as boolean
+                                                                                                        )
+                                                                                                    }
+                                                                                                />
+                                                                                                <Label
+                                                                                                    htmlFor={`permission-${permission.id}`}
+                                                                                                    className="text-sm font-normal capitalize cursor-pointer"
+                                                                                                >
+                                                                                                    {permission.action ||
+                                                                                                        permission.name.split(
+                                                                                                            '.'
+                                                                                                        )[2]}
+                                                                                                </Label>
+                                                                                            </div>
+                                                                                        )
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {errors.permissions && (
+                                        <p className="text-sm text-red-500">{errors.permissions}</p>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="flex items-center space-x-2">
                                 <Checkbox
                                     id="is_company_admin"
                                     checked={data.is_company_admin}
                                     onCheckedChange={(checked) =>
-                                        setData('is_company_admin', checked as boolean)
+                                        handleCompanyAdminChange(checked as boolean)
                                     }
                                 />
                                 <Label htmlFor="is_company_admin">Company Administrator</Label>
@@ -308,6 +654,27 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                     </form>
                 </Card>
             </div>
+
+            {/* Company Admin Confirmation Dialog */}
+            <Dialog open={showCompanyAdminConfirm} onOpenChange={setShowCompanyAdminConfirm}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Company Administrator Confirmation</DialogTitle>
+                        <DialogDescription className="pt-4">
+                            By setting <strong>{data.name || 'this user'}</strong> as a Company Administrator for <strong>{getCompanyName()}</strong>, 
+                            they will have access to view and manage <strong>all Riding Companies</strong> belonging to {getCompanyName()}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => setShowCompanyAdminConfirm(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleCompanyAdminConfirm}>
+                            OK
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

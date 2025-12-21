@@ -133,12 +133,65 @@ class HandleInertiaRequests extends Middleware
         // Get selected company for super admin
         $selectedCompany = null;
         $companies = collect([]);
+        $ridingCompanies = collect([]);
+        $selectedRidingCompany = null;
+        
         if ($user && $user->isSuperAdmin()) {
             $selectedCompanyId = $request->session()->get('selected_company_id');
             if ($selectedCompanyId) {
                 $selectedCompany = \Modules\Core\app\Models\Company::find($selectedCompanyId);
+            } else {
+                // If no company is selected, default to Tradeway
+                $tradewayCompany = \Modules\Core\app\Models\Company::where(function ($query) {
+                    $query->where('name', 'Tradeway')
+                        ->orWhere('slug', 'tradeway');
+                })
+                ->active()
+                ->first();
+                
+                if ($tradewayCompany) {
+                    $selectedCompany = $tradewayCompany;
+                    // Set it in session so it persists
+                    $request->session()->put('selected_company_id', $tradewayCompany->id);
+                } else {
+                    // If Tradeway doesn't exist, select the first active company
+                    $firstCompany = \Modules\Core\app\Models\Company::active()->orderBy('name')->first();
+                    if ($firstCompany) {
+                        $selectedCompany = $firstCompany;
+                        $request->session()->put('selected_company_id', $firstCompany->id);
+                    }
+                }
             }
             $companies = \Modules\Core\app\Models\Company::active()->orderBy('name')->get(['id', 'name', 'logo']);
+            
+            // Load riding companies for the selected company
+            if ($selectedCompany) {
+                $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $selectedCompany->id)
+                    ->active()
+                    ->orderBy('name')
+                    ->get(['id', 'name']);
+                    
+                // Get selected riding company from session
+                $selectedRidingCompanyId = $request->session()->get('selected_riding_company_id');
+                if ($selectedRidingCompanyId) {
+                    $selectedRidingCompany = $ridingCompanies->firstWhere('id', $selectedRidingCompanyId);
+                }
+            }
+        } elseif ($user && $user->is_company_admin && !$user->riding_company_id) {
+            // Company admin without specific riding company - can see all riding companies in their company
+            $companyId = $user->company_id;
+            if ($companyId) {
+                $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $companyId)
+                    ->active()
+                    ->orderBy('name')
+                    ->get(['id', 'name']);
+                    
+                // Get selected riding company from session
+                $selectedRidingCompanyId = $request->session()->get('selected_riding_company_id');
+                if ($selectedRidingCompanyId) {
+                    $selectedRidingCompany = $ridingCompanies->firstWhere('id', $selectedRidingCompanyId);
+                }
+            }
         }
 
         // Load user permissions if user exists (both direct and through roles)
@@ -150,7 +203,7 @@ class HandleInertiaRequests extends Middleware
             }
             
             // Load permissions through roles and direct permissions
-            $user->load(['roles.permissions', 'permissions', 'company']);
+            $user->load(['roles.permissions', 'permissions', 'company', 'ridingCompany']);
             
             // Get all permissions (from roles + direct)
             $allPermissions = $user->getAllPermissions();
@@ -169,11 +222,16 @@ class HandleInertiaRequests extends Middleware
                     'is_super_admin' => $user->is_super_admin ?? false,
                     'is_company_admin' => $user->is_company_admin ?? false,
                     'company_id' => $user->company_id,
+                    'riding_company_id' => $user->riding_company_id,
                     'company' => $user->company ? [
                         'id' => $user->company->id,
                         'name' => $user->company->name,
                         'logo' => $user->company->logo,
                         'logo_url' => $user->company->logo_url,
+                    ] : null,
+                    'riding_company' => $user->ridingCompany ? [
+                        'id' => $user->ridingCompany->id,
+                        'name' => $user->ridingCompany->name,
                     ] : null,
                     'permissions' => $allPermissions->map(fn($p) => [
                         'id' => $p->id,
@@ -205,6 +263,14 @@ class HandleInertiaRequests extends Middleware
                 'logo' => $c->logo,
                 'logo_url' => $c->logo_url,
             ])->toArray(),
+            'ridingCompanies' => $ridingCompanies->map(fn($rc) => [
+                'id' => $rc->id,
+                'name' => $rc->name,
+            ])->toArray(),
+            'selectedRidingCompany' => $selectedRidingCompany ? [
+                'id' => $selectedRidingCompany->id,
+                'name' => $selectedRidingCompany->name,
+            ] : null,
         ];
     }
 
@@ -337,9 +403,9 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
-        // Riding Car Companies Module - Only for non-super admin users
+        // Riding Car Companies Module - For Company Admin and users with access
         // Super admin sees Riding Companies under Core group
-        if (! $user->isSuperAdmin() && ($user->canAccessModule('ridingcarcompanies') || $user->isSuperAdmin())) {
+        if (! $user->isSuperAdmin() && ($user->canAccessModule('ridingcarcompanies') || $user->isCompanyAdmin())) {
             $ridingCarItems = [];
 
             // Riding Companies

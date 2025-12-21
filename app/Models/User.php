@@ -29,6 +29,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'mobile1',
+        'mobile2',
         'company_id',
         'riding_company_id',
         'is_super_admin',
@@ -109,6 +111,10 @@ class User extends Authenticatable
         }
 
         if ($this->isCompanyAdmin()) {
+            // Company Admin has access to RidingCarCompanies module by default
+            if ($moduleName === 'ridingcarcompanies') {
+                return true;
+            }
             return $this->company?->hasModule($moduleName) ?? false;
         }
 

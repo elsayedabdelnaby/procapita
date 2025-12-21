@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\RidingCarCompanies\app\Http\Controllers\FacebookIntegrationController;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
@@ -9,6 +10,10 @@ Route::get('/', function () {
         'canRegister' => Features::enabled(Features::registration()),
     ]);
 })->name('home');
+
+// Facebook OAuth callback (outside auth middleware as it comes from Facebook)
+Route::get('ridingcarcompanies/facebook/callback', [FacebookIntegrationController::class, 'callback'])
+    ->name('ridingcarcompanies.facebook.callback');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {

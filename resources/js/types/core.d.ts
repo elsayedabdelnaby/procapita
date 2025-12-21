@@ -54,12 +54,21 @@ export interface Permission {
     updated_at: string;
 }
 
+export interface RidingCompany {
+    id: number;
+    name: string;
+}
+
 export interface CoreUser extends User {
     company_id: number | null;
+    riding_company_id?: number | null;
+    mobile1?: string;
+    mobile2?: string | null;
     is_super_admin: boolean;
     is_company_admin: boolean;
     is_active: boolean;
     company?: Company;
+    ridingCompany?: RidingCompany;
     roles?: Role[];
     permissions?: Permission[];
 }

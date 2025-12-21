@@ -30,6 +30,11 @@ class RidingCompany extends Model
         'api_settings',
         'active',
         'created_by',
+        'default_driver_user_id',
+        'distribution_type',
+        'max_drivers_per_day',
+        'distribution_users',
+        'last_distribution_date',
     ];
 
     protected function casts(): array
@@ -37,6 +42,8 @@ class RidingCompany extends Model
         return [
             'active' => 'boolean',
             'api_settings' => 'array',
+            'distribution_users' => 'array',
+            'last_distribution_date' => 'date',
         ];
     }
 
@@ -101,6 +108,11 @@ class RidingCompany extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function defaultDriverUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'default_driver_user_id');
     }
 
     public function scopeActive($query)

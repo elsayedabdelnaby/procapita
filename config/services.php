@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'facebook' => [
+        'app_id' => env('FACEBOOK_APP_ID'),
+        'app_secret' => env('FACEBOOK_APP_SECRET'),
+        'redirect_uri' => env('FACEBOOK_REDIRECT_URI', env('APP_URL') . '/ridingcarcompanies/facebook/callback'),
+    ],
+
 ];

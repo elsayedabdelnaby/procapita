@@ -34,22 +34,27 @@ class Driver extends Model
         'campaign_id',
         'lead_source_id',
         'assigned_to',
+        'assigned_time',
+        'last_assigned_time',
+        'last_assigned_by',
         'lead_status_id',
         'lead_status_comment',
         'next_follow_up',
-        'next_time',
         'last_follow_up',
         'lead_stage_id',
         'current_stage_id',
         'notes',
         'driver_num',
+        'duplicate',
     ];
 
     protected function casts(): array
     {
         return [
-            'next_follow_up' => 'date',
-            'last_follow_up' => 'date',
+            'next_follow_up' => 'datetime',
+            'last_follow_up' => 'datetime',
+            'assigned_time' => 'datetime',
+            'last_assigned_time' => 'datetime',
         ];
     }
 
@@ -60,6 +65,81 @@ class Driver extends Model
         static::creating(function ($model) {
             if (empty($model->uuid)) {
                 $model->uuid = (string) Str::uuid();
+            }
+        });
+
+        // Calculate duplicate count after saving
+        static::saved(function ($driver) {
+            $driverService = app(\Modules\Drivers\app\Services\DriverService::class);
+            
+            // Check if phone or whatsapp_phone was changed
+            $phoneChanged = $driver->wasChanged('phone');
+            $whatsappChanged = $driver->wasChanged('whatsapp_phone');
+            $wasCreated = $driver->wasRecentlyCreated;
+            
+            // Update duplicate count for this driver
+            if ($wasCreated || $phoneChanged || $whatsappChanged || !isset($driver->duplicate)) {
+                $duplicateCount = $driverService->calculateDuplicateCount($driver);
+                if (($driver->duplicate ?? 0) != $duplicateCount) {
+                    $driver->updateQuietly(['duplicate' => $duplicateCount]);
+                }
+            }
+            
+            // If phone or whatsapp_phone changed, update duplicate count for all affected drivers
+            if ($phoneChanged || $whatsappChanged) {
+                $oldPhone = $driver->getOriginal('phone');
+                $oldWhatsapp = $driver->getOriginal('whatsapp_phone');
+                $newPhone = $driver->phone;
+                $newWhatsapp = $driver->whatsapp_phone;
+                
+                // Get all drivers that had the old phone or whatsapp
+                $affectedIds = [];
+                if ($oldPhone) {
+                    $affectedIds = array_merge($affectedIds, Driver::where('id', '!=', $driver->id)
+                        ->where(function ($q) use ($oldPhone) {
+                            $q->where('phone', $oldPhone)->orWhere('whatsapp_phone', $oldPhone);
+                        })
+                        ->pluck('id')
+                        ->toArray());
+                }
+                if ($oldWhatsapp && $oldWhatsapp !== $oldPhone) {
+                    $affectedIds = array_merge($affectedIds, Driver::where('id', '!=', $driver->id)
+                        ->where(function ($q) use ($oldWhatsapp) {
+                            $q->where('phone', $oldWhatsapp)->orWhere('whatsapp_phone', $oldWhatsapp);
+                        })
+                        ->pluck('id')
+                        ->toArray());
+                }
+                
+                // Also get drivers with new phone/whatsapp
+                if ($newPhone) {
+                    $affectedIds = array_merge($affectedIds, Driver::where('id', '!=', $driver->id)
+                        ->where(function ($q) use ($newPhone) {
+                            $q->where('phone', $newPhone)->orWhere('whatsapp_phone', $newPhone);
+                        })
+                        ->pluck('id')
+                        ->toArray());
+                }
+                if ($newWhatsapp && $newWhatsapp !== $newPhone) {
+                    $affectedIds = array_merge($affectedIds, Driver::where('id', '!=', $driver->id)
+                        ->where(function ($q) use ($newWhatsapp) {
+                            $q->where('phone', $newWhatsapp)->orWhere('whatsapp_phone', $newWhatsapp);
+                        })
+                        ->pluck('id')
+                        ->toArray());
+                }
+                
+                // Update duplicate count for all affected drivers
+                $uniqueAffectedIds = array_unique($affectedIds);
+                foreach ($uniqueAffectedIds as $affectedId) {
+                    $affectedDriver = Driver::find($affectedId);
+                    if ($affectedDriver) {
+                        $duplicateCount = $driverService->calculateDuplicateCount($affectedDriver);
+                        if (($affectedDriver->duplicate ?? 0) != $duplicateCount) {
+                            $affectedDriver->updateQuietly(['duplicate' => $duplicateCount]);
+                        }
+                    }
+                }
             }
         });
 
@@ -232,6 +312,11 @@ class Driver extends Model
     public function assignedTo(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function lastAssignedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'last_assigned_by');
     }
 
     public function assignedUsers(): BelongsToMany

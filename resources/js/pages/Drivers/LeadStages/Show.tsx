@@ -8,6 +8,7 @@ import { Activity, Building2, Edit, Trash2, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { DeleteDialog } from '@/components/core/delete-dialog';
 import { usePermissions } from '@/hooks/use-permissions';
+import { formatDate } from '@/utils/date-format';
 
 interface RidingCompany {
     id: number;
@@ -206,13 +207,13 @@ export default function LeadStagesShow({ leadStage, activities = [] }: LeadStage
                                 <div>
                                     <p className="text-sm text-neutral-500">Created At</p>
                                     <p className="font-medium">
-                                        {new Date(leadStage.created_at).toLocaleString()}
+                                        {formatDate(leadStage.created_at)}
                                     </p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-neutral-500">Updated At</p>
                                     <p className="font-medium">
-                                        {new Date(leadStage.updated_at).toLocaleString()}
+                                        {formatDate(leadStage.updated_at)}
                                     </p>
                                 </div>
                             </div>

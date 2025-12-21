@@ -1389,7 +1389,7 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                                                 break;
                                                             case 'created_time':
                                                                 cellContent = followUp.created_time
-                                                                    ? formatDate(followUp.created_time) + ' ' + new Date(followUp.created_time).toLocaleTimeString()
+                                                                    ? formatDate(followUp.created_time)
                                                                     : 'N/A';
                                                                 break;
                                                             case 'riding_company':

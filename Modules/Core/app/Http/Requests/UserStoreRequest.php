@@ -22,6 +22,8 @@ class UserStoreRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'mobile1' => ['required', 'string', 'max:255'],
+            'mobile2' => ['nullable', 'string', 'max:255'],
             'password' => ['required', 'string', 'min:8'],
             'company_id' => ['required', 'integer', 'exists:companies,id'],
             'riding_company_id' => [
@@ -61,6 +63,7 @@ class UserStoreRequest extends FormRequest
             'name.required' => 'User name is required.',
             'email.required' => 'Email address is required.',
             'email.unique' => 'This email is already registered.',
+            'mobile1.required' => 'Mobile 1 is required.',
             'password.required' => 'Password is required.',
             'password.min' => 'Password must be at least 8 characters.',
             'company_id.required' => 'Company is required.',

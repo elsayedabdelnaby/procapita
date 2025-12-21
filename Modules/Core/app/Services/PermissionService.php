@@ -89,8 +89,13 @@ class PermissionService
             ->get();
 
         $grouped = [];
+        $seenIds = [];
 
         foreach ($permissions as $permission) {
+            if (in_array($permission->id, $seenIds)) {
+                continue;
+            }
+
             $module = $permission->module_name ?? 'system';
             $entity = $permission->entity_name ?? 'general';
 
@@ -103,6 +108,7 @@ class PermissionService
             }
 
             $grouped[$module][$entity][] = $permission;
+            $seenIds[] = $permission->id;
         }
 
         return $grouped;
@@ -152,5 +158,45 @@ class PermissionService
 
         return $created;
     }
-}
 
+    public function getGroupedPermissionsForUser(\App\Models\User $user): array
+    {
+        if ($user->isSuperAdmin() || $user->isCompanyAdmin()) {
+            return $this->getGroupedPermissions();
+        }
+
+        $userPermissions = $user->getAllPermissions();
+        $userPermissionNames = $userPermissions->pluck('name')->toArray();
+
+        $permissions = Permission::whereIn('name', $userPermissionNames)
+            ->orderBy('module_name')
+            ->orderBy('entity_name')
+            ->orderBy('action')
+            ->get();
+
+        $grouped = [];
+        $seenIds = [];
+
+        foreach ($permissions as $permission) {
+            if (in_array($permission->id, $seenIds)) {
+                continue;
+            }
+
+            $module = $permission->module_name ?? 'system';
+            $entity = $permission->entity_name ?? 'general';
+
+            if (! isset($grouped[$module])) {
+                $grouped[$module] = [];
+            }
+
+            if (! isset($grouped[$module][$entity])) {
+                $grouped[$module][$entity] = [];
+            }
+
+            $grouped[$module][$entity][] = $permission;
+            $seenIds[] = $permission->id;
+        }
+
+        return $grouped;
+    }
+}

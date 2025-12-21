@@ -31,6 +31,7 @@ class FortifyServiceProvider extends ServiceProvider
         $this->configureActions();
         $this->configureViews();
         $this->configureRateLimiting();
+        $this->configureRedirects();
     }
 
     /**
@@ -87,5 +88,30 @@ class FortifyServiceProvider extends ServiceProvider
 
             return Limit::perMinute(5)->by($throttleKey);
         });
+    }
+
+    /**
+     * Configure redirects after authentication.
+     */
+    private function configureRedirects(): void
+    {
+        // Auto-verify email for all users in non-production environments
+        // This allows login without email verification during development
+        if (config('app.env') !== 'production') {
+            Fortify::authenticateUsing(function (Request $request) {
+                $user = \App\Models\User::where('email', $request->email)->first();
+
+                if ($user && \Hash::check($request->password, $user->password)) {
+                    // Auto-verify email for development/testing
+                    if (! $user->hasVerifiedEmail()) {
+                        $user->markEmailAsVerified();
+                    }
+                    
+                    return $user;
+                }
+
+                return null;
+            });
+        }
     }
 }

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Core\app\Models\Company;
+use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
 class WhatsAppSession extends Model
 {
@@ -16,7 +17,9 @@ class WhatsAppSession extends Model
 
     protected $fillable = [
         'company_id',
+        'riding_company_id',
         'phone_number',
+        'contact_name',
         'session_id',
         'status',
         'qr_code',
@@ -37,6 +40,11 @@ class WhatsAppSession extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function ridingCompany(): BelongsTo
+    {
+        return $this->belongsTo(RidingCompany::class);
     }
 
     public function messages(): HasMany

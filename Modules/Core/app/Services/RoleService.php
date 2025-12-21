@@ -212,5 +212,50 @@ class RoleService
 
         return $newRole->fresh(['permissions']);
     }
+
+    /**
+     * Get roles that are below the current user in the hierarchy
+     * Returns only roles that are descendants of the user's roles
+     */
+    public function getSubordinateRolesForUser(\App\Models\User $user, ?int $companyId = null): Collection
+    {
+        if ($user->isSuperAdmin() || $user->isCompanyAdmin()) {
+            // Super admin and company admin can see all roles
+            return $this->getAllRoles($companyId);
+        }
+
+        $userRoleIds = $user->roles()->pluck('id')->toArray();
+        
+        if (empty($userRoleIds)) {
+            // If user has no roles, return empty collection
+            return collect();
+        }
+
+        // Get all user's roles
+        $userRoles = Role::whereIn('id', $userRoleIds)->get();
+        
+        // Get all descendant role IDs
+        $subordinateRoleIds = [];
+        foreach ($userRoles as $role) {
+            // Get all roles that are descendants of this role
+            $descendants = Role::where('hierarchy_path', 'like', $role->hierarchy_path . ':%')
+                ->where('team_id', $role->team_id)
+                ->pluck('id')
+                ->toArray();
+            $subordinateRoleIds = array_merge($subordinateRoleIds, $descendants);
+        }
+
+        // Include user's own roles
+        $allRoleIds = array_unique(array_merge($userRoleIds, $subordinateRoleIds));
+
+        // Get all roles with these IDs
+        $query = Role::whereIn('id', $allRoleIds)->with(['parent', 'children', 'permissions']);
+
+        if ($companyId) {
+            $query->forCompany($companyId);
+        }
+
+        return $query->orderBy('hierarchy_level')->orderBy('name')->get();
+    }
 }
 

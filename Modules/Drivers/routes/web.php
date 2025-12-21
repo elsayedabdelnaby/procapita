@@ -18,6 +18,7 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.drivers.read'])->group(function () {
         Route::get('drivers', [DriverController::class, 'index'])->name('drivers.index');
+        Route::get('drivers/recycle-bin', [DriverController::class, 'recycleBin'])->name('drivers.recycle-bin');
     });
 
     Route::middleware(['permission:drivers.drivers.export'])->group(function () {
@@ -37,6 +38,11 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
     Route::middleware(['permission:drivers.drivers.mass-edit'])->group(function () {
         Route::get('drivers/mass-edit', [DriverController::class, 'massEdit'])->name('drivers.mass-edit');
         Route::post('drivers/mass-update', [DriverController::class, 'massUpdate'])->name('drivers.mass-update');
+    });
+
+    // Merge route - must be before drivers/{driver} route to avoid route matching conflicts
+    Route::middleware(['permission:drivers.drivers.update'])->group(function () {
+        Route::post('drivers/merge', [DriverController::class, 'merge'])->name('drivers.merge');
     });
 
     Route::middleware(['permission:drivers.drivers.read'])->group(function () {

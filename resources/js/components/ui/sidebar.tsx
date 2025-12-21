@@ -685,7 +685,7 @@ function SidebarMenuSubButton({
         "data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground",
         size === "sm" && "text-xs",
         size === "md" && "text-sm",
-        "group-data-[collapsible=icon]:hidden",
+        "group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:[&>span]:hidden group-data-[collapsible=icon]:[&>svg]:block group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:-translate-x-0",
         className
       )}
       {...props}

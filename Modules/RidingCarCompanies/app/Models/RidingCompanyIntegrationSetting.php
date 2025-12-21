@@ -19,6 +19,12 @@ class RidingCompanyIntegrationSetting extends Model
         'type',
         'config',
         'active',
+        'facebook_access_token',
+        'facebook_user_id',
+        'facebook_page_id',
+        'facebook_form_id',
+        'facebook_field_mapping',
+        'facebook_token_expires_at',
     ];
 
     protected function casts(): array
@@ -26,6 +32,8 @@ class RidingCompanyIntegrationSetting extends Model
         return [
             'config' => 'array',
             'active' => 'boolean',
+            'facebook_field_mapping' => 'array',
+            'facebook_token_expires_at' => 'datetime',
         ];
     }
 

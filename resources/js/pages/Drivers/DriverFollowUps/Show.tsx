@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link } from '@inertiajs/react';
+import { formatDate } from '@/utils/date-format';
 
 interface Driver {
     id: number;
@@ -130,7 +131,7 @@ export default function DriverFollowUpsShow({ followUp }: DriverFollowUpsShowPro
                                 <p className="text-sm text-neutral-500">Created At</p>
                                 <p className="font-medium">
                                     {followUp.created_at
-                                        ? new Date(followUp.created_at).toLocaleString()
+                                        ? formatDate(followUp.created_at)
                                         : 'N/A'}
                                 </p>
                             </div>
@@ -139,7 +140,7 @@ export default function DriverFollowUpsShow({ followUp }: DriverFollowUpsShowPro
                                 <p className="text-sm text-neutral-500">Updated At</p>
                                 <p className="font-medium">
                                     {followUp.updated_at
-                                        ? new Date(followUp.updated_at).toLocaleString()
+                                        ? formatDate(followUp.updated_at)
                                         : 'N/A'}
                                 </p>
                             </div>

@@ -23,19 +23,6 @@ class RoleUpdateRequest extends FormRequest
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'guard_name' => ['nullable', 'string', 'max:255'],
-            'riding_company_id' => [
-                'nullable',
-                'integer',
-                'exists:riding_companies,id',
-                function ($attribute, $value, $fail) use ($companyId) {
-                    if ($value && $companyId) {
-                        $ridingCompany = \Modules\RidingCarCompanies\app\Models\RidingCompany::find($value);
-                        if ($ridingCompany && $ridingCompany->company_id != $companyId) {
-                            $fail('The selected riding company does not belong to this company.');
-                        }
-                    }
-                },
-            ],
             'parent_id' => ['nullable', 'integer', 'exists:roles,id'],
             'module_name' => ['nullable', 'string', 'max:255'],
             'entity_name' => ['nullable', 'string', 'max:255'],

@@ -40,6 +40,11 @@ export function UserInfo({
                         </span>
                     </div>
                 )}
+                {user.riding_company && (
+                    <span className="truncate text-xs text-muted-foreground">
+                        {user.riding_company.name}
+                    </span>
+                )}
             </div>
         </>
     );

@@ -12,6 +12,7 @@ interface FormFieldProps {
     required?: boolean;
     placeholder?: string;
     disabled?: boolean;
+    className?: string;
 }
 
 export function FormField({
@@ -24,6 +25,7 @@ export function FormField({
     required = false,
     placeholder,
     disabled = false,
+    className = '',
 }: FormFieldProps) {
     return (
         <div className="space-y-2">
@@ -39,7 +41,7 @@ export function FormField({
                 onChange={onChange}
                 placeholder={placeholder}
                 disabled={disabled}
-                className={error ? 'border-red-500' : ''}
+                className={`${error ? 'border-red-500' : ''} ${className}`}
             />
             {error && <p className="text-sm text-red-500">{error}</p>}
         </div>

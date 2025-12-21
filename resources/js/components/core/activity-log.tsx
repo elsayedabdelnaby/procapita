@@ -36,8 +36,8 @@ export function ActivityLog({ activities }: ActivityLogProps) {
     }
 
     const formatValue = (value: any): string => {
-        if (value === null || value === undefined) {
-            return '<em>empty</em>';
+        if (value === null || value === undefined || value === '') {
+            return 'empty';
         }
         if (typeof value === 'boolean') {
             return value ? 'Yes' : 'No';
@@ -49,8 +49,25 @@ export function ActivityLog({ activities }: ActivityLogProps) {
     };
 
     const getFieldLabel = (field: string): string => {
-        // Convert snake_case to Title Case
-        return field
+        const fieldLabels: Record<string, string> = {
+            'full_name': 'Full Name',
+            'phone': 'Phone',
+            'whatsapp_phone': 'WhatsApp Phone',
+            'email': 'Email',
+            'riding_company_id': 'Riding Company',
+            'campaign_id': 'Campaign',
+            'lead_source_id': 'Lead Source',
+            'assigned_to': 'Assigned To',
+            'assigned_users': 'Assigned Users',
+            'lead_status_id': 'Lead Status',
+            'lead_status_comment': 'Lead Status Comment',
+            'next_follow_up': 'Next Follow-up',
+            'last_follow_up': 'Last Follow-up',
+            'lead_stage_id': 'Lead Stage',
+            'current_stage_id': 'Current Stage',
+            'notes': 'Notes',
+        };
+        return fieldLabels[field] || field
             .split('_')
             .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
@@ -73,70 +90,74 @@ export function ActivityLog({ activities }: ActivityLogProps) {
                           }))
                     : [];
 
+                // Format date and time for tooltip
+                const fullDateTime = new Date(activity.created_at);
+                const dateTimeString = `${fullDateTime.toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                })} at ${fullDateTime.toLocaleTimeString('en-US', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: true 
+                })}`;
+
                 return (
-                    <Card key={activity.id} className="p-4">
-                        <div className="space-y-3">
-                            {/* Header */}
-                            <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                    <p className="font-medium text-sm">
+                    <div key={activity.id} className="border-l-2 border-blue-500 pl-4 py-3 bg-neutral-50 dark:bg-neutral-900/50 rounded-r">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 space-y-2">
+                                {activity.causer && (
+                                    <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                        Updated by <span className="font-semibold">{activity.causer.name}</span>
+                                    </p>
+                                )}
+                                
+                                {changes.length > 0 ? (
+                                    <div className="space-y-1">
+                                        {changes.map((change, index) => {
+                                            const fieldLabel = getFieldLabel(change.field);
+                                            const oldValue = formatValue(change.oldValue);
+                                            const newValue = formatValue(change.newValue);
+                                            
+                                            return (
+                                                <div key={index} className="text-sm">
+                                                    <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                                                        {fieldLabel}:
+                                                    </span>{' '}
+                                                    <span className="text-neutral-600 dark:text-neutral-400">
+                                                        Changed from{' '}
+                                                        <span className="line-through text-red-600 dark:text-red-400">
+                                                            {oldValue}
+                                                        </span>
+                                                        {' '}to{' '}
+                                                        <span className="text-green-600 dark:text-green-400 font-medium">
+                                                            {newValue}
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-neutral-600 dark:text-neutral-400">
                                         {activity.description}
                                     </p>
-                                    {activity.event && (
-                                        <Badge variant="outline" className="mt-1 text-xs">
-                                            {activity.event}
-                                        </Badge>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                    {activity.causer && (
-                                        <div className="flex items-center gap-1">
-                                            <User className="h-3 w-3" />
-                                            <span>{activity.causer.name}</span>
-                                        </div>
-                                    )}
-                                    <div className="flex items-center gap-1">
-                                        <Clock className="h-3 w-3" />
-                                        <RelativeDate date={activity.created_at} />
-                                    </div>
-                                </div>
+                                )}
+                                
+                                <p 
+                                    className="text-xs text-neutral-400 mt-2 cursor-help" 
+                                    title={dateTimeString}
+                                >
+                                    {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                                </p>
                             </div>
-
-                            {/* Changes */}
-                            {changes.length > 0 && (
-                                <div className="mt-3 space-y-2 border-t pt-3">
-                                    {changes.map((change, index) => (
-                                        <div
-                                            key={index}
-                                            className="grid grid-cols-1 gap-2 rounded-md bg-muted/50 p-2 text-sm md:grid-cols-3"
-                                        >
-                                            <div className="font-medium">
-                                                {getFieldLabel(change.field)}
-                                            </div>
-                                            <div className="text-muted-foreground">
-                                                <span className="font-medium">From:</span>{' '}
-                                                <span
-                                                    className="rounded bg-red-100 px-1.5 py-0.5 text-red-800 dark:bg-red-900/20 dark:text-red-400"
-                                                    dangerouslySetInnerHTML={{
-                                                        __html: formatValue(change.oldValue),
-                                                    }}
-                                                />
-                                            </div>
-                                            <div className="text-muted-foreground">
-                                                <span className="font-medium">To:</span>{' '}
-                                                <span
-                                                    className="rounded bg-green-100 px-1.5 py-0.5 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                                                    dangerouslySetInnerHTML={{
-                                                        __html: formatValue(change.newValue),
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                            {activity.event && (
+                                <Badge variant="outline" className="flex-shrink-0">
+                                    {activity.event}
+                                </Badge>
                             )}
                         </div>
-                    </Card>
+                    </div>
                 );
             })}
         </div>

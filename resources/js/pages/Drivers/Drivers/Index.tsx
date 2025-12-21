@@ -76,11 +76,12 @@ interface Driver {
     lead_status?: LeadStatus;
     lead_status_comment?: string;
     next_follow_up?: string;
-    next_time?: string;
     last_follow_up?: string;
+    assigned_time?: string;
     lead_stage?: LeadStage;
     created_at: string;
     updated_at: string;
+    duplicate?: number;
 }
 
 interface FilterOption {
@@ -110,6 +111,7 @@ interface DriversIndexProps {
 const ALL_DRIVER_COLUMNS = [
     { id: 'actions', label: 'Actions', defaultVisible: true, defaultOrder: 0 },
     { id: 'driver_num', label: 'Driver Num', defaultVisible: false, defaultOrder: 0.5 },
+    { id: 'duplicate', label: 'Duplicate', defaultVisible: false, defaultOrder: 0.6 },
     { id: 'name', label: 'Name', defaultVisible: true, defaultOrder: 1 },
     { id: 'phone', label: 'Phone', defaultVisible: true, defaultOrder: 2 },
     { id: 'whatsapp', label: 'WhatsApp', defaultVisible: true, defaultOrder: 3 },
@@ -120,10 +122,14 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 8 },
     { id: 'lead_status_comment', label: 'Feedback Comment', defaultVisible: false, defaultOrder: 8.5 },
     { id: 'next_follow_up', label: 'Next Follow-up', defaultVisible: false, defaultOrder: 8.6 },
-    { id: 'next_time', label: 'Next Time', defaultVisible: false, defaultOrder: 8.65 },
     { id: 'last_follow_up', label: 'Last Follow-up', defaultVisible: false, defaultOrder: 8.7 },
+    { id: 'assigned_time', label: 'Assigned Time', defaultVisible: false, defaultOrder: 8.8 },
     { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 9 },
-    { id: 'assigned_to', label: 'Assigned To', defaultVisible: true, defaultOrder: 10 },
+    { id: 'current_stage', label: 'Current Stage', defaultVisible: false, defaultOrder: 9.5 },
+    { id: 'assigned_users', label: 'Assigned Users', defaultVisible: true, defaultOrder: 10 },
+    { id: 'last_assigned_time', label: 'Last Assigned Time', defaultVisible: false, defaultOrder: 10.5 },
+    { id: 'last_assigned_by', label: 'Last Assigned By', defaultVisible: false, defaultOrder: 10.6 },
+    { id: 'notes', label: 'Notes', defaultVisible: false, defaultOrder: 10.7 },
     { id: 'uuid', label: 'UUID', defaultVisible: false, defaultOrder: 11 },
     { id: 'created_at', label: 'Created At', defaultVisible: false, defaultOrder: 12 },
     { id: 'updated_at', label: 'Updated At', defaultVisible: false, defaultOrder: 13 },
@@ -149,12 +155,67 @@ const TIME_OPTIONS = generateTimeOptions();
 export default function DriversIndex({ drivers = [], importAvailableFields, filterOptions = {} }: DriversIndexProps) {
     const page = usePage<SharedData>();
     
+    // Local state for optimistic updates
+    const [localDrivers, setLocalDrivers] = useState<Driver[]>(drivers);
+    
+    // Sync local drivers with props when they change
+    useEffect(() => {
+        setLocalDrivers(drivers);
+    }, [drivers]);
+    
     // Ensure drivers is always an array
-    const safeDrivers = Array.isArray(drivers) ? drivers : [];
+    const safeDrivers = Array.isArray(localDrivers) ? localDrivers : [];
     
     // Get selected company from page props (the company selected from under the logo)
     const selectedCompany = page.props.selectedCompany;
     const companyId = selectedCompany?.id || null;
+    
+    // Get user info for WhatsApp access
+    const currentUser = page.props.auth?.user;
+    const userRidingCompanyId = (currentUser as any)?.riding_company_id || null;
+    const isCompanyAdmin = currentUser?.is_company_admin || false;
+    const isSuperAdmin = currentUser?.is_super_admin || false;
+    
+    // Get selected riding company from sidebar (for admins)
+    const sidebarSelectedRidingCompany = (page.props as any).selectedRidingCompany;
+    const sidebarSelectedRidingCompanyId = sidebarSelectedRidingCompany?.id || null;
+    
+    // Get available riding companies for WhatsApp selector (for admins)
+    const availableRidingCompanies = useMemo(() => {
+        if (!isSuperAdmin && !isCompanyAdmin) return [];
+        
+        // Get unique riding companies from drivers
+        const ridingCompaniesMap = new Map<number, RidingCompany>();
+        safeDrivers.forEach(d => {
+            if (d.riding_company) {
+                ridingCompaniesMap.set(d.riding_company.id, d.riding_company);
+            }
+        });
+        return Array.from(ridingCompaniesMap.values());
+    }, [safeDrivers, isSuperAdmin, isCompanyAdmin]);
+    
+    // Selected riding company for WhatsApp (for admins)
+    const [selectedWhatsAppRidingCompanyId, setSelectedWhatsAppRidingCompanyId] = useState<number | null>(
+        sidebarSelectedRidingCompanyId || (availableRidingCompanies.length > 0 ? availableRidingCompanies[0]?.id : null)
+    );
+    
+    // Update selected riding company when sidebar selection or available companies change
+    useEffect(() => {
+        if (sidebarSelectedRidingCompanyId) {
+            setSelectedWhatsAppRidingCompanyId(sidebarSelectedRidingCompanyId);
+        } else if (availableRidingCompanies.length > 0 && !selectedWhatsAppRidingCompanyId) {
+            setSelectedWhatsAppRidingCompanyId(availableRidingCompanies[0].id);
+        }
+    }, [availableRidingCompanies, sidebarSelectedRidingCompanyId]);
+    
+    // Determine which riding company ID to use for WhatsApp
+    // If user has a specific riding company, use that
+    // Otherwise, use sidebar selection
+    const whatsAppRidingCompanyId = userRidingCompanyId || sidebarSelectedRidingCompanyId;
+    
+    // Hide WhatsApp button when "All Riding Companies" is selected (no specific riding company)
+    // Show only when user has a specific riding company OR admin selected a specific riding company from sidebar
+    const showWhatsAppButton = !!userRidingCompanyId || !!sidebarSelectedRidingCompanyId;
     
     // Debug: Log to help troubleshoot
     if (!companyId) {
@@ -162,35 +223,49 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     }
     
     // Get driver phone numbers assigned to current user (both phone and whatsapp_phone)
+    // Filter by selected riding company for WhatsApp
     const userDriverPhoneNumbers = useMemo(() => {
         const user = page.props.auth?.user;
         if (!user) return [];
         
         const phoneNumbers: string[] = [];
         
-        // If super admin or company admin, show all drivers
+        // Helper function to check if phone number is valid
+        const isValidPhone = (phone: string | null | undefined): boolean => {
+            if (!phone) return false;
+            const trimmed = phone.trim();
+            // Must have at least 5 digits and not be just "0" or empty
+            return trimmed.length >= 5 && trimmed !== '0' && /\d{5,}/.test(trimmed);
+        };
+        
+        // Filter drivers by the selected riding company for WhatsApp
+        const driversForWhatsApp = whatsAppRidingCompanyId
+            ? safeDrivers.filter(d => d.riding_company?.id === whatsAppRidingCompanyId)
+            : safeDrivers;
+        
+        // If super admin or company admin, show all drivers in the selected riding company
         if (user.is_super_admin || user.is_company_admin) {
-            safeDrivers.forEach(d => {
-                if (d.phone) phoneNumbers.push(d.phone);
-                if (d.whatsapp_phone) phoneNumbers.push(d.whatsapp_phone);
+            driversForWhatsApp.forEach(d => {
+                if (isValidPhone(d.phone)) phoneNumbers.push(d.phone!);
+                if (isValidPhone(d.whatsapp_phone)) phoneNumbers.push(d.whatsapp_phone!);
             });
         } else {
             // Otherwise, show only drivers assigned to this user
-            safeDrivers
+            driversForWhatsApp
                 .filter(driver => {
                     // Check if driver is assigned to this user
                     const assignedUsers = driver.assigned_users || [];
                     return assignedUsers.some((u: any) => u.id === user.id);
                 })
                 .forEach(d => {
-                    if (d.phone) phoneNumbers.push(d.phone);
-                    if (d.whatsapp_phone) phoneNumbers.push(d.whatsapp_phone);
+                    if (isValidPhone(d.phone)) phoneNumbers.push(d.phone!);
+                    if (isValidPhone(d.whatsapp_phone)) phoneNumbers.push(d.whatsapp_phone!);
                 });
         }
         
         // Remove duplicates
         return [...new Set(phoneNumbers)];
-    }, [safeDrivers, page.props.auth?.user]);
+    }, [safeDrivers, page.props.auth?.user, whatsAppRidingCompanyId]);
     const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; driver: Driver | null }>({
         open: false,
         driver: null,
@@ -223,6 +298,8 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [selectedDrivers, setSelectedDrivers] = useState<Set<number>>(new Set());
     const [massDeleteDialog, setMassDeleteDialog] = useState(false);
+    const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+    const [mergeDrivers, setMergeDrivers] = useState<Driver[]>([]);
     
     // Quick edit states
     const [editingRowId, setEditingRowId] = useState<number | null>(null);
@@ -234,6 +311,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     const [viewingDriver, setViewingDriver] = useState<Driver | null>(null);
     const [driverDetails, setDriverDetails] = useState<any>(null);
     const [driverActivities, setDriverActivities] = useState<any[]>([]);
+    const [driverDuplicateDrivers, setDriverDuplicateDrivers] = useState<any[]>([]);
     
     // WhatsApp Window states
     const [whatsappWindowOpen, setWhatsappWindowOpen] = useState(false);
@@ -246,7 +324,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     const [phoneMousePosition, setPhoneMousePosition] = useState<{ x: number; y: number } | null>(null);
     const [whatsappMousePosition, setWhatsappMousePosition] = useState<{ x: number; y: number } | null>(null);
     const [emailMousePosition, setEmailMousePosition] = useState<{ x: number; y: number } | null>(null);
-    const [viewDialogTab, setViewDialogTab] = useState<'overview' | 'updates' | 'followups'>('overview');
+    const [viewDialogTab, setViewDialogTab] = useState<'overview' | 'updates' | 'followups' | 'duplicates'>('overview');
     const [driverFollowUps, setDriverFollowUps] = useState<any[]>([]);
     const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const emailHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -340,13 +418,45 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         phone: '',
         whatsapp_phone: '',
         email: '',
-        riding_company: '',
+        riding_company_id: null,
         campaign_id: null,
         lead_source_id: null,
         lead_status_id: null,
         lead_status_comment: '',
         lead_stage_id: null,
         assigned_to: null,
+        last_assigned_time_from: '',
+        last_assigned_time_to: '',
+        last_assigned_time_from_time: '',
+        last_assigned_time_to_time: '',
+        next_follow_up_from: '',
+        next_follow_up_to: '',
+        next_follow_up_from_time: '',
+        next_follow_up_to_time: '',
+        last_follow_up_from: '',
+        last_follow_up_to: '',
+        last_follow_up_from_time: '',
+        last_follow_up_to_time: '',
+        assigned_time_from: '',
+        assigned_time_to: '',
+        assigned_time_from_time: '',
+        assigned_time_to_time: '',
+        created_at_from: '',
+        created_at_to: '',
+        created_at_from_time: '',
+        created_at_to_time: '',
+        updated_at_from: '',
+        updated_at_to: '',
+        updated_at_from_time: '',
+        updated_at_to_time: '',
+    });
+    const [dateRangeDropdownOpen, setDateRangeDropdownOpen] = useState<Record<string, boolean>>({
+        last_assigned_time: false,
+        next_follow_up: false,
+        last_follow_up: false,
+        assigned_time: false,
+        created_at: false,
+        updated_at: false,
     });
 
     const defaultAvailableFields = [
@@ -497,13 +607,13 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                     return false;
                 }
             }
-            // Riding Company filter (text search)
-            if (filters.riding_company) {
-                if (filters.riding_company === 'is_empty') {
-                    if (driver.riding_company?.name && driver.riding_company.name.trim() !== '') {
+            // Riding Company filter (dropdown)
+            if (filters.riding_company_id) {
+                if (filters.riding_company_id === 'is_empty') {
+                    if (driver.riding_company?.id) {
                         return false;
                     }
-                } else if (!driver.riding_company?.name || !driver.riding_company.name.toLowerCase().includes(String(filters.riding_company).toLowerCase())) {
+                } else if (driver.riding_company?.id !== filters.riding_company_id) {
                     return false;
                 }
             }
@@ -565,6 +675,249 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                     }
                 } else if (driver.assigned_to?.id !== filters.assigned_to) {
                     return false;
+                }
+            }
+            // Last Assigned Time filter (date range: from - to with time)
+            if (filters.last_assigned_time_from || filters.last_assigned_time_to) {
+                const lastAssignedTime = (driver as any).last_assigned_time;
+                if (!lastAssignedTime) {
+                    return false; // Skip if no last_assigned_time
+                }
+                
+                // Parse the date/time string (format: dd-mm-yyyy hh:mm AM/PM)
+                // Convert to Date object for comparison
+                try {
+                    // Parse format: "22-01-2025 02:30 PM"
+                    const parts = lastAssignedTime.split(' ');
+                    if (parts.length >= 2) {
+                        const datePart = parts[0]; // "22-01-2025"
+                        const timePart = parts.slice(1).join(' '); // "02:30 PM"
+                        
+                        const [day, month, year] = datePart.split('-').map(Number);
+                        const timeMatch = timePart.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                        
+                        if (timeMatch) {
+                            let hours = parseInt(timeMatch[1]);
+                            const minutes = parseInt(timeMatch[2]);
+                            const ampm = timeMatch[3].toUpperCase();
+                            
+                            if (ampm === 'PM' && hours !== 12) hours += 12;
+                            if (ampm === 'AM' && hours === 12) hours = 0;
+                            
+                            const driverDate = new Date(year, month - 1, day, hours, minutes);
+                            
+                            // Check from date/time
+                            if (filters.last_assigned_time_from) {
+                                const fromDate = new Date(String(filters.last_assigned_time_from));
+                                if (filters.last_assigned_time_from_time) {
+                                    const [fromHours, fromMinutes] = String(filters.last_assigned_time_from_time).split(':').map(Number);
+                                    fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
+                                } else {
+                                    fromDate.setHours(0, 0, 0, 0);
+                                }
+                                if (driverDate < fromDate) {
+                                    return false;
+                                }
+                            }
+                            
+                            // Check to date/time
+                            if (filters.last_assigned_time_to) {
+                                const toDate = new Date(String(filters.last_assigned_time_to));
+                                if (filters.last_assigned_time_to_time) {
+                                    const [toHours, toMinutes] = String(filters.last_assigned_time_to_time).split(':').map(Number);
+                                    toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
+                                } else {
+                                    toDate.setHours(23, 59, 59, 999);
+                                }
+                                if (driverDate > toDate) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // If parsing fails, skip this filter
+                    console.error('Error parsing last_assigned_time:', e);
+                }
+            }
+            // Next Follow-up filter (date range: from - to with time)
+            if (filters.next_follow_up_from || filters.next_follow_up_to) {
+                const nextFollowUp = (driver as any).next_follow_up;
+                if (!nextFollowUp) {
+                    return false;
+                }
+                try {
+                    const driverDate = new Date(nextFollowUp);
+                    if (filters.next_follow_up_from) {
+                        const fromDate = new Date(String(filters.next_follow_up_from));
+                        if (filters.next_follow_up_from_time) {
+                            const [fromHours, fromMinutes] = String(filters.next_follow_up_from_time).split(':').map(Number);
+                            fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
+                        } else {
+                            fromDate.setHours(0, 0, 0, 0);
+                        }
+                        if (driverDate < fromDate) {
+                            return false;
+                        }
+                    }
+                    if (filters.next_follow_up_to) {
+                        const toDate = new Date(String(filters.next_follow_up_to));
+                        if (filters.next_follow_up_to_time) {
+                            const [toHours, toMinutes] = String(filters.next_follow_up_to_time).split(':').map(Number);
+                            toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
+                        } else {
+                            toDate.setHours(23, 59, 59, 999);
+                        }
+                        if (driverDate > toDate) {
+                            return false;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing next_follow_up:', e);
+                }
+            }
+            // Last Follow-up filter (date range: from - to with time)
+            if (filters.last_follow_up_from || filters.last_follow_up_to) {
+                const lastFollowUp = (driver as any).last_follow_up;
+                if (!lastFollowUp) {
+                    return false;
+                }
+                try {
+                    const driverDate = new Date(lastFollowUp);
+                    if (filters.last_follow_up_from) {
+                        const fromDate = new Date(String(filters.last_follow_up_from));
+                        if (filters.last_follow_up_from_time) {
+                            const [fromHours, fromMinutes] = String(filters.last_follow_up_from_time).split(':').map(Number);
+                            fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
+                        } else {
+                            fromDate.setHours(0, 0, 0, 0);
+                        }
+                        if (driverDate < fromDate) {
+                            return false;
+                        }
+                    }
+                    if (filters.last_follow_up_to) {
+                        const toDate = new Date(String(filters.last_follow_up_to));
+                        if (filters.last_follow_up_to_time) {
+                            const [toHours, toMinutes] = String(filters.last_follow_up_to_time).split(':').map(Number);
+                            toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
+                        } else {
+                            toDate.setHours(23, 59, 59, 999);
+                        }
+                        if (driverDate > toDate) {
+                            return false;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing last_follow_up:', e);
+                }
+            }
+            // Assigned Time filter (date range: from - to with time)
+            if (filters.assigned_time_from || filters.assigned_time_to) {
+                const assignedTime = (driver as any).assigned_time;
+                if (!assignedTime) {
+                    return false;
+                }
+                try {
+                    const driverDate = new Date(assignedTime);
+                    if (filters.assigned_time_from) {
+                        const fromDate = new Date(String(filters.assigned_time_from));
+                        if (filters.assigned_time_from_time) {
+                            const [fromHours, fromMinutes] = String(filters.assigned_time_from_time).split(':').map(Number);
+                            fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
+                        } else {
+                            fromDate.setHours(0, 0, 0, 0);
+                        }
+                        if (driverDate < fromDate) {
+                            return false;
+                        }
+                    }
+                    if (filters.assigned_time_to) {
+                        const toDate = new Date(String(filters.assigned_time_to));
+                        if (filters.assigned_time_to_time) {
+                            const [toHours, toMinutes] = String(filters.assigned_time_to_time).split(':').map(Number);
+                            toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
+                        } else {
+                            toDate.setHours(23, 59, 59, 999);
+                        }
+                        if (driverDate > toDate) {
+                            return false;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing assigned_time:', e);
+                }
+            }
+            // Created At filter (date range: from - to with time)
+            if (filters.created_at_from || filters.created_at_to) {
+                const createdAt = driver.created_at;
+                if (!createdAt) {
+                    return false;
+                }
+                try {
+                    const driverDate = new Date(createdAt);
+                    if (filters.created_at_from) {
+                        const fromDate = new Date(String(filters.created_at_from));
+                        if (filters.created_at_from_time) {
+                            const [fromHours, fromMinutes] = String(filters.created_at_from_time).split(':').map(Number);
+                            fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
+                        } else {
+                            fromDate.setHours(0, 0, 0, 0);
+                        }
+                        if (driverDate < fromDate) {
+                            return false;
+                        }
+                    }
+                    if (filters.created_at_to) {
+                        const toDate = new Date(String(filters.created_at_to));
+                        if (filters.created_at_to_time) {
+                            const [toHours, toMinutes] = String(filters.created_at_to_time).split(':').map(Number);
+                            toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
+                        } else {
+                            toDate.setHours(23, 59, 59, 999);
+                        }
+                        if (driverDate > toDate) {
+                            return false;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing created_at:', e);
+                }
+            }
+            // Updated At filter (date range: from - to with time)
+            if (filters.updated_at_from || filters.updated_at_to) {
+                const updatedAt = driver.updated_at;
+                if (!updatedAt) {
+                    return false;
+                }
+                try {
+                    const driverDate = new Date(updatedAt);
+                    if (filters.updated_at_from) {
+                        const fromDate = new Date(String(filters.updated_at_from));
+                        if (filters.updated_at_from_time) {
+                            const [fromHours, fromMinutes] = String(filters.updated_at_from_time).split(':').map(Number);
+                            fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
+                        } else {
+                            fromDate.setHours(0, 0, 0, 0);
+                        }
+                        if (driverDate < fromDate) {
+                            return false;
+                        }
+                    }
+                    if (filters.updated_at_to) {
+                        const toDate = new Date(String(filters.updated_at_to));
+                        if (filters.updated_at_to_time) {
+                            const [toHours, toMinutes] = String(filters.updated_at_to_time).split(':').map(Number);
+                            toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
+                        } else {
+                            toDate.setHours(23, 59, 59, 999);
+                        }
+                        if (driverDate > toDate) {
+                            return false;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing updated_at:', e);
                 }
             }
             return true;
@@ -694,8 +1047,8 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                         bValue = b.email || '';
                         break;
                     case 'riding_company':
-                        aValue = a.riding_company?.name || '';
-                        bValue = b.riding_company?.name || '';
+                        aValue = a.riding_company?.id || 0;
+                        bValue = b.riding_company?.id || 0;
                         break;
                     case 'campaign':
                         aValue = a.campaign?.name || '';
@@ -725,12 +1078,55 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                         aValue = a.lead_stage?.name || '';
                         bValue = b.lead_stage?.name || '';
                         break;
+                    case 'current_stage':
+                        aValue = (a as any).current_stage?.name || '';
+                        bValue = (b as any).current_stage?.name || '';
+                        break;
                     case 'assigned_to':
                         aValue = a.assigned_to?.name || '';
                         bValue = b.assigned_to?.name || '';
                         break;
+                    case 'assigned_users':
+                        aValue = a.assigned_users && a.assigned_users.length > 0 ? a.assigned_users.map((u: any) => u.name).join(', ') : '';
+                        bValue = b.assigned_users && b.assigned_users.length > 0 ? b.assigned_users.map((u: any) => u.name).join(', ') : '';
+                        break;
+                    case 'last_assigned_time':
+                        aValue = (a as any).last_assigned_time || '';
+                        bValue = (b as any).last_assigned_time || '';
+                        break;
+                    case 'last_assigned_by':
+                        aValue = (a as any).last_assigned_by?.name || '';
+                        bValue = (b as any).last_assigned_by?.name || '';
+                        break;
+                    case 'notes':
+                        aValue = (a as any).notes || '';
+                        bValue = (b as any).notes || '';
+                        break;
+                    case 'next_follow_up':
+                        aValue = (a as any).next_follow_up || '';
+                        bValue = (b as any).next_follow_up || '';
+                        break;
+                    case 'last_follow_up':
+                        aValue = (a as any).last_follow_up || '';
+                        bValue = (b as any).last_follow_up || '';
+                        break;
+                    case 'assigned_time':
+                        aValue = (a as any).assigned_time || '';
+                        bValue = (b as any).assigned_time || '';
+                        break;
+                    case 'duplicate':
+                        aValue = (a as any).duplicate ?? 0;
+                        bValue = (b as any).duplicate ?? 0;
+                        break;
                     default:
                         return 0;
+                }
+                
+                // For numeric fields, compare directly
+                if (sortField === 'duplicate') {
+                    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+                    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+                    return 0;
                 }
                 
                 // Convert to string for comparison
@@ -851,12 +1247,36 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
             phone: '',
             whatsapp_phone: '',
             email: '',
-            riding_company: '',
+            riding_company_id: null,
             campaign_id: null,
             lead_source_id: null,
             lead_status_id: null,
             lead_stage_id: null,
             assigned_to: null,
+            last_assigned_time_from: '',
+            last_assigned_time_to: '',
+            last_assigned_time_from_time: '',
+            last_assigned_time_to_time: '',
+            next_follow_up_from: '',
+            next_follow_up_to: '',
+            next_follow_up_from_time: '',
+            next_follow_up_to_time: '',
+            last_follow_up_from: '',
+            last_follow_up_to: '',
+            last_follow_up_from_time: '',
+            last_follow_up_to_time: '',
+            assigned_time_from: '',
+            assigned_time_to: '',
+            assigned_time_from_time: '',
+            assigned_time_to_time: '',
+            created_at_from: '',
+            created_at_to: '',
+            created_at_from_time: '',
+            created_at_to_time: '',
+            updated_at_from: '',
+            updated_at_to: '',
+            updated_at_from_time: '',
+            updated_at_to_time: '',
         });
     };
 
@@ -903,6 +1323,15 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         if (selectedDrivers.size > 0) {
             const ids = Array.from(selectedDrivers);
             router.visit(`/drivers/drivers/mass-edit?ids=${ids.join(',')}`);
+        }
+    };
+
+    const handleMerge = () => {
+        if (selectedDrivers.size >= 2 && selectedDrivers.size <= 3) {
+            const selectedIds = Array.from(selectedDrivers);
+            const driversToMerge = localDrivers.filter(d => selectedIds.includes(d.id));
+            setMergeDrivers(driversToMerge);
+            setMergeDialogOpen(true);
         }
     };
 
@@ -992,17 +1421,56 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
             submitData.company_id = driver.company_id;
         }
 
+        // Optimistic update - update local state immediately
+        const driverIndex = safeDrivers.findIndex((d) => d.id === driverId);
+        if (driverIndex !== -1) {
+            const updatedDriver = { ...safeDrivers[driverIndex] };
+            
+            // Update driver fields optimistically
+            if (savedData.full_name) updatedDriver.full_name = savedData.full_name;
+            if (savedData.phone) updatedDriver.phone = savedData.phone;
+            if (savedData.whatsapp_phone !== undefined) updatedDriver.whatsapp_phone = savedData.whatsapp_phone || null;
+            if (savedData.email !== undefined) updatedDriver.email = savedData.email || null;
+            if (savedData.riding_company_id !== undefined) {
+                const ridingCompany = filterOptions?.ridingCompanies?.find(rc => rc.value === savedData.riding_company_id);
+                updatedDriver.riding_company = ridingCompany ? { id: ridingCompany.value, name: ridingCompany.label } : null;
+            }
+            if (savedData.campaign_id !== undefined) {
+                const campaign = filterOptions?.campaigns?.find(c => c.value === savedData.campaign_id);
+                updatedDriver.campaign = campaign ? { id: campaign.value, name: campaign.label } : null;
+            }
+            if (savedData.lead_source_id !== undefined) {
+                const leadSource = filterOptions?.leadSources?.find(ls => ls.value === savedData.lead_source_id);
+                updatedDriver.lead_source = leadSource ? { id: leadSource.value, name: leadSource.label } : null;
+            }
+            if (savedData.lead_status_id !== undefined) {
+                const leadStatus = filterOptions?.leadStatuses?.find(ls => ls.value === savedData.lead_status_id);
+                updatedDriver.lead_status = leadStatus ? { id: leadStatus.value, name: leadStatus.label, color: leadStatus.color } : null;
+            }
+            if (savedData.assigned_to !== undefined) {
+                const assignedUser = filterOptions?.users?.find(u => u.value === savedData.assigned_to);
+                updatedDriver.assigned_to = assignedUser ? { id: assignedUser.value, name: assignedUser.label } : null;
+            }
+            
+            // Update local drivers array
+            const updatedDrivers = [...safeDrivers];
+            updatedDrivers[driverIndex] = updatedDriver;
+            setLocalDrivers(updatedDrivers);
+        }
+
         router.put(
             `/drivers/drivers/${driverId}`,
             submitData,
             {
                 preserveScroll: true,
                 onSuccess: () => {
-                    // Reload to get updated data
-                    router.reload({ only: ['drivers', 'filterOptions', 'importAvailableFields'] });
+                    // Silently reload to sync with server (in background)
+                    router.reload({ only: ['drivers', 'filterOptions', 'importAvailableFields'], preserveScroll: true });
                 },
                 onError: (errors) => {
                     console.error('Error saving driver:', errors);
+                    // Revert optimistic update on error
+                    router.reload({ only: ['drivers', 'filterOptions', 'importAvailableFields'], preserveScroll: true });
                     // Reopen editing mode on error
                     setEditingRowId(driverId);
                     setEditingData(savedData);
@@ -1087,6 +1555,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                 setDriverDetails(data.driver);
                 setDriverActivities(data.activities || []);
                 setDriverFollowUps(data.follow_ups || []);
+                setDriverDuplicateDrivers(data.duplicate_drivers || []);
             } else {
                 const errorText = await response.text();
                 let errorData;
@@ -1289,7 +1758,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                 Import
                             </Button>
                         <div className="flex items-center gap-2 ml-auto">
-                            {companyId && (
+                            {showWhatsAppButton && whatsAppRidingCompanyId && (
                                 <Button
                                     type="button"
                                     variant={whatsappWindowOpen ? "default" : "outline"}
@@ -1430,6 +1899,16 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                         {selectedDrivers.size} driver(s) selected
                                     </span>
                                     <div className="flex gap-2">
+                                        {selectedDrivers.size >= 2 && selectedDrivers.size <= 3 && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleMerge}
+                                            >
+                                                Merge
+                                            </Button>
+                                        )}
                                         {canMassEdit() && (
                                             <Button
                                                 type="button"
@@ -1670,15 +2149,313 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                 }
                                                 const filterKey = col.id === 'name' ? 'full_name' : 
                                                                   col.id === 'whatsapp' ? 'whatsapp_phone' :
-                                                                  col.id === 'riding_company' ? 'riding_company' :
+                                                                  col.id === 'riding_company' ? 'riding_company_id' :
                                                                   col.id === 'lead_source' ? 'lead_source_id' :
                                                                   col.id === 'lead_status' ? 'lead_status_id' :
                                                                   col.id === 'lead_status_comment' ? 'lead_status_comment' :
                                                                   col.id === 'lead_stage' ? 'lead_stage_id' :
                                                                   col.id === 'assigned_to' ? 'assigned_to' :
                                                                   col.id === 'campaign' ? 'campaign_id' :
+                                                                  col.id === 'last_assigned_time' ? 'last_assigned_time' :
                                                                   col.id;
-                                                if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to'].includes(col.id)) {
+                                                if (col.id === 'last_assigned_time') {
+                                                    const hasFromDate = filters.last_assigned_time_from && String(filters.last_assigned_time_from).trim() !== '';
+                                                    const hasFromTime = filters.last_assigned_time_from_time && String(filters.last_assigned_time_from_time).trim() !== '';
+                                                    const hasToDate = filters.last_assigned_time_to && String(filters.last_assigned_time_to).trim() !== '';
+                                                    const hasToTime = filters.last_assigned_time_to_time && String(filters.last_assigned_time_to_time).trim() !== '';
+                                                    const hasActiveDateFilter = hasFromDate || hasToDate;
+                                                    
+                                                    const formatDisplayValue = () => {
+                                                        if (!hasActiveDateFilter) return 'Select date range...';
+                                                        const fromStr = hasFromDate 
+                                                            ? `${String(filters.last_assigned_time_from)}${hasFromTime ? ' ' + String(filters.last_assigned_time_from_time) : ''}`
+                                                            : '...';
+                                                        const toStr = hasToDate 
+                                                            ? `${String(filters.last_assigned_time_to)}${hasToTime ? ' ' + String(filters.last_assigned_time_to_time) : ''}`
+                                                            : '...';
+                                                        return `${fromStr} - ${toStr}`;
+                                                    };
+                                                    
+                                                    return (
+                                                        <th key={col.id} className="px-4 py-2">
+                                                            <div className="relative">
+                                                                <DropdownMenu open={dateRangeDropdownOpen.last_assigned_time || false} onOpenChange={(open) => {
+                                                                    setDateRangeDropdownOpen({...dateRangeDropdownOpen, last_assigned_time: open});
+                                                                    if (open) {
+                                                                        // Auto-fill with today's date and current time when opening
+                                                                        const now = new Date();
+                                                                        const today = now.toISOString().split('T')[0];
+                                                                        const currentTime = now.toTimeString().slice(0, 5);
+                                                                        if (!filters.last_assigned_time_from) {
+                                                                            handleFilterChange('last_assigned_time_from', today);
+                                                                        }
+                                                                        if (!filters.last_assigned_time_from_time) {
+                                                                            handleFilterChange('last_assigned_time_from_time', currentTime);
+                                                                        }
+                                                                        if (!filters.last_assigned_time_to) {
+                                                                            handleFilterChange('last_assigned_time_to', today);
+                                                                        }
+                                                                        if (!filters.last_assigned_time_to_time) {
+                                                                            handleFilterChange('last_assigned_time_to_time', currentTime);
+                                                                        }
+                                                                    }
+                                                                }}>
+                                                                    <DropdownMenuTrigger asChild>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            className="w-full text-xs h-8 justify-start text-left font-normal"
+                                                                        >
+                                                                            {formatDisplayValue()}
+                                                                        </Button>
+                                                                    </DropdownMenuTrigger>
+                                                                    <DropdownMenuContent className="w-96 p-4" align="start">
+                                                                        <div className="space-y-4">
+                                                                            <div>
+                                                                                <label className="text-xs font-medium mb-1 block">From Date</label>
+                                                                                <div className="flex gap-2">
+                                                                                    <Input
+                                                                                        type="date"
+                                                                                        value={filters.last_assigned_time_from ? String(filters.last_assigned_time_from) : ''}
+                                                                                        onChange={(e) => handleFilterChange('last_assigned_time_from', e.target.value)}
+                                                                                        onClick={(e) => {
+                                                                                            const input = e.target as HTMLInputElement;
+                                                                                            input.showPicker?.();
+                                                                                        }}
+                                                                                        onFocus={(e) => {
+                                                                                            e.target.showPicker?.();
+                                                                                        }}
+                                                                                        className="flex-1 text-xs h-8 cursor-pointer"
+                                                                                    />
+                                                                                    <Input
+                                                                                        type="time"
+                                                                                        value={filters.last_assigned_time_from_time ? String(filters.last_assigned_time_from_time) : ''}
+                                                                                        onChange={(e) => handleFilterChange('last_assigned_time_from_time', e.target.value)}
+                                                                                        className="w-32 text-xs h-8"
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="text-xs font-medium mb-1 block">To Date</label>
+                                                                                <div className="flex gap-2">
+                                                                                    <Input
+                                                                                        type="date"
+                                                                                        value={filters.last_assigned_time_to ? String(filters.last_assigned_time_to) : ''}
+                                                                                        onChange={(e) => handleFilterChange('last_assigned_time_to', e.target.value)}
+                                                                                        onClick={(e) => {
+                                                                                            const input = e.target as HTMLInputElement;
+                                                                                            input.showPicker?.();
+                                                                                        }}
+                                                                                        onFocus={(e) => {
+                                                                                            e.target.showPicker?.();
+                                                                                        }}
+                                                                                        className="flex-1 text-xs h-8 cursor-pointer"
+                                                                                    />
+                                                                                    <Input
+                                                                                        type="time"
+                                                                                        value={filters.last_assigned_time_to_time ? String(filters.last_assigned_time_to_time) : ''}
+                                                                                        onChange={(e) => handleFilterChange('last_assigned_time_to_time', e.target.value)}
+                                                                                        className="w-32 text-xs h-8"
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex gap-2">
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    className="flex-1 text-xs h-7"
+                                                                                    onClick={() => {
+                                                                                        handleFilterChange('last_assigned_time_from', '');
+                                                                                        handleFilterChange('last_assigned_time_to', '');
+                                                                                        handleFilterChange('last_assigned_time_from_time', '');
+                                                                                        handleFilterChange('last_assigned_time_to_time', '');
+                                                                                    }}
+                                                                                >
+                                                                                    Clear
+                                                                                </Button>
+                                                                                <Button
+                                                                                    variant="default"
+                                                                                    size="sm"
+                                                                                    className="flex-1 text-xs h-7"
+                                                                                    onClick={() => {
+                                                                                        setDateRangeDropdownOpen({...dateRangeDropdownOpen, last_assigned_time: false});
+                                                                                    }}
+                                                                                >
+                                                                                    Apply
+                                                                                </Button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </DropdownMenuContent>
+                                                                </DropdownMenu>
+                                                                {hasActiveDateFilter && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            clearFilter('last_assigned_time_from');
+                                                                            clearFilter('last_assigned_time_to');
+                                                                            clearFilter('last_assigned_time_from_time');
+                                                                            clearFilter('last_assigned_time_to_time');
+                                                                        }}
+                                                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-700 z-10"
+                                                                        title="Clear filter"
+                                                                    >
+                                                                        <X className="h-3 w-3" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </th>
+                                                    );
+                                                }
+                                                // Date range filters for next_follow_up, last_follow_up, assigned_time
+                                                const dateTimeFields = ['next_follow_up', 'last_follow_up', 'assigned_time', 'created_at', 'updated_at'];
+                                                if (dateTimeFields.includes(col.id)) {
+                                                    const fieldName = col.id;
+                                                    const hasFromDate = filters[`${fieldName}_from` as keyof typeof filters] && String(filters[`${fieldName}_from` as keyof typeof filters]).trim() !== '';
+                                                    const hasFromTime = filters[`${fieldName}_from_time` as keyof typeof filters] && String(filters[`${fieldName}_from_time` as keyof typeof filters]).trim() !== '';
+                                                    const hasToDate = filters[`${fieldName}_to` as keyof typeof filters] && String(filters[`${fieldName}_to` as keyof typeof filters]).trim() !== '';
+                                                    const hasToTime = filters[`${fieldName}_to_time` as keyof typeof filters] && String(filters[`${fieldName}_to_time` as keyof typeof filters]).trim() !== '';
+                                                    const hasActiveDateFilter = hasFromDate || hasToDate;
+                                                    
+                                                    const formatDisplayValue = () => {
+                                                        if (!hasActiveDateFilter) return 'Select date range...';
+                                                        const fromStr = hasFromDate 
+                                                            ? `${String(filters[`${fieldName}_from` as keyof typeof filters])}${hasFromTime ? ' ' + String(filters[`${fieldName}_from_time` as keyof typeof filters]) : ''}`
+                                                            : '...';
+                                                        const toStr = hasToDate 
+                                                            ? `${String(filters[`${fieldName}_to` as keyof typeof filters])}${hasToTime ? ' ' + String(filters[`${fieldName}_to_time` as keyof typeof filters]) : ''}`
+                                                            : '...';
+                                                        return `${fromStr} - ${toStr}`;
+                                                    };
+                                                    
+                                                    return (
+                                                        <th key={col.id} className="px-4 py-2">
+                                                            <div className="relative">
+                                                                <DropdownMenu open={dateRangeDropdownOpen[fieldName as keyof typeof dateRangeDropdownOpen] || false} onOpenChange={(open) => {
+                                                                    setDateRangeDropdownOpen({...dateRangeDropdownOpen, [fieldName]: open});
+                                                                    if (open) {
+                                                                        // Auto-fill with today's date and current time when opening
+                                                                        const now = new Date();
+                                                                        const today = now.toISOString().split('T')[0];
+                                                                        const currentTime = now.toTimeString().slice(0, 5);
+                                                                        if (!filters[`${fieldName}_from` as keyof typeof filters]) {
+                                                                            handleFilterChange(`${fieldName}_from`, today);
+                                                                        }
+                                                                        if (!filters[`${fieldName}_from_time` as keyof typeof filters]) {
+                                                                            handleFilterChange(`${fieldName}_from_time`, currentTime);
+                                                                        }
+                                                                        if (!filters[`${fieldName}_to` as keyof typeof filters]) {
+                                                                            handleFilterChange(`${fieldName}_to`, today);
+                                                                        }
+                                                                        if (!filters[`${fieldName}_to_time` as keyof typeof filters]) {
+                                                                            handleFilterChange(`${fieldName}_to_time`, currentTime);
+                                                                        }
+                                                                    }
+                                                                }}>
+                                                                    <DropdownMenuTrigger asChild>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            className="w-full text-xs h-8 justify-start text-left font-normal"
+                                                                        >
+                                                                            {formatDisplayValue()}
+                                                                        </Button>
+                                                                    </DropdownMenuTrigger>
+                                                                    <DropdownMenuContent className="w-96 p-4" align="start">
+                                                                        <div className="space-y-4">
+                                                                            <div>
+                                                                                <label className="text-xs font-medium mb-1 block">From Date</label>
+                                                                                <div className="flex gap-2">
+                                                                                    <Input
+                                                                                        type="date"
+                                                                                        value={filters[`${fieldName}_from` as keyof typeof filters] ? String(filters[`${fieldName}_from` as keyof typeof filters]) : ''}
+                                                                                        onChange={(e) => handleFilterChange(`${fieldName}_from`, e.target.value)}
+                                                                                        onClick={(e) => {
+                                                                                            const input = e.target as HTMLInputElement;
+                                                                                            input.showPicker?.();
+                                                                                        }}
+                                                                                        onFocus={(e) => {
+                                                                                            e.target.showPicker?.();
+                                                                                        }}
+                                                                                        className="flex-1 text-xs h-8 cursor-pointer"
+                                                                                    />
+                                                                                    <Input
+                                                                                        type="time"
+                                                                                        value={filters[`${fieldName}_from_time` as keyof typeof filters] ? String(filters[`${fieldName}_from_time` as keyof typeof filters]) : ''}
+                                                                                        onChange={(e) => handleFilterChange(`${fieldName}_from_time`, e.target.value)}
+                                                                                        className="w-32 text-xs h-8"
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="text-xs font-medium mb-1 block">To Date</label>
+                                                                                <div className="flex gap-2">
+                                                                                    <Input
+                                                                                        type="date"
+                                                                                        value={filters[`${fieldName}_to` as keyof typeof filters] ? String(filters[`${fieldName}_to` as keyof typeof filters]) : ''}
+                                                                                        onChange={(e) => handleFilterChange(`${fieldName}_to`, e.target.value)}
+                                                                                        onClick={(e) => {
+                                                                                            const input = e.target as HTMLInputElement;
+                                                                                            input.showPicker?.();
+                                                                                        }}
+                                                                                        onFocus={(e) => {
+                                                                                            e.target.showPicker?.();
+                                                                                        }}
+                                                                                        className="flex-1 text-xs h-8 cursor-pointer"
+                                                                                    />
+                                                                                    <Input
+                                                                                        type="time"
+                                                                                        value={filters[`${fieldName}_to_time` as keyof typeof filters] ? String(filters[`${fieldName}_to_time` as keyof typeof filters]) : ''}
+                                                                                        onChange={(e) => handleFilterChange(`${fieldName}_to_time`, e.target.value)}
+                                                                                        className="w-32 text-xs h-8"
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex gap-2">
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    className="flex-1 text-xs h-7"
+                                                                                    onClick={() => {
+                                                                                        handleFilterChange(`${fieldName}_from`, '');
+                                                                                        handleFilterChange(`${fieldName}_to`, '');
+                                                                                        handleFilterChange(`${fieldName}_from_time`, '');
+                                                                                        handleFilterChange(`${fieldName}_to_time`, '');
+                                                                                    }}
+                                                                                >
+                                                                                    Clear
+                                                                                </Button>
+                                                                                <Button
+                                                                                    variant="default"
+                                                                                    size="sm"
+                                                                                    className="flex-1 text-xs h-7"
+                                                                                    onClick={() => {
+                                                                                        setDateRangeDropdownOpen({...dateRangeDropdownOpen, [fieldName]: false});
+                                                                                    }}
+                                                                                >
+                                                                                    Apply
+                                                                                </Button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </DropdownMenuContent>
+                                                                </DropdownMenu>
+                                                                {hasActiveDateFilter && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            clearFilter(`${fieldName}_from`);
+                                                                            clearFilter(`${fieldName}_to`);
+                                                                            clearFilter(`${fieldName}_from_time`);
+                                                                            clearFilter(`${fieldName}_to_time`);
+                                                                        }}
+                                                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-700 z-10"
+                                                                        title="Clear filter"
+                                                                    >
+                                                                        <X className="h-3 w-3" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </th>
+                                                    );
+                                                }
+                                                if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to', 'riding_company'].includes(col.id)) {
                                                     return (
                                                         <th key={col.id} className="px-4 py-2">
                                                             <div className="relative">
@@ -1705,7 +2482,8 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                           col.id === 'lead_source' ? (filterOptions?.leadSources || []) :
                                                                           col.id === 'lead_status' ? (filterOptions?.leadStatuses || []) :
                                                                           col.id === 'lead_stage' ? ((filterOptions as any)?.leadStages || []) :
-                                                                          col.id === 'assigned_to' ? (filterOptions?.users || []) : []).map((option: any) => (
+                                                                          col.id === 'assigned_to' ? (filterOptions?.users || []) :
+                                                                          col.id === 'riding_company' ? (filterOptions?.ridingCompanies || []) : []).map((option: any) => (
                                                                             <SelectItem key={option.id} value={String(option.id)}>
                                                                                 {option.name}
                                                                             </SelectItem>
@@ -1891,6 +2669,9 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                         switch (col.id) {
                                                             case 'driver_num':
                                                                 cellContent = driver.driver_num || driver.id;
+                                                                break;
+                                                            case 'duplicate':
+                                                                cellContent = (driver as any).duplicate ?? 0;
                                                                 break;
                                                             case 'name':
                                                                 cellContent = driver.full_name || '-';
@@ -2114,6 +2895,9 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                             case 'lead_stage':
                                                                 cellContent = driver.lead_stage?.name || '-';
                                                                 break;
+                                                            case 'current_stage':
+                                                                cellContent = (driver as any).current_stage?.name || '-';
+                                                                break;
                                                             case 'assigned_to':
                                                                 if (driver.assigned_to) {
                                                                     cellContent = driver.assigned_to.name;
@@ -2130,6 +2914,39 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                 } else {
                                                                     cellContent = '-';
                                                                 }
+                                                                break;
+                                                            case 'assigned_users':
+                                                                cellContent = driver.assigned_users && driver.assigned_users.length > 0 ? (
+                                                                    <div className="flex flex-wrap gap-1">
+                                                                        {driver.assigned_users.map((user: any) => (
+                                                                            <Badge key={user.id} variant="secondary" className="text-xs">
+                                                                                {user.name}
+                                                                            </Badge>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'last_assigned_time':
+                                                                cellContent = (driver as any).last_assigned_time ? formatDate((driver as any).last_assigned_time) : '-';
+                                                                break;
+                                                            case 'last_assigned_by':
+                                                                cellContent = (driver as any).last_assigned_by?.name || '-';
+                                                                break;
+                                                            case 'notes':
+                                                                cellContent = (driver as any).notes ? (
+                                                                    <div className="max-w-xs truncate" title={(driver as any).notes}>
+                                                                        {(driver as any).notes}
+                                                                    </div>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'next_follow_up':
+                                                                cellContent = (driver as any).next_follow_up ? formatDate((driver as any).next_follow_up) : '-';
+                                                                break;
+                                                            case 'last_follow_up':
+                                                                cellContent = (driver as any).last_follow_up ? formatDate((driver as any).last_follow_up) : '-';
+                                                                break;
+                                                            case 'assigned_time':
+                                                                cellContent = (driver as any).assigned_time ? formatDate((driver as any).assigned_time) : '-';
                                                                 break;
                                                             case 'uuid':
                                                                 cellContent = driver.uuid || '-';
@@ -2190,6 +3007,427 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                     title="Delete Selected Drivers"
                     description={`Are you sure you want to delete ${selectedDrivers.size} driver(s)? This action cannot be undone.`}
                 />
+
+                {/* Merge Drivers Dialog */}
+                <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
+                    <DialogContent className="!max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
+                        <DialogHeader>
+                            <DialogTitle>Merge Records In &gt; Drivers</DialogTitle>
+                            <DialogDescription>
+                                The primary record will be retained after the merge. You can select the column to retain the values. The other record(s) will be deleted but the related information will be merged.
+                            </DialogDescription>
+                        </DialogHeader>
+                        
+                        {mergeDrivers.length > 0 && (
+                            <div className="flex-1 overflow-y-auto">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full border-collapse">
+                                        <thead className="bg-neutral-50 dark:bg-neutral-900 sticky top-0 z-10">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300 border-b">Fields</th>
+                                                {mergeDrivers.map((driver, index) => (
+                                                    <th key={driver.id} className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300 border-b">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="primary_record"
+                                                                value={driver.id}
+                                                                defaultChecked={index === 0}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <Link href={`/drivers/drivers/${driver.id}`} className="text-blue-600 hover:underline" target="_blank">
+                                                                Record #{driver.id}
+                                                            </Link>
+                                                        </div>
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {/* Full Name */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Name</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="full_name"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.full_name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Phone */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Phone</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="phone"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.phone || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* WhatsApp Phone */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">WhatsApp</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="whatsapp_phone"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.whatsapp_phone || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Email */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Email</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="email"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.email || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Riding Company */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Riding Company</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="riding_company_id"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.riding_company?.name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Campaign */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Campaign</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="campaign_id"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.campaign?.name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Lead Source */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Lead Source</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="lead_source_id"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.lead_source?.name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Lead Status */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Lead Status</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="lead_status_id"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            {driver.lead_status ? (
+                                                                <Badge style={{ backgroundColor: driver.lead_status.color || '#6b7280' }}>
+                                                                    {driver.lead_status.name}
+                                                                </Badge>
+                                                            ) : (
+                                                                <span>-</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Lead Stage */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Lead Stage</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="lead_stage_id"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.lead_stage?.name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Assigned To */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Assigned To</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="assigned_to"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.assigned_to?.name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Assigned Users */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Assigned Users</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="assigned_users"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>
+                                                                {driver.assigned_users && driver.assigned_users.length > 0
+                                                                    ? driver.assigned_users.map((u: any) => u.name).join(', ')
+                                                                    : '-'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Lead Status Comment */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Sales Comment</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="lead_status_comment"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span className="max-w-xs truncate" title={driver.lead_status_comment || ''}>
+                                                                {driver.lead_status_comment || '-'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Next Follow Up */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Next Follow Up</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="next_follow_up"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.next_follow_up ? formatDate(driver.next_follow_up) : '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Last Follow Up */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Last Follow Up</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="last_follow_up"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.last_follow_up ? formatDate(driver.last_follow_up) : '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Notes */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Notes</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="notes"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span className="max-w-xs truncate" title={driver.notes || ''}>
+                                                                {driver.notes || '-'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <div className="mt-6 flex justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setMergeDialogOpen(false)}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        onClick={async () => {
+                                            // Get selected values
+                                            const primaryRecordInput = document.querySelector('input[name="primary_record"]:checked') as HTMLInputElement;
+                                            const primaryRecordId = primaryRecordInput ? parseInt(primaryRecordInput.value) : mergeDrivers[0].id;
+                                            
+                                            const fieldMappings: { [key: string]: string } = {};
+                                            const fieldNames = [
+                                                'full_name', 'phone', 'whatsapp_phone', 'email', 'riding_company_id', 
+                                                'campaign_id', 'lead_source_id', 'lead_status_id', 'lead_stage_id',
+                                                'assigned_to', 'assigned_users', 'lead_status_comment', 
+                                                'next_follow_up', 'last_follow_up', 'notes'
+                                            ];
+                                            
+                                            fieldNames.forEach(fieldName => {
+                                                const selectedInput = document.querySelector(`input[name="${fieldName}"]:checked`) as HTMLInputElement;
+                                                if (selectedInput) {
+                                                    const selectedDriverId = parseInt(selectedInput.value);
+                                                    const selectedDriver = mergeDrivers.find(d => d.id === selectedDriverId);
+                                                    if (selectedDriver) {
+                                                        if (fieldName === 'riding_company_id') {
+                                                            fieldMappings[fieldName] = selectedDriver.riding_company?.id?.toString() || '';
+                                                        } else if (fieldName === 'campaign_id') {
+                                                            fieldMappings[fieldName] = selectedDriver.campaign?.id?.toString() || '';
+                                                        } else if (fieldName === 'lead_source_id') {
+                                                            fieldMappings[fieldName] = selectedDriver.lead_source?.id?.toString() || '';
+                                                        } else if (fieldName === 'lead_status_id') {
+                                                            fieldMappings[fieldName] = selectedDriver.lead_status?.id?.toString() || '';
+                                                        } else if (fieldName === 'lead_stage_id') {
+                                                            fieldMappings[fieldName] = selectedDriver.lead_stage?.id?.toString() || '';
+                                                        } else if (fieldName === 'assigned_to') {
+                                                            fieldMappings[fieldName] = selectedDriver.assigned_to?.id?.toString() || '';
+                                                        } else if (fieldName === 'assigned_users') {
+                                                            // Store the selected driver ID, we'll handle it in backend
+                                                            fieldMappings[fieldName] = selectedDriverId.toString();
+                                                        } else {
+                                                            fieldMappings[fieldName] = (selectedDriver as any)[fieldName] || '';
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                            
+                                            const driverIds = mergeDrivers.map(d => d.id);
+                                            
+                                            try {
+                                                await router.post('/drivers/drivers/merge', {
+                                                    primary_driver_id: primaryRecordId,
+                                                    driver_ids: driverIds,
+                                                    field_mappings: fieldMappings,
+                                                }, {
+                                                    onSuccess: () => {
+                                                        setMergeDialogOpen(false);
+                                                        setSelectedDrivers(new Set());
+                                                        setMergeDrivers([]);
+                                                    },
+                                                    onError: (errors) => {
+                                                        console.error('Merge error:', errors);
+                                                        alert('Failed to merge drivers. Please try again.');
+                                                    },
+                                                });
+                                            } catch (error) {
+                                                console.error('Merge error:', error);
+                                                alert('Failed to merge drivers. Please try again.');
+                                            }
+                                        }}
+                                    >
+                                        Merge
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </DialogContent>
+                </Dialog>
 
                 <ImportModal
                     open={importModalOpen}
@@ -2254,6 +3492,18 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                         >
                                             Follow-ups ({driverFollowUps.length})
                                         </button>
+                                        {driverDetails?.duplicate > 0 && (
+                                            <button
+                                                onClick={() => setViewDialogTab('duplicates')}
+                                                className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                                    viewDialogTab === 'duplicates'
+                                                        ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                                        : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                                                }`}
+                                            >
+                                                Duplicates ({driverDetails.duplicate})
+                                            </button>
+                                        )}
                                     </nav>
                                 </div>
 
@@ -2707,7 +3957,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                         {driverFollowUps.map((followUp) => (
                                                             <tr key={followUp.id} className="border-t hover:bg-muted/50 transition-colors">
                                                                 <td className="px-4 py-3 text-sm">
-                                                                    {followUp.created_time ? formatDate(followUp.created_time) + ' ' + new Date(followUp.created_time).toLocaleTimeString() : 'N/A'}
+                                                                    {followUp.created_time ? formatDate(followUp.created_time) : 'N/A'}
                                                                 </td>
                                                                 <td className="px-4 py-3 text-sm">
                                                                     {followUp.user_name || 'N/A'}
@@ -2744,6 +3994,77 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                             <div className="py-8 text-center text-neutral-500">
                                                 No follow-ups found for this driver.
                                             </div>
+                                        )}
+                                    </Card>
+                                )}
+
+                                {viewDialogTab === 'duplicates' && driverDetails?.duplicate > 0 && (
+                                    <Card className="p-6">
+                                        <h2 className="mb-4 text-lg font-semibold">Duplicate Drivers ({driverDetails.duplicate})</h2>
+                                        <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+                                            Drivers with the same phone number or WhatsApp number as this driver.
+                                        </p>
+                                        {driverDuplicateDrivers.length > 0 ? (
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full">
+                                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                                        <tr>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Full Name</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">WhatsApp</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Email</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Campaign</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Source</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Assigned To</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {driverDuplicateDrivers.map((dup) => (
+                                                            <tr key={dup.id} className="border-t hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => {
+                                                                setViewDialogOpen(false);
+                                                                router.visit(`/drivers/drivers/${dup.id}`);
+                                                            }}>
+                                                                <td className="px-4 py-3 text-sm">{dup.full_name || '-'}</td>
+                                                                <td className="px-4 py-3 text-sm">{dup.phone || '-'}</td>
+                                                                <td className="px-4 py-3 text-sm">{dup.whatsapp_phone || '-'}</td>
+                                                                <td className="px-4 py-3 text-sm">{dup.email || '-'}</td>
+                                                                <td className="px-4 py-3 text-sm">{dup.riding_company?.name || '-'}</td>
+                                                                <td className="px-4 py-3 text-sm">{dup.campaign?.name || '-'}</td>
+                                                                <td className="px-4 py-3 text-sm">{dup.lead_source?.name || '-'}</td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    {dup.lead_status ? (
+                                                                        <Badge style={{ backgroundColor: dup.lead_status.color || '#6b7280' }}>
+                                                                            {dup.lead_status.name}
+                                                                        </Badge>
+                                                                    ) : '-'}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm">{dup.lead_stage?.name || '-'}</td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    {dup.assigned_to?.name || (dup.assigned_users && dup.assigned_users.length > 0 ? dup.assigned_users.map((u: any) => u.name).join(', ') : '-')}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setViewDialogOpen(false);
+                                                                            router.visit(`/drivers/drivers/${dup.id}`);
+                                                                        }}
+                                                                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                                                        title="View Details"
+                                                                    >
+                                                                        <Eye className="h-4 w-4" />
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ) : (
+                                            <p className="text-neutral-500 dark:text-neutral-400">No duplicate drivers found.</p>
                                         )}
                                     </Card>
                                 )}
@@ -2789,7 +4110,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                     </div>
                     
                     {/* WhatsApp Window - Side Panel */}
-                    {companyId && whatsappWindowOpen && !whatsappFloating && (
+                    {whatsAppRidingCompanyId && whatsappWindowOpen && !whatsappFloating && (
                         <div 
                             className="flex-shrink-0 h-[calc(100vh-8rem)] border-l border-neutral-200 dark:border-neutral-700 relative group"
                             style={{ width: `${whatsappWindowWidth}px`, minWidth: '300px', maxWidth: '80vw' }}
@@ -2824,8 +4145,16 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                 title="Drag to resize"
                             />
                             <WhatsAppWindow
-                                companyId={companyId}
+                                ridingCompanyId={whatsAppRidingCompanyId}
                                 driverPhoneNumbers={userDriverPhoneNumbers}
+                                drivers={drivers
+                                    .filter(d => {
+                                        // Only include drivers that have phone or whatsapp_phone
+                                        const hasPhone = d.phone && d.phone.trim().length >= 5 && d.phone.trim() !== '0' && /\d{5,}/.test(d.phone.trim());
+                                        const hasWhatsapp = d.whatsapp_phone && d.whatsapp_phone.trim().length >= 5 && d.whatsapp_phone.trim() !== '0' && /\d{5,}/.test(d.whatsapp_phone.trim());
+                                        return hasPhone || hasWhatsapp;
+                                    })
+                                    .map(d => ({ id: d.id, name: d.full_name, phone: d.phone, whatsapp_phone: d.whatsapp_phone }))}
                                 isOpen={whatsappWindowOpen}
                                 onClose={() => {
                                     setWhatsappWindowOpen(false);
@@ -2842,10 +4171,18 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         </AppLayout>
         
         {/* WhatsApp Window - Floating */}
-        {companyId && whatsappWindowOpen && whatsappFloating && (
+        {whatsAppRidingCompanyId && whatsappWindowOpen && whatsappFloating && (
             <WhatsAppWindow
-                companyId={companyId}
+                ridingCompanyId={whatsAppRidingCompanyId}
                 driverPhoneNumbers={userDriverPhoneNumbers}
+                drivers={drivers
+                    .filter(d => {
+                        // Only include drivers that have phone or whatsapp_phone
+                        const hasPhone = d.phone && d.phone.trim().length >= 5 && d.phone.trim() !== '0' && /\d{5,}/.test(d.phone.trim());
+                        const hasWhatsapp = d.whatsapp_phone && d.whatsapp_phone.trim().length >= 5 && d.whatsapp_phone.trim() !== '0' && /\d{5,}/.test(d.whatsapp_phone.trim());
+                        return hasPhone || hasWhatsapp;
+                    })
+                    .map(d => ({ id: d.id, name: d.full_name, phone: d.phone, whatsapp_phone: d.whatsapp_phone }))}
                 isOpen={whatsappWindowOpen}
                 onClose={() => {
                     setWhatsappWindowOpen(false);
@@ -2898,7 +4235,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         lead_status_id: driver.lead_status?.id ? String(driver.lead_status.id) : '',
         lead_status_comment: driver.lead_status_comment || '',
         next_follow_up: driver.next_follow_up || '',
-        next_time: driver.next_time || '',
         last_follow_up: driver.last_follow_up || '',
         lead_stage_id: driver.lead_stage?.id ? String(driver.lead_stage.id) : '',
         current_stage_id: '',
@@ -2922,7 +4258,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
             lead_status_id: data.lead_status_id ? Number(data.lead_status_id) : null,
             lead_status_comment: data.lead_status_comment || null,
             next_follow_up: data.next_follow_up || null,
-            next_time: data.next_time || null,
             lead_stage_id: data.lead_stage_id ? Number(data.lead_stage_id) : null,
             current_stage_id: data.current_stage_id || null,
             notes: data.notes || null,
@@ -3170,99 +4505,43 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                 >
                                     Next Follow-up
                                 </label>
-                                <div className="relative">
-                                    <Input
-                                        type="date"
-                                        id="quick-edit-next-follow-up"
-                                        value={data.next_follow_up}
-                                        onChange={(e) => {
-                                            const selectedDate = e.target.value;
-                                            const today = new Date().toISOString().split('T')[0];
-                                            if (selectedDate && selectedDate < today) {
-                                                alert('Next Follow-up date must be today or a future date.');
-                                                return;
-                                            }
-                                            setData('next_follow_up', selectedDate);
-                                        }}
-                                        min={new Date().toISOString().split('T')[0]}
-                                        className={`${errors.next_follow_up ? 'border-red-500' : ''} cursor-pointer`}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            const dateInput = e.target as HTMLInputElement;
-                                            dateInput.showPicker?.() || dateInput.focus();
-                                        }}
-                                        onFocus={(e) => {
-                                            e.target.showPicker?.();
-                                        }}
-                                        style={{ 
-                                            color: data.next_follow_up ? 'transparent' : 'transparent',
-                                            caretColor: 'transparent'
-                                        }}
-                                    />
-                                    {!data.next_follow_up && (
-                                        <div 
-                                            className="date-display-overlay absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
-                                            style={{ 
-                                                color: '#6b7280',
-                                                fontSize: '0.875rem',
-                                                lineHeight: '1.25rem'
-                                            }}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                const dateInput = document.getElementById('quick-edit-next-follow-up') as HTMLInputElement;
-                                                if (dateInput) {
-                                                    dateInput.showPicker?.() || dateInput.focus();
+                                <div className="flex gap-2">
+                                    <div className="flex-1 relative">
+                                        <Input
+                                            type="date"
+                                            id="quick-edit-next-follow-up"
+                                            value={data.next_follow_up ? new Date(data.next_follow_up).toISOString().split('T')[0] : ''}
+                                            onChange={(e) => {
+                                                const selectedDate = e.target.value;
+                                                const today = new Date().toISOString().split('T')[0];
+                                                if (selectedDate && selectedDate < today) {
+                                                    alert('Next Follow-up date must be today or a future date.');
+                                                    return;
                                                 }
+                                                const existingTime = data.next_follow_up ? new Date(data.next_follow_up).toTimeString().slice(0, 5) : '00:00';
+                                                const datetime = `${selectedDate}T${existingTime}`;
+                                                setData('next_follow_up', datetime);
                                             }}
-                                        >
-                                            dd / mm / yyyy
-                                        </div>
-                                    )}
-                                    {data.next_follow_up && (
-                                        <div 
-                                            className="date-display-overlay absolute inset-0 flex items-center px-3 pointer-events-none cursor-pointer select-none"
-                                            style={{ 
-                                                color: 'inherit',
-                                                fontSize: '0.875rem',
-                                                lineHeight: '1.25rem'
+                                            min={new Date().toISOString().split('T')[0]}
+                                            className={`${errors.next_follow_up ? 'border-red-500' : ''} cursor-pointer`}
+                                        />
+                                    </div>
+                                    <div className="w-32">
+                                        <Input
+                                            type="time"
+                                            value={data.next_follow_up ? new Date(data.next_follow_up).toTimeString().slice(0, 5) : ''}
+                                            onChange={(e) => {
+                                                const time = e.target.value;
+                                                const date = data.next_follow_up ? new Date(data.next_follow_up).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+                                                const datetime = `${date}T${time}`;
+                                                setData('next_follow_up', datetime);
                                             }}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                const dateInput = document.getElementById('quick-edit-next-follow-up') as HTMLInputElement;
-                                                if (dateInput) {
-                                                    dateInput.showPicker?.() || dateInput.focus();
-                                                }
-                                            }}
-                                        >
-                                            {formatDate(data.next_follow_up)}
-                                        </div>
-                                    )}
+                                            className={errors.next_follow_up ? 'border-red-500' : ''}
+                                        />
+                                    </div>
                                 </div>
                                 {errors.next_follow_up && (
                                     <p className="text-sm text-red-500 mt-1">{errors.next_follow_up}</p>
-                                )}
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">Next Time</label>
-                                <Select
-                                    value={data.next_time || ''}
-                                    onValueChange={(value) => setData('next_time', value)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Time" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {TIME_OPTIONS.map((time) => (
-                                            <SelectItem key={time} value={time}>
-                                                {time}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {errors.next_time && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.next_time}</p>
                                 )}
                             </div>
                         </div>

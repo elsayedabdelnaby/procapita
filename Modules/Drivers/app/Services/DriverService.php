@@ -11,16 +11,26 @@ use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
 class DriverService
 {
-    public function getAllDrivers(?int $companyId = null, ?\App\Models\User $user = null): Collection
+    public function getAllDrivers(?int $companyId = null, ?\App\Models\User $user = null, ?int $selectedRidingCompanyId = null): Collection
     {
-        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'assignedUsers', 'leadStatus', 'leadStage', 'currentStage']);
+        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'assignedUsers', 'leadStatus', 'leadStage', 'currentStage', 'lastAssignedByUser']);
 
         if ($companyId) {
             $query->where('company_id', $companyId);
         }
 
+        // Filter by selected riding company (for admins using the selector)
+        if ($selectedRidingCompanyId) {
+            $query->where('riding_company_id', $selectedRidingCompanyId);
+        }
+
         // Filter by assigned_to or assigned_users if user is not super admin
         if ($user && !$user->isSuperAdmin()) {
+            // Filter by riding company first (if user is not company admin and has a specific riding company)
+            if (!$user->is_company_admin && $user->riding_company_id) {
+                $query->where('riding_company_id', $user->riding_company_id);
+            }
+            
             $subordinateUserIds = $user->getSubordinateUserIds();
             
             // Always include current user ID to ensure they see their own data
@@ -52,9 +62,93 @@ class DriverService
             'leadStatus',
             'leadStage',
             'currentStage',
+            'lastAssignedByUser',
             'stages.stageTemplate',
             'documents.documentTemplate',
         ])->find($id);
+    }
+
+    /**
+     * Calculate duplicate count for a driver based on phone or whatsapp_phone
+     */
+    public function calculateDuplicateCount(Driver $driver): int
+    {
+        $duplicateIds = [];
+        
+        if ($driver->phone) {
+            $formattedPhone = $this->reformatPhoneNumber($driver->phone);
+            $phoneDuplicates = Driver::where('id', '!=', $driver->id)
+                ->where(function ($q) use ($formattedPhone) {
+                    $q->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone])
+                      ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone]);
+                })
+                ->pluck('id')
+                ->toArray();
+            $duplicateIds = array_merge($duplicateIds, $phoneDuplicates);
+        }
+        
+        if ($driver->whatsapp_phone && $driver->whatsapp_phone !== $driver->phone) {
+            $formattedWhatsapp = $this->reformatPhoneNumber($driver->whatsapp_phone);
+            $whatsappDuplicates = Driver::where('id', '!=', $driver->id)
+                ->where(function ($q) use ($formattedWhatsapp) {
+                    $q->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp])
+                      ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp]);
+                })
+                ->pluck('id')
+                ->toArray();
+            $duplicateIds = array_merge($duplicateIds, $whatsappDuplicates);
+        }
+        
+        return count(array_unique($duplicateIds));
+    }
+
+    /**
+     * Get duplicate drivers for a driver based on phone or whatsapp_phone
+     */
+    public function getDuplicateDrivers(Driver $driver): Collection
+    {
+        $duplicateIds = [];
+        
+        if ($driver->phone) {
+            $formattedPhone = $this->reformatPhoneNumber($driver->phone);
+            $phoneDuplicates = Driver::where('id', '!=', $driver->id)
+                ->where(function ($q) use ($formattedPhone) {
+                    $q->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone])
+                      ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone]);
+                })
+                ->pluck('id')
+                ->toArray();
+            $duplicateIds = array_merge($duplicateIds, $phoneDuplicates);
+        }
+        
+        if ($driver->whatsapp_phone && $driver->whatsapp_phone !== $driver->phone) {
+            $formattedWhatsapp = $this->reformatPhoneNumber($driver->whatsapp_phone);
+            $whatsappDuplicates = Driver::where('id', '!=', $driver->id)
+                ->where(function ($q) use ($formattedWhatsapp) {
+                    $q->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp])
+                      ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp]);
+                })
+                ->pluck('id')
+                ->toArray();
+            $duplicateIds = array_merge($duplicateIds, $whatsappDuplicates);
+        }
+        
+        $uniqueIds = array_unique($duplicateIds);
+        
+        if (empty($uniqueIds)) {
+            return new Collection();
+        }
+        
+        return Driver::with([
+            'company',
+            'ridingCompany',
+            'campaign',
+            'leadSource',
+            'assignedTo',
+            'assignedUsers',
+            'leadStatus',
+            'leadStage',
+        ])->whereIn('id', $uniqueIds)->get();
     }
 
     public function createDriver(array $data): Driver
@@ -224,6 +318,13 @@ class DriverService
         // Sync assigned users if provided
         if ($assignedUsers !== null) {
             $driver->assignedUsers()->sync($assignedUsers);
+            // Update assigned_to to first user if not explicitly set
+            if (!isset($data['assigned_to']) && !empty($assignedUsers)) {
+                $driver->update(['assigned_to' => $assignedUsers[0]]);
+            } elseif (!isset($data['assigned_to']) && empty($assignedUsers)) {
+                // Clear assigned_to if assigned_users is empty
+                $driver->update(['assigned_to' => null]);
+            }
         }
 
         return $driver->fresh(['assignedUsers']);
@@ -246,7 +347,7 @@ class DriverService
     /**
      * Helper function to reformat phone numbers
      */
-    protected function reformatPhoneNumber($phoneNumber)
+    public function reformatPhoneNumber($phoneNumber)
     {
         // تحويل الأرقام العربية إلى إنجليزية
         $arabicNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];

@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
+import { formatDate } from '@/utils/date-format';
 
 interface Driver {
     id: number;
@@ -129,7 +130,7 @@ export default function DriverStagesIndex({ driverStages }: DriverStagesIndexPro
                                     header: 'Completed At',
                                     accessor: (row) =>
                                         row.completed_at
-                                            ? new Date(row.completed_at).toLocaleDateString()
+                                            ? formatDate(row.completed_at)
                                             : '-',
                                 },
                                 {

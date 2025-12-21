@@ -23,6 +23,8 @@ class UserUpdateRequest extends FormRequest
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => ['sometimes', 'required', 'email', 'max:255', "unique:users,email,{$userId}"],
+            'mobile1' => ['sometimes', 'required', 'string', 'max:255'],
+            'mobile2' => ['nullable', 'string', 'max:255'],
             'password' => ['nullable', 'string', 'min:8'],
             'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'riding_company_id' => [
@@ -62,6 +64,7 @@ class UserUpdateRequest extends FormRequest
             'name.required' => 'User name is required.',
             'email.required' => 'Email address is required.',
             'email.unique' => 'This email is already registered.',
+            'mobile1.required' => 'Mobile 1 is required.',
             'password.min' => 'Password must be at least 8 characters.',
             'company_id.exists' => 'Selected company does not exist.',
             'roles.*.exists' => 'One or more selected roles do not exist.',

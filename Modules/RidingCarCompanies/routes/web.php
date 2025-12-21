@@ -6,8 +6,13 @@ use Modules\RidingCarCompanies\app\Http\Controllers\RidingCompanyStageTemplateCo
 use Modules\RidingCarCompanies\app\Http\Controllers\RidingCompanyDocumentRequirementController;
 use Modules\RidingCarCompanies\app\Http\Controllers\RidingCompanyIntegrationController;
 use Modules\RidingCarCompanies\app\Http\Controllers\RidingCompanyIntegrationSettingController;
+use Modules\RidingCarCompanies\app\Http\Controllers\FacebookIntegrationController;
 
 Route::middleware(['auth', 'verified'])->prefix('ridingcarcompanies')->name('ridingcarcompanies.')->group(function () {
+    // Riding Company Selection (for admins)
+    Route::post('riding-companies/select', [RidingCompanyController::class, 'select'])->name('ridingcompanies.select');
+    Route::post('riding-companies/clear-selection', [RidingCompanyController::class, 'clearSelection'])->name('ridingcompanies.clear-selection');
+    
     // Riding Companies
     Route::get('riding-companies', [RidingCompanyController::class, 'index'])->name('ridingcompanies.index');
     Route::get('riding-companies/create', [RidingCompanyController::class, 'create'])->name('ridingcompanies.create');
@@ -18,6 +23,7 @@ Route::middleware(['auth', 'verified'])->prefix('ridingcarcompanies')->name('rid
     Route::delete('riding-companies/{id}', [RidingCompanyController::class, 'destroy'])->name('ridingcompanies.destroy');
     Route::post('riding-companies/{id}/toggle-active', [RidingCompanyController::class, 'toggleActive'])->name('ridingcompanies.toggle-active');
     Route::post('riding-companies/{id}/upload-logo', [RidingCompanyController::class, 'uploadLogo'])->name('ridingcompanies.upload-logo');
+    Route::post('riding-companies/{id}/distribute-drivers', [RidingCompanyController::class, 'distributeDrivers'])->name('ridingcompanies.distribute-drivers');
 
     // Stage Templates
     Route::get('riding-companies/{ridingCompanyId}/stage-templates', [RidingCompanyStageTemplateController::class, 'index'])->name('stagetemplates.index');
@@ -56,4 +62,14 @@ Route::middleware(['auth', 'verified'])->prefix('ridingcarcompanies')->name('rid
     Route::delete('integration-settings/{id}', [RidingCompanyIntegrationSettingController::class, 'destroy'])->name('integrationsettings.destroy');
     Route::post('integration-settings/{id}/toggle-active', [RidingCompanyIntegrationSettingController::class, 'toggleActive'])->name('integrationsettings.toggle-active');
     Route::post('integration-settings/{id}/test-access', [RidingCompanyIntegrationSettingController::class, 'testAccess'])->name('integrationsettings.test-access');
+
+    // Facebook Integration
+    Route::get('riding-companies/{ridingCompanyId}/facebook', [FacebookIntegrationController::class, 'show'])->name('facebook.show');
+    Route::post('riding-companies/{ridingCompanyId}/facebook/oauth-url', [FacebookIntegrationController::class, 'getOAuthUrl'])->name('facebook.oauth-url');
+    Route::post('riding-companies/{ridingCompanyId}/facebook/pages', [FacebookIntegrationController::class, 'getPages'])->name('facebook.pages');
+    Route::post('riding-companies/{ridingCompanyId}/facebook/forms', [FacebookIntegrationController::class, 'getForms'])->name('facebook.forms');
+    Route::post('riding-companies/{ridingCompanyId}/facebook/form-fields', [FacebookIntegrationController::class, 'getFormFields'])->name('facebook.form-fields');
+    Route::post('riding-companies/{ridingCompanyId}/facebook/configuration', [FacebookIntegrationController::class, 'saveConfiguration'])->name('facebook.save-configuration');
+    Route::post('riding-companies/{ridingCompanyId}/facebook/field-mapping', [FacebookIntegrationController::class, 'saveFieldMapping'])->name('facebook.save-field-mapping');
+    Route::post('riding-companies/{ridingCompanyId}/facebook/sync-leads', [FacebookIntegrationController::class, 'syncLeads'])->name('facebook.sync-leads');
 });

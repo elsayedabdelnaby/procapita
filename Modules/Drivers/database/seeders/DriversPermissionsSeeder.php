@@ -17,6 +17,31 @@ class DriversPermissionsSeeder extends Seeder
             'driverstages' => ['create', 'read', 'update', 'delete', 'complete', 'reject', 'export'],
             'driverdocuments' => ['create', 'read', 'update', 'delete', 'upload', 'approve', 'reject', 'download', 'export', 'set-pending', 'set-approved', 'set-rejected', 'view', 'replace', 'delete-file'],
             'driverfollowups' => ['create', 'read', 'update', 'delete'],
+            // Field-level permissions for drivers
+            'driverfields' => [
+                'view-full_name',
+                'view-phone',
+                'view-whatsapp_phone',
+                'view-email',
+                'view-riding_company',
+                'view-campaign',
+                'view-lead_source',
+                'view-assigned_to',
+                'view-assigned_users',
+                'view-last_assigned_time',
+                'view-last_assigned_by',
+                'view-lead_status',
+                'view-lead_status_comment',
+                'view-next_follow_up',
+                'view-next_time',
+                'view-last_follow_up',
+                'view-lead_stage',
+                'view-current_stage',
+                'view-notes',
+                'view-driver_num',
+                'view-created_at',
+                'view-updated_at',
+            ],
         ];
 
         $createdPermissions = [];

@@ -60,7 +60,6 @@ interface Driver {
     lead_status_id?: number;
     lead_status_comment?: string;
     next_follow_up?: string;
-    next_time?: string;
     last_follow_up?: string;
     lead_stage_id?: number;
     current_stage_id?: number;
@@ -103,7 +102,6 @@ export default function DriversEdit({
         lead_status_id: driver.lead_status_id ? String(driver.lead_status_id) : '',
         lead_status_comment: driver.lead_status_comment || '',
         next_follow_up: driver.next_follow_up || '',
-        next_time: driver.next_time || '',
         last_follow_up: driver.last_follow_up || '',
         lead_stage_id: driver.lead_stage_id ? String(driver.lead_stage_id) : '',
         current_stage_id: driver.current_stage_id ? String(driver.current_stage_id) : '',
@@ -472,26 +470,6 @@ export default function DriversEdit({
                                     </div>
                                     {errors.next_follow_up && (
                                         <p className="text-sm text-red-500">{errors.next_follow_up}</p>
-                                    )}
-                                </div>
-                                <div>
-                                    <Label htmlFor="next_time" className="font-bold text-green-700 dark:text-green-300">Next Time</Label>
-                                    <select
-                                        id="next_time"
-                                        name="next_time"
-                                        value={data.next_time || ''}
-                                        onChange={(e) => setData('next_time', e.target.value)}
-                                        className="w-full rounded-md border px-3 py-2"
-                                    >
-                                        <option value="">Select Time</option>
-                                        {TIME_OPTIONS.map((time) => (
-                                            <option key={time} value={time}>
-                                                {time}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {errors.next_time && (
-                                        <p className="text-sm text-red-500">{errors.next_time}</p>
                                     )}
                                 </div>
                             </div>

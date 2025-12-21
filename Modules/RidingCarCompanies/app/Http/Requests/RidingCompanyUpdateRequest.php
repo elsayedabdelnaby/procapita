@@ -24,6 +24,11 @@ class RidingCompanyUpdateRequest extends FormRequest
             'contact_phone' => ['nullable', 'string', 'max:255'],
             'api_settings' => ['nullable', 'array'],
             'active' => ['nullable', 'boolean'],
+            'default_driver_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'distribution_type' => ['nullable', 'string', 'in:equal'],
+            'max_drivers_per_day' => ['nullable', 'integer', 'min:1'],
+            'distribution_users' => ['nullable', 'array'],
+            'distribution_users.*' => ['integer', 'exists:users,id'],
         ];
 
         if ($user->isSuperAdmin()) {

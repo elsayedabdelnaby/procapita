@@ -41,27 +41,55 @@ interface WhatsAppMessage {
     isForwarded: boolean;
     hasMedia: boolean;
     mediaUrl?: string;
+    mimetype?: string;
+    filename?: string;
+}
+
+interface Driver {
+    id: number;
+    name: string;
+    phone?: string;
+    whatsapp_phone?: string;
+    avatar?: string;
 }
 
 interface WhatsAppWindowProps {
-    companyId: number;
+    companyId?: number | null;
+    ridingCompanyId?: number | null;
     driverPhoneNumbers: string[];
+    drivers?: Driver[];
     isOpen: boolean;
     onClose: () => void;
     initialChatPhone?: string;
     isFloating?: boolean;
     onToggleFloating?: () => void;
+    singleChatMode?: boolean; // Hide chat list and show only the conversation
 }
 
 export function WhatsAppWindow({ 
     companyId, 
+    ridingCompanyId,
     driverPhoneNumbers, 
+    drivers = [],
     isOpen, 
     onClose,
     initialChatPhone,
     isFloating: externalIsFloating,
-    onToggleFloating
+    onToggleFloating,
+    singleChatMode = false
 }: WhatsAppWindowProps) {
+    // Determine the API base path based on whether we're using riding company or company
+    const apiBasePath = ridingCompanyId 
+        ? `/whatsapp/riding-companies/${ridingCompanyId}`
+        : companyId 
+            ? `/whatsapp/${companyId}`
+            : null;
+    
+    const nodeApiBasePath = ridingCompanyId
+        ? `/api/whatsapp/riding-company/${ridingCompanyId}`
+        : companyId
+            ? `/api/whatsapp/${companyId}`
+            : null;
     const [chats, setChats] = useState<WhatsAppChat[]>([]);
     const [selectedChat, setSelectedChat] = useState<WhatsAppChat | null>(null);
     const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
@@ -69,8 +97,16 @@ export function WhatsAppWindow({
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [isFloating, setIsFloating] = useState(externalIsFloating || false);
-    const [chatsPanelWidth, setChatsPanelWidth] = useState(33.33); // Percentage width for chats panel (default 1/3 = 33.33%)
+    const [chatsPanelWidth, setChatsPanelWidth] = useState(() => {
+        const saved = localStorage.getItem('whatsapp_chats_panel_width');
+        return saved ? parseFloat(saved) : 33.33;
+    }); // Percentage width for chats panel (default 1/3 = 33.33%)
     const [chatNotFoundError, setChatNotFoundError] = useState<string | null>(null);
+    const [isCreatingChat, setIsCreatingChat] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
+    const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+    const [recordedAudio, setRecordedAudio] = useState<{ blob: Blob; url: string } | null>(null);
+    const [replyToMessage, setReplyToMessage] = useState<WhatsAppMessage | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const windowRef = useRef<HTMLDivElement>(null);
@@ -78,8 +114,46 @@ export function WhatsAppWindow({
     // Get WhatsApp service URL from environment or use default
     const whatsappServiceUrl = (window as any).WHATSAPP_SERVICE_URL || import.meta.env.VITE_WHATSAPP_SERVICE_URL || 'http://localhost:3001';
 
+    // Find driver by phone number
+    const findDriverByPhone = (phone: string): Driver | undefined => {
+        if (!phone || drivers.length === 0) {
+            console.log('findDriverByPhone: No phone or no drivers', { phone, driversCount: drivers.length });
+            return undefined;
+        }
+        
+        // Clean phone - remove all non-digits
+        const cleanPhone = phone.replace(/[^0-9]/g, '');
+        // Get last 9-10 digits for comparison (ignoring country code)
+        const phoneLast9 = cleanPhone.slice(-9);
+        
+        const found = drivers.find(d => {
+            const driverPhone = (d.phone || '').replace(/[^0-9]/g, '');
+            const driverWhatsapp = (d.whatsapp_phone || '').replace(/[^0-9]/g, '');
+            const driverPhoneLast9 = driverPhone.slice(-9);
+            const driverWhatsappLast9 = driverWhatsapp.slice(-9);
+            
+            // Match by last 9 digits (Egyptian numbers without country code)
+            const match = (driverPhoneLast9 && phoneLast9 === driverPhoneLast9) ||
+                   (driverWhatsappLast9 && phoneLast9 === driverWhatsappLast9) ||
+                   // Also try full number match
+                   cleanPhone === driverPhone || cleanPhone === driverWhatsapp ||
+                   // Or ends with
+                   cleanPhone.endsWith(driverPhone) || cleanPhone.endsWith(driverWhatsapp) ||
+                   (driverPhone && driverPhone.endsWith(phoneLast9)) ||
+                   (driverWhatsapp && driverWhatsapp.endsWith(phoneLast9));
+            
+            return match;
+        });
+        
+        console.log('findDriverByPhone:', { phone, cleanPhone, phoneLast9, found: found?.name, driversCount: drivers.length });
+        return found;
+    };
+
+    // Get driver for selected chat
+    const selectedDriver = selectedChat ? findDriverByPhone(selectedChat.phone) : undefined;
+
     useEffect(() => {
-        if (isOpen && companyId) {
+        if (isOpen && (companyId || ridingCompanyId)) {
             loadChats();
             // Auto-refresh chats every 10 seconds
             const interval = setInterval(() => {
@@ -87,15 +161,18 @@ export function WhatsAppWindow({
             }, 10000);
             return () => clearInterval(interval);
         }
-    }, [isOpen, companyId, driverPhoneNumbers]);
+    }, [isOpen, companyId, ridingCompanyId, driverPhoneNumbers]);
 
     useEffect(() => {
         if (selectedChat) {
+            setMessages([]);
             loadMessages(selectedChat.id);
-            // Poll for new messages every 5 seconds
+            // Poll for new messages every 10 seconds
             const interval = setInterval(() => {
+                if (!loadingMessages) {
                 loadMessages(selectedChat.id);
-            }, 5000);
+                }
+            }, 10000);
             return () => clearInterval(interval);
         }
     }, [selectedChat]);
@@ -133,14 +210,96 @@ export function WhatsAppWindow({
                     setSelectedChat(chatById);
                     setChatNotFoundError(null);
                 } else {
-                    // Chat not found - show error message
-                    setChatNotFoundError(`هذا الرقم (${initialChatPhone}) ليس لديه WhatsApp`);
-                    setSelectedChat(null);
+                    // Chat not found - create new chat by sending an initial message
+                    if (!isCreatingChat) {
+                        setIsCreatingChat(true);
+                        (async () => {
+                            try {
+                                await createNewChat(initialChatPhone);
+                                // Reload chats and try to find the new chat
+                                const findChat = async () => {
+                                    const normalizedInitial = normalizePhone(initialChatPhone);
+                                    
+                                    // Reload chats
+                                    await loadChats();
+                                    
+                                    // Wait a bit for state to update, then check again
+                                    setTimeout(() => {
+                                        const updatedChats = chats;
+                                        const newChat = updatedChats.find(c => {
+                                            const normalizedChat = normalizePhone(c.phone);
+                                            const chatId = c.id || '';
+                                            const phoneInId = chatId.split('@')[0].replace(/\D/g, '');
+                                            return normalizedChat === normalizedInitial || 
+                                                   normalizedChat.includes(normalizedInitial) || 
+                                                   normalizedInitial.includes(normalizedChat) ||
+                                                   phoneInId === normalizedInitial ||
+                                                   phoneInId.includes(normalizedInitial) ||
+                                                   normalizedInitial.includes(phoneInId);
+                                        });
+                                        
+                                        if (newChat) {
+                                            setSelectedChat(newChat);
+                                            setChatNotFoundError(null);
+                                            setIsCreatingChat(false);
+                                        } else {
+                                            // If still not found, try reloading chats one more time
+                                            setTimeout(async () => {
+                                                await loadChats();
+                                                setTimeout(() => {
+                                                    const finalChats = chats;
+                                                    const finalChat = finalChats.find(c => {
+                                                        const normalizedChat = normalizePhone(c.phone);
+                                                        const chatId = c.id || '';
+                                                        const phoneInId = chatId.split('@')[0].replace(/\D/g, '');
+                                                        return normalizedChat === normalizedInitial || 
+                                                               normalizedChat.includes(normalizedInitial) || 
+                                                               normalizedInitial.includes(normalizedChat) ||
+                                                               phoneInId === normalizedInitial ||
+                                                               phoneInId.includes(normalizedInitial) ||
+                                                               normalizedInitial.includes(phoneInId);
+                                                    });
+                                                    
+                                                    if (finalChat) {
+                                                        setSelectedChat(finalChat);
+                                                        setChatNotFoundError(null);
+                                                    } else {
+                                                        setChatNotFoundError(`تم إنشاء الشات. يرجى إعادة فتح الواتساب.`);
+                                                    }
+                                                    setIsCreatingChat(false);
+                                                }, 500);
+                                            }, 2000);
+                                        }
+                                    }, 1000);
+                                };
+                                
+                                // Start finding chat after initial delay
+                                setTimeout(findChat, 1500);
+                            } catch (error: any) {
+                                console.error('Error creating new chat:', error);
+                                setIsCreatingChat(false);
+                                setChatNotFoundError(`فشل في إنشاء شات جديد: ${error.response?.data?.error || error.message}`);
+                                setSelectedChat(null);
+                            }
+                        })();
+                    }
                 }
             }
-        } else if (initialChatPhone && chats.length === 0 && !loading) {
-            // If chats are loaded but empty, and we're looking for a specific phone
-            setChatNotFoundError(`هذا الرقم (${initialChatPhone}) ليس لديه WhatsApp`);
+        } else if (initialChatPhone && chats.length === 0 && !loading && !isCreatingChat) {
+            // If chats are loaded but empty, and we're looking for a specific phone, create new chat
+            setIsCreatingChat(true);
+            (async () => {
+                try {
+                    await createNewChat(initialChatPhone);
+                    // Reload chats after creating new chat
+                    await loadChats();
+                    setIsCreatingChat(false);
+                } catch (error: any) {
+                    console.error('Error creating new chat:', error);
+                    setIsCreatingChat(false);
+                    setChatNotFoundError(`فشل في إنشاء شات جديد: ${error.response?.data?.error || error.message}`);
+                }
+            })();
         }
     }, [initialChatPhone, chats, loading]);
 
@@ -149,6 +308,11 @@ export function WhatsAppWindow({
     }, [messages]);
 
     const loadChats = async () => {
+        if (!nodeApiBasePath) {
+            console.error('[WhatsApp] loadChats: nodeApiBasePath is not set');
+            return;
+        }
+        
         try {
             setLoading(true);
             // Send phone_numbers only if provided, otherwise get all chats
@@ -156,48 +320,139 @@ export function WhatsAppWindow({
                 ? { phone_numbers: driverPhoneNumbers }
                 : {};
             
+            console.log('[WhatsApp] ========== LOAD CHATS REQUEST ==========');
+            console.log('[WhatsApp] API Path:', nodeApiBasePath);
+            console.log('[WhatsApp] Full URL:', `${whatsappServiceUrl}${nodeApiBasePath}/chats`);
+            console.log('[WhatsApp] Payload:', payload);
+            console.log('[WhatsApp] Driver phone numbers count:', driverPhoneNumbers ? driverPhoneNumbers.length : 0);
+            console.log('[WhatsApp] Driver phone numbers:', driverPhoneNumbers);
+            
             const response = await axios.post(
-                `${whatsappServiceUrl}/api/whatsapp/${companyId}/chats`,
+                `${whatsappServiceUrl}${nodeApiBasePath}/chats`,
                 payload
             );
-            // Filter out any group chats that might have slipped through (double check)
+            
+            console.log('[WhatsApp] Response status:', response.status);
+            console.log('[WhatsApp] Response data:', response.data);
+            console.log('[WhatsApp] Total chats in response:', response.data.chats ? response.data.chats.length : 0);
+            // Filter out any group chats and chats with phone number "0"
             const individualChats = (response.data.chats || []).filter((chat: WhatsAppChat) => {
                 // Group chats typically have IDs that don't contain a phone number pattern
                 // or have @g.us suffix instead of @c.us
                 const chatId = chat.id || '';
-                return !chatId.includes('@g.us') && !chat.isGroup;
+                const phone = chat.phone || '';
+                
+                // Filter out group chats
+                if (chatId.includes('@g.us') || chat.isGroup) return false;
+                
+                // Filter out chats with phone number "0" or invalid phone numbers
+                const normalizedPhone = phone.replace(/\D/g, '');
+                if (!normalizedPhone || normalizedPhone === '0' || normalizedPhone.length < 5) return false;
+                
+                // If driverPhoneNumbers is provided, ensure this chat matches one of them
+                if (driverPhoneNumbers && driverPhoneNumbers.length > 0) {
+                    const chatLast9 = normalizedPhone.slice(-9);
+                    const matches = driverPhoneNumbers.some(driverPhone => {
+                        const normalizedDriverPhone = driverPhone.replace(/\D/g, '');
+                        const driverLast9 = normalizedDriverPhone.slice(-9);
+                        return normalizedPhone === normalizedDriverPhone || 
+                               (chatLast9 && driverLast9 && chatLast9 === driverLast9) ||
+                               normalizedPhone.includes(normalizedDriverPhone) ||
+                               normalizedDriverPhone.includes(normalizedPhone);
+                    });
+                    if (!matches) return false;
+                }
+                
+                return true;
             });
+            
+            console.log('[WhatsApp] Individual chats after filtering:', individualChats.length);
+            console.log('[WhatsApp] Individual chats details:', individualChats.map(c => ({ id: c.id, name: c.name, phone: c.phone })));
+            console.log('[WhatsApp] ========== END LOAD CHATS ==========');
             setChats(individualChats);
         } catch (error: any) {
-            console.error('Error loading chats:', error);
+            console.error('[WhatsApp] ERROR loading chats:', error);
+            console.error('[WhatsApp] Error response:', error.response?.data);
+            console.error('[WhatsApp] Error message:', error.message);
         } finally {
             setLoading(false);
         }
     };
 
+    const [loadingMessages, setLoadingMessages] = useState(false);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
+
     const loadMessages = async (chatId: string) => {
+        if (!nodeApiBasePath) return;
+        
+        setLoadingMessages(true);
         try {
             const response = await axios.get(
-                `${whatsappServiceUrl}/api/whatsapp/${companyId}/chats/${chatId}/messages`
+                `${whatsappServiceUrl}${nodeApiBasePath}/chats/${chatId}/messages`
             );
-            setMessages(response.data.messages || []);
+            const newMessages = response.data.messages || [];
+            console.log(`Loaded ${newMessages.length} messages`);
+            setMessages(newMessages);
         } catch (error: any) {
             console.error('Error loading messages:', error);
+        } finally {
+            setLoadingMessages(false);
+        }
+    };
+
+    // Create new chat by sending an initial message
+    const createNewChat = async (phoneNumber: string) => {
+        if (!phoneNumber || !nodeApiBasePath) return;
+
+        try {
+            const payload: any = {
+                phone_number: phoneNumber,
+                message: 'مرحباً', // Initial message to create chat
+            };
+            
+            const response = await axios.post(
+                `${whatsappServiceUrl}${nodeApiBasePath}/send`,
+                payload
+            );
+            
+            // Clear error after successful creation
+            setChatNotFoundError(null);
+            return response.data;
+        } catch (error: any) {
+            console.error('Error creating new chat:', error);
+            
+            // Provide better error message
+            let errorMessage = 'فشل في إنشاء الشات.';
+            if (error.response?.data?.error) {
+                errorMessage = error.response.data.error;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            throw new Error(errorMessage);
         }
     };
 
     const sendMessage = async () => {
-        if (!messageText.trim() || !selectedChat) return;
+        if (!messageText.trim() || !selectedChat || !nodeApiBasePath) return;
 
         try {
-            await axios.post(
-                `${whatsappServiceUrl}/api/whatsapp/${companyId}/send`,
-                {
+            const payload: any = {
                     phone_number: selectedChat.phone,
                     message: messageText,
+            };
+            
+            // Add reply info if replying to a message
+            if (replyToMessage) {
+                payload.quoted_message_id = replyToMessage.id;
                 }
+            
+            await axios.post(
+                `${whatsappServiceUrl}${nodeApiBasePath}/send`,
+                payload
             );
             setMessageText('');
+            setReplyToMessage(null);
             // Reload messages
             loadMessages(selectedChat.id);
         } catch (error: any) {
@@ -209,6 +464,11 @@ export function WhatsAppWindow({
     const sendFile = async (file: File) => {
         if (!selectedChat) return;
 
+        // Determine the correct API path for sending files
+        const sendFileApiPath = ridingCompanyId 
+            ? `${whatsappServiceUrl}/api/whatsapp/riding-company/${ridingCompanyId}/send-file`
+            : `${whatsappServiceUrl}/api/whatsapp/${companyId}/send-file`;
+
         try {
             const formData = new FormData();
             formData.append('phone_number', selectedChat.phone);
@@ -216,7 +476,7 @@ export function WhatsAppWindow({
             formData.append('message', file.name);
 
             await axios.post(
-                `${whatsappServiceUrl}/api/whatsapp/${companyId}/send-file`,
+                sendFileApiPath,
                 formData,
                 {
                     headers: {
@@ -236,6 +496,106 @@ export function WhatsAppWindow({
         const file = e.target.files?.[0];
         if (file) {
             sendFile(file);
+        }
+    };
+
+    // Download media file
+    const downloadMedia = (mediaUrl: string, filename: string, mimetype?: string) => {
+        const link = document.createElement('a');
+        link.href = mediaUrl;
+        link.download = filename || `download_${Date.now()}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    // Ref to store audio chunks during recording
+    const audioChunksRef = useRef<Blob[]>([]);
+    const streamRef = useRef<MediaStream | null>(null);
+
+    // Start voice recording
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            streamRef.current = stream;
+            
+            // Try different mimetypes for browser compatibility
+            let mimeType = 'audio/ogg;codecs=opus';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'audio/webm;codecs=opus';
+            }
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'audio/webm';
+            }
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'audio/mp4';
+            }
+            
+            const recorder = new MediaRecorder(stream, { mimeType });
+            audioChunksRef.current = [];
+
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    audioChunksRef.current.push(e.data);
+                }
+            };
+
+            recorder.onstop = async () => {
+                try {
+                    const chunks = audioChunksRef.current;
+                    if (chunks.length === 0) {
+                        console.error('No audio chunks recorded');
+                        return;
+                    }
+                    const audioBlob = new Blob(chunks, { type: mimeType });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    setRecordedAudio({ blob: audioBlob, url: audioUrl });
+                } catch (err) {
+                    console.error('Error processing voice message:', err);
+                    alert('Failed to process voice message');
+                } finally {
+                    streamRef.current?.getTracks().forEach(track => track.stop());
+                    streamRef.current = null;
+                }
+            };
+
+            setMediaRecorder(recorder);
+            recorder.start(100); // Collect data every 100ms
+            setIsRecording(true);
+        } catch (error) {
+            console.error('Error starting recording:', error);
+            alert('Could not access microphone. Please check permissions.');
+        }
+    };
+
+    // Stop voice recording
+    const stopRecording = () => {
+        if (mediaRecorder && isRecording) {
+            mediaRecorder.stop();
+            setIsRecording(false);
+            setMediaRecorder(null);
+        }
+    };
+
+    // Send recorded voice
+    const sendRecordedVoice = async () => {
+        if (!recordedAudio) return;
+        try {
+            const ext = recordedAudio.blob.type.includes('ogg') ? 'ogg' : recordedAudio.blob.type.includes('mp4') ? 'm4a' : 'webm';
+            const audioFile = new File([recordedAudio.blob], `voice_${Date.now()}.${ext}`, { type: recordedAudio.blob.type });
+            await sendFile(audioFile);
+            cancelRecordedVoice();
+        } catch (err) {
+            console.error('Error sending voice message:', err);
+            alert('Failed to send voice message');
+        }
+    };
+
+    // Cancel recorded voice
+    const cancelRecordedVoice = () => {
+        if (recordedAudio) {
+            URL.revokeObjectURL(recordedAudio.url);
+            setRecordedAudio(null);
         }
     };
 
@@ -271,7 +631,8 @@ export function WhatsAppWindow({
             className="bg-white dark:bg-neutral-900 flex h-full"
             style={isFloating ? { width: '900px', height: '700px' } : {}}
         >
-            {/* Left Panel - Chats List */}
+            {/* Left Panel - Chats List (hidden in singleChatMode) */}
+            {!singleChatMode && (
             <div 
                 className="border-r border-neutral-200 dark:border-neutral-700 flex flex-col bg-[#f0f2f5] dark:bg-neutral-800 relative"
                 style={{ width: `${chatsPanelWidth}%`, minWidth: '200px', maxWidth: '70%' }}
@@ -342,7 +703,10 @@ export function WhatsAppWindow({
                             </div>
                         </div>
                     ) : (
-                        filteredChats.map((chat) => (
+                        filteredChats.map((chat) => {
+                            const driver = findDriverByPhone(chat.phone);
+                            const displayName = driver?.name || chat.name;
+                            return (
                             <div
                                 key={chat.id}
                                 onClick={() => setSelectedChat(chat)}
@@ -350,12 +714,29 @@ export function WhatsAppWindow({
                                     selectedChat?.id === chat.id ? 'bg-[#f0f2f5] dark:bg-neutral-800' : ''
                                 }`}
                             >
+                                {driver?.avatar ? (
+                                    <img 
+                                        src={driver.avatar} 
+                                        alt={displayName}
+                                        className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                                    />
+                                ) : (
                                 <div className="w-12 h-12 rounded-full bg-[#25d366] flex items-center justify-center text-white font-semibold flex-shrink-0 text-lg">
-                                    {chat.name.charAt(0).toUpperCase()}
+                                        {displayName.charAt(0).toUpperCase()}
                                 </div>
+                                )}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between mb-1">
-                                        <h4 className="font-medium text-sm truncate text-neutral-900 dark:text-neutral-100">{chat.name}</h4>
+                                        <div className="truncate flex flex-col gap-0.5">
+                                            {driver && (
+                                                <h4 className="font-medium text-sm truncate text-blue-600 dark:text-blue-400">{driver.name}</h4>
+                                            )}
+                                            {chat.phone && (
+                                                <span className={`text-xs ${driver ? 'text-neutral-600 dark:text-neutral-400' : 'font-medium text-sm text-neutral-900 dark:text-neutral-100'}`}>
+                                                    {chat.phone}
+                                                </span>
+                                            )}
+                                        </div>
                                         {chat.lastMessage && (
                                             <span className="text-xs text-neutral-500 ml-2 flex-shrink-0">
                                                 {formatTime(chat.lastMessage.timestamp)}
@@ -378,7 +759,8 @@ export function WhatsAppWindow({
                                     </div>
                                 </div>
                             </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
                 
@@ -392,18 +774,20 @@ export function WhatsAppWindow({
                         const startWidth = chatsPanelWidth;
                         const containerWidth = windowRef.current?.offsetWidth || 100;
                         
+                        let finalWidth = startWidth;
                         const handleMouseMove = (moveEvent: MouseEvent) => {
                             const diff = moveEvent.clientX - startX;
                             const widthChangePercent = (diff / containerWidth) * 100;
-                            const newWidth = Math.max(20, Math.min(70, startWidth + widthChangePercent));
-                            setChatsPanelWidth(newWidth);
+                            finalWidth = Math.max(20, Math.min(70, startWidth + widthChangePercent));
+                            setChatsPanelWidth(finalWidth);
                         };
-                        
                         const handleMouseUp = () => {
                             document.removeEventListener('mousemove', handleMouseMove);
                             document.removeEventListener('mouseup', handleMouseUp);
                             document.body.style.cursor = '';
                             document.body.style.userSelect = '';
+                            // Save the width to localStorage
+                            localStorage.setItem('whatsapp_chats_panel_width', finalWidth.toString());
                         };
                         
                         document.addEventListener('mousemove', handleMouseMove);
@@ -414,17 +798,19 @@ export function WhatsAppWindow({
                     title="Drag to resize"
                 />
             </div>
+            )}
 
             {/* Right Panel - Chat View */}
             <div 
                 className="flex flex-col bg-[#efeae2] dark:bg-[#0b141a]"
-                style={{ width: `${100 - chatsPanelWidth}%`, minWidth: '30%' }}
+                style={{ width: singleChatMode ? '100%' : `${100 - chatsPanelWidth}%`, minWidth: '30%' }}
             >
                 {selectedChat ? (
                     <>
                         {/* Chat Header */}
                         <div className="bg-[#075e54] dark:bg-[#202c33] text-white p-3 flex items-center justify-between shadow-sm">
                             <div className="flex items-center gap-3">
+                                {!singleChatMode && (
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -433,13 +819,45 @@ export function WhatsAppWindow({
                                 >
                                     <ArrowLeft className="h-5 w-5" />
                                 </Button>
+                                )}
+                                {selectedDriver?.avatar ? (
+                                    <img 
+                                        src={selectedDriver.avatar} 
+                                        alt={selectedDriver.name}
+                                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                                    />
+                                ) : (
                                 <div className="w-10 h-10 rounded-full bg-[#25d366] flex items-center justify-center flex-shrink-0">
-                                    <span className="text-white font-semibold">{selectedChat.name.charAt(0).toUpperCase()}</span>
+                                        <span className="text-white font-semibold">{(selectedDriver?.name || selectedChat.name).charAt(0).toUpperCase()}</span>
                                 </div>
-                                <div>
+                                )}
+                                <div className="flex-1">
+                                    {selectedDriver ? (
+                                        <>
+                                            <h3 className="font-semibold text-sm">{selectedDriver.name}</h3>
+                                            <p className="text-xs text-white/80">{selectedChat.phone}</p>
+                                        </>
+                                    ) : (
+                                        <>
                                     <h3 className="font-semibold text-sm">{selectedChat.name}</h3>
                                     <p className="text-xs text-white/80">{selectedChat.phone}</p>
+                                        </>
+                                    )}
                                 </div>
+                                {selectedDriver && (
+                                    <a
+                                        href={`/drivers/drivers/${selectedDriver.id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-1 px-2 py-1 text-xs bg-white/20 hover:bg-white/30 rounded text-white transition-colors"
+                                        title="Open Driver Details"
+                                    >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                        Open
+                                    </a>
+                                )}
                             </div>
                             <div className="flex items-center gap-1">
                                 <Button
@@ -461,13 +879,23 @@ export function WhatsAppWindow({
 
                         {/* Messages Area */}
                         <div 
+                            ref={messagesContainerRef}
                             className="flex-1 overflow-y-auto p-4 space-y-1 bg-[#efeae2] dark:bg-[#0b141a]" 
                             style={{
                                 backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='grid' width='100' height='100' patternUnits='userSpaceOnUse'%3E%3Cpath d='M 100 0 L 0 0 0 100' fill='none' stroke='%23d4d4d4' stroke-width='0.5' opacity='0.3'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100' height='100' fill='url(%23grid)'/%3E%3C/svg%3E")`,
                                 backgroundSize: '100px 100px',
                             }}
                         >
-                            {messages.length === 0 ? (
+                            {/* Loading indicator */}
+                            {loadingMessages && messages.length === 0 && (
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="text-center">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mx-auto mb-2"></div>
+                                        <span className="text-sm text-neutral-500">Loading messages...</span>
+                                    </div>
+                                </div>
+                            )}
+                            {!loadingMessages && messages.length === 0 ? (
                                 <div className="flex items-center justify-center h-full">
                                     <div className="text-center">
                                         <p className="text-neutral-500 text-sm">No messages yet</p>
@@ -487,7 +915,18 @@ export function WhatsAppWindow({
                                                     {formatDate(message.timestamp)}
                                                 </div>
                                             )}
-                                            <div className={`flex ${isFromMe ? 'justify-end' : 'justify-start'} mb-0.5`}>
+                                            <div className={`flex ${isFromMe ? 'justify-end' : 'justify-start'} mb-0.5 group/msg`}>
+                                                <div className={`flex items-start gap-1 ${isFromMe ? 'flex-row-reverse' : ''}`}>
+                                                    {/* Reply button */}
+                                                    <button
+                                                        onClick={() => setReplyToMessage(message)}
+                                                        className="opacity-0 group-hover/msg:opacity-100 transition-opacity p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 mt-2"
+                                                        title="Reply"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                                        </svg>
+                                                    </button>
                                                 <div
                                                     className={`max-w-[65%] rounded-lg px-3 py-2 shadow-md ${
                                                         isFromMe
@@ -495,12 +934,113 @@ export function WhatsAppWindow({
                                                             : 'bg-white dark:bg-[#202c33]'
                                                     }`}
                                                 >
-                                                    {message.hasMedia && message.mediaUrl && (
+                                                    {message.hasMedia && (
+                                                        <div className="mb-1">
+                                                            {/* Media not available placeholder */}
+                                                            {!message.mediaUrl && (
+                                                                <div className="flex items-center gap-2 p-2 bg-neutral-100 dark:bg-neutral-700 rounded text-sm text-neutral-500">
+                                                                    {message.mimetype?.startsWith('image/') && (
+                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                                        </svg>
+                                                                    )}
+                                                                    {(message.mimetype?.startsWith('audio/') || message.type === 'ptt') && (
+                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                                                        </svg>
+                                                                    )}
+                                                                    {message.mimetype?.startsWith('video/') && (
+                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                                        </svg>
+                                                                    )}
+                                                                    {message.mimetype && !message.mimetype.startsWith('image/') && !message.mimetype.startsWith('audio/') && !message.mimetype.startsWith('video/') && message.type !== 'ptt' && (
+                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                                        </svg>
+                                                                    )}
+                                                                    <span>{message.filename || message.mimetype || 'Media'}</span>
+                                                                </div>
+                                                            )}
+                                                            {/* Image */}
+                                                            {message.mediaUrl && message.mimetype?.startsWith('image/') && (
+                                                                <div className="relative group">
                                                         <img 
                                                             src={message.mediaUrl} 
                                                             alt="Media" 
-                                                            className="max-w-full rounded mb-1"
-                                                        />
+                                                                        className="max-w-full rounded cursor-pointer"
+                                                                        onClick={() => window.open(message.mediaUrl, '_blank')}
+                                                                    />
+                                                                    <button
+                                                                        onClick={() => downloadMedia(message.mediaUrl!, message.filename || `image_${message.timestamp}.jpg`, message.mimetype)}
+                                                                        className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        title="Download"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                            {/* Audio/Voice */}
+                                                            {message.mediaUrl && (message.mimetype?.startsWith('audio/') || message.type === 'ptt') && (
+                                                                <div className="flex items-center gap-2 min-w-[200px]">
+                                                                    <audio 
+                                                                        controls 
+                                                                        src={message.mediaUrl} 
+                                                                        className="h-10 w-full"
+                                                                        style={{ maxWidth: '250px' }}
+                                                                    />
+                                                                    <button
+                                                                        onClick={() => downloadMedia(message.mediaUrl!, message.filename || `audio_${message.timestamp}.ogg`, message.mimetype)}
+                                                                        className="text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 p-1"
+                                                                        title="Download"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                            {/* Video */}
+                                                            {message.mediaUrl && message.mimetype?.startsWith('video/') && (
+                                                                <div className="relative group">
+                                                                    <video 
+                                                                        controls 
+                                                                        src={message.mediaUrl} 
+                                                                        className="max-w-full rounded"
+                                                                        style={{ maxHeight: '300px' }}
+                                                                    />
+                                                                    <button
+                                                                        onClick={() => downloadMedia(message.mediaUrl!, message.filename || `video_${message.timestamp}.mp4`, message.mimetype)}
+                                                                        className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        title="Download"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                            {/* Document/File */}
+                                                            {message.mediaUrl && message.mimetype && !message.mimetype.startsWith('image/') && !message.mimetype.startsWith('audio/') && !message.mimetype.startsWith('video/') && message.type !== 'ptt' && (
+                                                                <div 
+                                                                    className="flex items-center gap-2 p-2 bg-neutral-100 dark:bg-neutral-700 rounded cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-600"
+                                                                    onClick={() => downloadMedia(message.mediaUrl!, message.filename || `file_${message.timestamp}`, message.mimetype)}
+                                                                >
+                                                                    <svg className="w-8 h-8 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                                    </svg>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="text-sm font-medium truncate">{message.filename || 'Document'}</p>
+                                                                        <p className="text-xs text-neutral-500">{message.mimetype}</p>
+                                                                    </div>
+                                                                    <svg className="w-5 h-5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                                    </svg>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     )}
                                                     {message.body && (
                                                         <p className={`text-sm break-words whitespace-pre-wrap ${
@@ -526,6 +1066,7 @@ export function WhatsAppWindow({
                                                             </span>
                                                         )}
                                                     </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -534,6 +1075,28 @@ export function WhatsAppWindow({
                             )}
                             <div ref={messagesEndRef} />
                         </div>
+
+                        {/* Reply Preview */}
+                        {replyToMessage && (
+                            <div className="px-3 py-2 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-neutral-200 dark:border-[#313d45]">
+                                <div className="flex items-center gap-2 bg-white dark:bg-neutral-700 rounded-lg p-2 border-l-4 border-[#25d366]">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs text-[#25d366] font-medium">
+                                            {replyToMessage.from.includes(selectedChat?.phone || '') ? (findDriverByPhone(selectedChat?.phone || '')?.name || selectedChat?.name) : 'You'}
+                                        </p>
+                                        <p className="text-sm text-neutral-600 dark:text-neutral-300 truncate">
+                                            {replyToMessage.hasMedia && !replyToMessage.body ? '📎 Media' : replyToMessage.body}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setReplyToMessage(null)}
+                                        className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Message Input */}
                         <div className="p-3 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-neutral-200 dark:border-[#313d45]">
@@ -572,18 +1135,56 @@ export function WhatsAppWindow({
                                     placeholder="Type a message"
                                     className="flex-1 bg-white dark:bg-neutral-700 border-0 rounded-full px-4"
                                 />
-                                {messageText.trim() ? (
+                                {recordedAudio ? (
+                                    // Voice preview mode
+                                    <>
+                                        <Button
+                                            onClick={cancelRecordedVoice}
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-full h-10 w-10 p-0"
+                                            title="Cancel"
+                                        >
+                                            <X className="h-5 w-5" />
+                                        </Button>
+                                        <audio 
+                                            controls 
+                                            src={recordedAudio.url} 
+                                            className="h-10 flex-1"
+                                            style={{ maxWidth: '200px' }}
+                                        />
+                                        <Button
+                                            onClick={sendRecordedVoice}
+                                            className="bg-[#25d366] hover:bg-[#20ba5a] text-white rounded-full h-10 w-10 p-0"
+                                            title="Send voice message"
+                                        >
+                                            <Send className="h-5 w-5" />
+                                        </Button>
+                                    </>
+                                ) : messageText.trim() ? (
                                     <Button
                                         onClick={sendMessage}
                                         className="bg-[#25d366] hover:bg-[#20ba5a] text-white rounded-full h-10 w-10 p-0"
                                     >
                                         <Send className="h-5 w-5" />
                                     </Button>
+                                ) : isRecording ? (
+                                    <Button
+                                        onClick={stopRecording}
+                                        className="bg-red-500 hover:bg-red-600 text-white rounded-full h-10 w-10 p-0 animate-pulse"
+                                        title="Stop recording"
+                                    >
+                                        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                                            <rect x="6" y="6" width="12" height="12" rx="2" />
+                                        </svg>
+                                    </Button>
                                 ) : (
                                     <Button
+                                        onClick={startRecording}
                                         variant="ghost"
                                         size="sm"
                                         className="text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-full h-10 w-10 p-0"
+                                        title="Record voice message"
                                     >
                                         <Mic className="h-5 w-5" />
                                     </Button>
@@ -591,6 +1192,20 @@ export function WhatsAppWindow({
                             </div>
                         </div>
                     </>
+                ) : isCreatingChat ? (
+                    <div className="flex-1 flex items-center justify-center">
+                        <div className="text-center max-w-md px-4">
+                            <div className="w-24 h-24 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mx-auto mb-4">
+                                <Phone className="h-12 w-12 text-green-500 dark:text-green-400 animate-pulse" />
+                            </div>
+                            <h3 className="text-xl font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
+                                جاري إنشاء الشات...
+                            </h3>
+                            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                                يرجى الانتظار بينما نقوم بإنشاء شات جديد مع هذا الرقم
+                            </p>
+                        </div>
+                    </div>
                 ) : chatNotFoundError ? (
                     <div className="flex-1 flex items-center justify-center">
                         <div className="text-center max-w-md px-4">

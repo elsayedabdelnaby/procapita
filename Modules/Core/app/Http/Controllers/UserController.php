@@ -31,6 +31,13 @@ class UserController extends Controller
             abort(404, 'Company not found.');
         }
 
+        $currentUser = $request->user();
+        
+        // Check access: Super admin can see all, Company admin can see only their company
+        if ($currentUser && ! $currentUser->isSuperAdmin() && $companyModel->id !== $currentUser->company_id) {
+            abort(403, 'You do not have access to this company.');
+        }
+
         // Set team context for Spatie Permission to load roles correctly
         setPermissionsTeamId($company);
 
@@ -50,16 +57,36 @@ class UserController extends Controller
             abort(404, 'Company not found.');
         }
 
-        $roles = $this->roleService->getAllRoles($company);
+        $currentUser = $request->user();
+        
+        // Check access: Super admin can see all, Company admin can see only their company
+        if ($currentUser && ! $currentUser->isSuperAdmin() && $companyModel->id !== $currentUser->company_id) {
+            abort(403, 'You do not have access to this company.');
+        }
+        
+        // Set team context for Spatie Permission to load roles correctly
+        setPermissionsTeamId($company);
+        
+        // Get roles that are below the current user in hierarchy
+        $roles = $this->roleService->getSubordinateRolesForUser($currentUser, $company);
+        
+        // Get permissions that the current user has
+        $permissions = $this->permissionService->getGroupedPermissionsForUser($currentUser);
+        
         $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
             ->active()
             ->orderBy('name')
             ->get();
 
+        // Get riding_company_id from query parameter if present
+        $ridingCompanyId = $request->query('riding_company_id');
+
         return Inertia::render('Core/Users/Create', [
             'company' => $companyModel,
             'roles' => $roles,
+            'permissions' => $permissions,
             'ridingCompanies' => $ridingCompanies,
+            'defaultRidingCompanyId' => $ridingCompanyId,
         ]);
     }
 
@@ -129,27 +156,43 @@ class UserController extends Controller
         }
 
         $companyModel = $this->companyService->getCompanyById($company);
+        $currentUser = $request->user();
+        
+        // Check access: Super admin can see all, Company admin can see only their company
+        if ($currentUser && ! $currentUser->isSuperAdmin() && $companyModel->id !== $currentUser->company_id) {
+            abort(403, 'You do not have access to this company.');
+        }
         
         // Set team context for Spatie Permission to load roles correctly
         setPermissionsTeamId($company);
         
-        $roles = $this->roleService->getAllRoles($company);
+        // Get roles that are below the current user in hierarchy
+        $roles = $this->roleService->getSubordinateRolesForUser($currentUser, $company);
+        
+        // Get permissions that the current user has
+        $permissions = $this->permissionService->getGroupedPermissionsForUser($currentUser);
+        
         $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
             ->active()
             ->orderBy('name')
             ->get();
         
-        // Reload the user's roles in the correct team context
-        $userModel->load('roles');
+        // Reload the user's roles and permissions in the correct team context
+        $userModel->load('roles', 'permissions');
         
         // Get user's current role IDs
         $userRoles = $userModel->roles->pluck('id')->toArray();
+        
+        // Get user's current permission IDs
+        $userPermissionIds = $userModel->permissions->pluck('id')->toArray();
 
         return Inertia::render('Core/Users/Edit', [
             'company' => $companyModel,
-            'user' => $userModel,
+            'user' => $userModel->load('permissions'),
             'roles' => $roles,
+            'permissions' => $permissions,
             'userRoles' => $userRoles,
+            'userPermissionIds' => $userPermissionIds,
             'ridingCompanies' => $ridingCompanies,
         ]);
     }

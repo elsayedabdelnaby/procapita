@@ -16,6 +16,7 @@ class RidingCarCompaniesPermissionsSeeder extends Seeder
             'documentrequirements' => ['create', 'read', 'update', 'delete', 'toggle-active'],
             'integrations' => ['create', 'read', 'update', 'delete', 'toggle-active', 'test-connection'],
             'integrationsettings' => ['create', 'read', 'update', 'delete', 'toggle-active', 'test-access'],
+            'ridingcompanyusers' => ['create', 'read', 'update', 'delete'],
         ];
 
         $createdPermissions = [];

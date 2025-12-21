@@ -3,7 +3,8 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { useFieldPermissions } from '@/hooks/use-field-permissions';
 import { 
     ArrowLeft, 
     Edit, 
@@ -16,11 +17,14 @@ import {
     XCircle,
     Activity,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    MessageCircle,
+    Eye
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useState, useEffect } from 'react';
 import { formatDate } from '@/utils/date-format';
+import { WhatsAppWindow } from '@/components/whatsapp/whatsapp-window';
 
 interface RidingCompany {
     id: number;
@@ -74,7 +78,10 @@ interface Activity {
     id: number;
     description: string;
     event: string;
-    properties: any;
+    properties?: {
+        old?: Record<string, any>;
+        attributes?: Record<string, any>;
+    };
     causer?: {
         id: number;
         name: string;
@@ -82,6 +89,29 @@ interface Activity {
     };
     created_at: string;
 }
+
+// Helper function to convert field names to readable labels
+const getFieldLabel = (fieldName: string): string => {
+    const fieldLabels: Record<string, string> = {
+        'full_name': 'Full Name',
+        'phone': 'Phone',
+        'whatsapp_phone': 'WhatsApp Phone',
+        'email': 'Email',
+        'riding_company_id': 'Riding Company',
+        'campaign_id': 'Campaign',
+        'lead_source_id': 'Lead Source',
+        'assigned_to': 'Assigned To',
+        'assigned_users': 'Assigned Users',
+        'lead_status_id': 'Lead Status',
+        'lead_status_comment': 'Lead Status Comment',
+        'next_follow_up': 'Next Follow-up',
+        'last_follow_up': 'Last Follow-up',
+        'lead_stage_id': 'Lead Stage',
+        'current_stage_id': 'Current Stage',
+        'notes': 'Notes',
+    };
+    return fieldLabels[fieldName] || fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
 
 interface Driver {
     id: number;
@@ -100,6 +130,11 @@ interface Driver {
         name: string;
     };
     assigned_users?: AssignedUser[];
+    last_assigned_time?: string;
+    last_assigned_by?: {
+        id: number;
+        name: string;
+    };
     lead_status?: LeadStatus;
     lead_status_comment?: string;
     next_follow_up?: string;
@@ -140,6 +175,7 @@ interface Driver {
     documents?: Document[];
     created_at: string;
     updated_at: string;
+    duplicate?: number;
 }
 
 interface FollowUp {
@@ -157,26 +193,79 @@ interface FollowUp {
     };
 }
 
+interface DuplicateDriver {
+    id: number;
+    full_name: string;
+    phone?: string;
+    whatsapp_phone?: string;
+    email?: string;
+    riding_company?: {
+        id: number;
+        name: string;
+    };
+    campaign?: {
+        id: number;
+        name: string;
+    };
+    lead_source?: {
+        id: number;
+        name: string;
+    };
+    lead_status?: {
+        id: number;
+        name: string;
+        color?: string;
+    };
+    lead_stage?: {
+        id: number;
+        name: string;
+    };
+    assigned_to?: {
+        id: number;
+        name: string;
+    };
+    assigned_users?: Array<{
+        id: number;
+        name: string;
+    }>;
+    created_at: string;
+    updated_at: string;
+}
+
 interface DriversShowProps {
     driver: Driver;
     activities?: Activity[];
     follow_ups?: FollowUp[];
+    duplicate_drivers?: DuplicateDriver[];
     next_driver_id?: number;
     previous_driver_id?: number;
+    riding_company_id?: number;
 }
 
 export default function DriversShow({ 
     driver, 
     activities = [], 
     follow_ups = [],
+    duplicate_drivers = [],
     next_driver_id, 
-    previous_driver_id 
+    previous_driver_id,
+    riding_company_id
 }: DriversShowProps) {
-    const [activeTab, setActiveTab] = useState<'overview' | 'updates' | 'followups'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'updates' | 'followups' | 'duplicates'>('overview');
     const [filteredIds, setFilteredIds] = useState<number[]>([]);
     const [currentIndex, setCurrentIndex] = useState<number>(-1);
     const [filteredNextId, setFilteredNextId] = useState<number | null>(null);
     const [filteredPreviousId, setFilteredPreviousId] = useState<number | null>(null);
+    const [phoneWhatsAppOpen, setPhoneWhatsAppOpen] = useState(false);
+    const [whatsappPhoneWhatsAppOpen, setWhatsappPhoneWhatsAppOpen] = useState(false);
+    
+    // Get riding company ID from props or driver
+    const page = usePage();
+    const auth = (page.props as any).auth;
+    const effectiveRidingCompanyId = riding_company_id || driver.riding_company?.id || (page.props as any).selectedRidingCompany?.id;
+    
+    // Field-level permissions
+    const { canViewDriverField } = useFieldPermissions();
 
     // Load filtered IDs from localStorage and find next/previous
     useEffect(() => {
@@ -323,6 +412,21 @@ export default function DriversShow({
                                 Follow-ups ({follow_ups.length})
                             </div>
                         </button>
+                        {(driver.duplicate ?? 0) > 0 && (
+                            <button
+                                onClick={() => setActiveTab('duplicates')}
+                                className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                    activeTab === 'duplicates'
+                                        ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                        : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <User className="h-4 w-4" />
+                                    Duplicates ({driver.duplicate})
+                                </div>
+                            </button>
+                        )}
                     </nav>
                 </div>
 
@@ -334,21 +438,25 @@ export default function DriversShow({
                             <Card className="p-6">
                                 <h2 className="mb-4 text-lg font-semibold">Personal Information</h2>
                                 <div className="space-y-4">
-                                    <div className="flex items-start gap-2">
-                                        <User className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                        <div className="flex-1">
-                                            <p className="text-sm text-neutral-500">Full Name</p>
-                                            <p className="font-medium">{driver.full_name}</p>
+                                    {canViewDriverField('full_name') && (
+                                        <div className="flex items-start gap-2">
+                                            <User className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                            <div className="flex-1">
+                                                <p className="text-sm text-neutral-500">Full Name</p>
+                                                <p className="font-medium">{driver.full_name}</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="flex items-start gap-2">
-                                        <Phone className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                        <div className="flex-1">
-                                            <p className="text-sm text-neutral-500">Phone</p>
-                                            <p className="font-medium">{driver.phone}</p>
+                                    )}
+                                    {canViewDriverField('phone') && (
+                                        <div className="flex items-start gap-2">
+                                            <Phone className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                            <div className="flex-1">
+                                                <p className="text-sm text-neutral-500">Phone</p>
+                                                <p className="font-medium">{driver.phone}</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    {driver.whatsapp_phone && (
+                                    )}
+                                    {canViewDriverField('whatsapp_phone') && driver.whatsapp_phone && (
                                         <div className="flex items-start gap-2">
                                             <Phone className="mt-0.5 h-4 w-4 text-neutral-500" />
                                             <div className="flex-1">
@@ -357,7 +465,7 @@ export default function DriversShow({
                                             </div>
                                         </div>
                                     )}
-                                    {driver.email && (
+                                    {canViewDriverField('email') && driver.email && (
                                         <div className="flex items-start gap-2">
                                             <Mail className="mt-0.5 h-4 w-4 text-neutral-500" />
                                             <div className="flex-1">
@@ -378,74 +486,82 @@ export default function DriversShow({
                             <Card className="p-6">
                                 <h2 className="mb-4 text-lg font-semibold">CRM Information</h2>
                                 <div className="space-y-4">
-                                    <div>
-                                        <p className="text-sm text-neutral-500">Riding Company</p>
-                                        <p className="font-medium">
-                                            {driver.riding_company?.name || <span className="text-neutral-400 italic">Not Set</span>}
-                                        </p>
-                                    </div>
-                                    {driver.campaign && (
+                                    {canViewDriverField('riding_company') && (
+                                        <div>
+                                            <p className="text-sm text-neutral-500">Riding Company</p>
+                                            <p className="font-medium">
+                                                {driver.riding_company?.name || <span className="text-neutral-400 italic">Not Set</span>}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('campaign') && driver.campaign && (
                                         <div>
                                             <p className="text-sm text-neutral-500">Campaign</p>
                                             <p className="font-medium">{driver.campaign.name}</p>
                                         </div>
                                     )}
-                                    <div>
-                                        <p className="text-sm text-neutral-500">Lead Source</p>
-                                        <p className="font-medium">
-                                            {driver.lead_source?.name || <span className="text-neutral-400 italic">Not Set</span>}
-                                        </p>
-                                    </div>
-                                    {/* Lead Status Group with Green Border */}
-                                    <div className="rounded-lg border-2 border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-900/10 p-4 space-y-4">
+                                    {canViewDriverField('lead_source') && (
                                         <div>
-                                            <p className="text-sm text-neutral-500">Lead Status</p>
-                                            {driver.lead_status ? (
-                                                <Badge
-                                                    variant="outline"
-                                                    style={{
-                                                        borderColor: driver.lead_status.color || 'gray',
-                                                        color: driver.lead_status.color || 'gray',
-                                                    }}
-                                                >
-                                                    {driver.lead_status.name}
-                                                </Badge>
-                                            ) : (
-                                                <span className="text-neutral-400 italic">Not Set</span>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-neutral-500">Feedback Comment</p>
-                                            {driver.lead_status_comment ? (
-                                                <p className="font-medium whitespace-pre-wrap">{driver.lead_status_comment}</p>
-                                            ) : (
-                                                <span className="text-neutral-400 italic">Not Set</span>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-neutral-500">Next Follow-up</p>
-                                            {driver.next_follow_up ? (
-                                                <p className="font-medium">{formatDate(driver.next_follow_up)}</p>
-                                            ) : (
-                                                <span className="text-neutral-400 italic">Not Set</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm text-neutral-500">Last Follow-up</p>
-                                        {driver.last_follow_up ? (
-                                            <p className="font-medium">{formatDate(driver.last_follow_up)}</p>
-                                        ) : (
-                                            <span className="text-neutral-400 italic">Not Set</span>
-                                        )}
-                                    </div>
-                                    {driver.assigned_to && (
-                                        <div>
-                                            <p className="text-sm text-neutral-500">Assigned To</p>
-                                            <p className="font-medium">{driver.assigned_to.name}</p>
+                                            <p className="text-sm text-neutral-500">Lead Source</p>
+                                            <p className="font-medium">
+                                                {driver.lead_source?.name || <span className="text-neutral-400 italic">Not Set</span>}
+                                            </p>
                                         </div>
                                     )}
-                                    {driver.assigned_users && driver.assigned_users.length > 0 && (
+                                    {/* Lead Status Group with Green Border */}
+                                    {(canViewDriverField('lead_status') || canViewDriverField('lead_status_comment') || canViewDriverField('next_follow_up')) && (
+                                        <div className="rounded-lg border-2 border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-900/10 p-4 space-y-4">
+                                            {canViewDriverField('lead_status') && (
+                                                <div>
+                                                    <p className="text-sm text-neutral-500">Lead Status</p>
+                                                    {driver.lead_status ? (
+                                                        <Badge
+                                                            variant="outline"
+                                                            style={{
+                                                                borderColor: driver.lead_status.color || 'gray',
+                                                                color: driver.lead_status.color || 'gray',
+                                                            }}
+                                                        >
+                                                            {driver.lead_status.name}
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-neutral-400 italic">Not Set</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {canViewDriverField('lead_status_comment') && (
+                                                <div>
+                                                    <p className="text-sm text-neutral-500">Feedback Comment</p>
+                                                    {driver.lead_status_comment ? (
+                                                        <p className="font-medium whitespace-pre-wrap">{driver.lead_status_comment}</p>
+                                                    ) : (
+                                                        <span className="text-neutral-400 italic">Not Set</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {canViewDriverField('next_follow_up') && (
+                                                <div>
+                                                    <p className="text-sm text-neutral-500">Next Follow-up</p>
+                                                    {driver.next_follow_up ? (
+                                                        <p className="font-medium">{formatDate(driver.next_follow_up)}</p>
+                                                    ) : (
+                                                        <span className="text-neutral-400 italic">Not Set</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {canViewDriverField('last_follow_up') && (
+                                        <div>
+                                            <p className="text-sm text-neutral-500">Last Follow-up</p>
+                                            {driver.last_follow_up ? (
+                                                <p className="font-medium">{formatDate(driver.last_follow_up)}</p>
+                                            ) : (
+                                                <span className="text-neutral-400 italic">Not Set</span>
+                                            )}
+                                        </div>
+                                    )}
+                                    {canViewDriverField('assigned_users') && driver.assigned_users && driver.assigned_users.length > 0 && (
                                         <div>
                                             <p className="text-sm text-neutral-500">Assigned Users</p>
                                             <div className="flex flex-wrap gap-2 mt-1">
@@ -457,11 +573,25 @@ export default function DriversShow({
                                             </div>
                                         </div>
                                     )}
-                                    <div>
-                                        <p className="text-sm text-neutral-500">Driver Num</p>
-                                        <p className="font-medium">{driver.driver_num || driver.id}</p>
-                                    </div>
-                                    {driver.current_stage && (
+                                    {canViewDriverField('last_assigned_time') && (
+                                        <div>
+                                            <p className="text-sm text-neutral-500">Last Assigned Time</p>
+                                            <p className="font-medium">{driver.last_assigned_time ? formatDate(driver.last_assigned_time) : <span className="text-neutral-400 italic">Not Set</span>}</p>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('last_assigned_by') && (
+                                        <div>
+                                            <p className="text-sm text-neutral-500">Last Assigned By</p>
+                                            <p className="font-medium">{driver.last_assigned_by?.name || <span className="text-neutral-400 italic">Not Set</span>}</p>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('driver_num') && (
+                                        <div>
+                                            <p className="text-sm text-neutral-500">Driver Num</p>
+                                            <p className="font-medium">{driver.driver_num || driver.id}</p>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('current_stage') && driver.current_stage && (
                                         <div>
                                             <p className="text-sm text-neutral-500">Current Stage</p>
                                             <p className="font-medium">{driver.current_stage.name}</p>
@@ -470,6 +600,77 @@ export default function DriversShow({
                                 </div>
                             </Card>
                         </div>
+
+                        {/* WhatsApp Chat Cards */}
+                        {effectiveRidingCompanyId && (
+                            <div className="grid gap-6 md:grid-cols-2">
+                                {/* Phone WhatsApp Chat */}
+                                <Card className="p-6">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h2 className="text-lg font-semibold flex items-center gap-2">
+                                            <MessageCircle className="h-5 w-5 text-green-500" />
+                                            Phone Chat
+                                        </h2>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setPhoneWhatsAppOpen(!phoneWhatsAppOpen)}
+                                            className="text-green-600 border-green-600 hover:bg-green-50"
+                                        >
+                                            {phoneWhatsAppOpen ? 'Close' : 'Open'} Chat
+                                        </Button>
+                                    </div>
+                                    <p className="text-sm text-neutral-500 mb-2">Phone: {driver.phone}</p>
+                                    {phoneWhatsAppOpen && (
+                                        <div className="border rounded-lg overflow-hidden" style={{ height: '400px' }}>
+                                            <WhatsAppWindow
+                                                ridingCompanyId={effectiveRidingCompanyId}
+                                                driverPhoneNumbers={[driver.phone]}
+                                                drivers={[{ id: driver.id, name: driver.full_name, phone: driver.phone, whatsapp_phone: driver.whatsapp_phone, avatar: (driver as any).avatar }]}
+                                                isOpen={true}
+                                                onClose={() => setPhoneWhatsAppOpen(false)}
+                                                initialChatPhone={driver.phone}
+                                                singleChatMode={true}
+                                            />
+                                        </div>
+                                    )}
+                                </Card>
+
+                                {/* WhatsApp Phone Chat */}
+                                {driver.whatsapp_phone && driver.whatsapp_phone !== driver.phone && (
+                                    <Card className="p-6">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h2 className="text-lg font-semibold flex items-center gap-2">
+                                                <MessageCircle className="h-5 w-5 text-green-500" />
+                                                WhatsApp Chat
+                                            </h2>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setWhatsappPhoneWhatsAppOpen(!whatsappPhoneWhatsAppOpen)}
+                                                className="text-green-600 border-green-600 hover:bg-green-50"
+                                            >
+                                                {whatsappPhoneWhatsAppOpen ? 'Close' : 'Open'} Chat
+                                            </Button>
+                                        </div>
+                                        <p className="text-sm text-neutral-500 mb-2">WhatsApp: {driver.whatsapp_phone}</p>
+                                        {whatsappPhoneWhatsAppOpen && (
+                                            <div className="border rounded-lg overflow-hidden" style={{ height: '400px' }}>
+                                                <WhatsAppWindow
+                                                    ridingCompanyId={effectiveRidingCompanyId}
+                                                    driverPhoneNumbers={[driver.whatsapp_phone]}
+                                                    drivers={[{ id: driver.id, name: driver.full_name, phone: driver.phone, whatsapp_phone: driver.whatsapp_phone, avatar: (driver as any).avatar }]}
+                                                    isOpen={true}
+                                                    onClose={() => setWhatsappPhoneWhatsAppOpen(false)}
+                                                    initialChatPhone={driver.whatsapp_phone}
+                                                    singleChatMode={true}
+                                                />
+                                            </div>
+                                        )}
+                                    </Card>
+                                )}
+                            </div>
+                        )}
 
                         {/* Stages Progress */}
                         {driver.stages_progress && (
@@ -606,24 +807,73 @@ export default function DriversShow({
                             <p className="text-sm text-neutral-500">No activity recorded yet.</p>
                         ) : (
                             <div className="space-y-4">
-                                {activities.map((activity) => (
-                                    <div key={activity.id} className="border-l-2 border-blue-500 pl-4 py-2">
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <p className="font-medium">{activity.description}</p>
-                                                {activity.causer && (
-                                                    <p className="text-sm text-neutral-500">
-                                                        by {activity.causer.name}
+                                {activities.map((activity) => {
+                                    const properties = activity.properties || {};
+                                    const oldValues = properties.old || {};
+                                    const newValues = properties.attributes || {};
+                                    const changedFields = Object.keys(newValues).filter(key => 
+                                        oldValues[key] !== newValues[key] && key !== 'updated_at'
+                                    );
+                                    
+                                    // Format date and time for tooltip
+                                    const dateTimeString = formatDate(activity.created_at);
+                                    
+                                    return (
+                                        <div key={activity.id} className="border-l-2 border-blue-500 pl-4 py-3 bg-neutral-50 dark:bg-neutral-900/50 rounded-r">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="flex-1 space-y-2">
+                                                    {activity.causer && (
+                                                        <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                                            Updated by <span className="font-semibold">{activity.causer.name}</span>
+                                                        </p>
+                                                    )}
+                                                    
+                                                    {changedFields.length > 0 ? (
+                                                        <div className="space-y-1">
+                                                            {changedFields.map((field) => {
+                                                                const oldValue = oldValues[field];
+                                                                const newValue = newValues[field];
+                                                                const fieldLabel = getFieldLabel(field);
+                                                                
+                                                                return (
+                                                                    <div key={field} className="text-sm">
+                                                                        <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                                                                            {fieldLabel}:
+                                                                        </span>{' '}
+                                                                        <span className="text-neutral-600 dark:text-neutral-400">
+                                                                            Changed from{' '}
+                                                                            <span className="line-through text-red-600 dark:text-red-400">
+                                                                                {oldValue !== null && oldValue !== undefined ? String(oldValue) : 'empty'}
+                                                                            </span>
+                                                                            {' '}to{' '}
+                                                                            <span className="text-green-600 dark:text-green-400 font-medium">
+                                                                                {newValue !== null && newValue !== undefined ? String(newValue) : 'empty'}
+                                                                            </span>
+                                                                        </span>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                                                            {activity.description}
+                                                        </p>
+                                                    )}
+                                                    
+                                                    <p 
+                                                        className="text-xs text-neutral-400 mt-2 cursor-help" 
+                                                        title={dateTimeString}
+                                                    >
+                                                        {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
                                                     </p>
-                                                )}
-                                                <p className="text-xs text-neutral-400 mt-1">
-                                                    {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
-                                                </p>
+                                                </div>
+                                                <Badge variant="outline" className="flex-shrink-0">
+                                                    {activity.event}
+                                                </Badge>
                                             </div>
-                                            <Badge variant="outline">{activity.event}</Badge>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </Card>
@@ -650,7 +900,7 @@ export default function DriversShow({
                                         {follow_ups.map((followUp) => (
                                             <tr key={followUp.id} className="border-t hover:bg-muted/50 transition-colors">
                                                 <td className="px-4 py-3 text-sm">
-                                                    {followUp.created_time ? formatDate(followUp.created_time) + ' ' + new Date(followUp.created_time).toLocaleTimeString() : 'N/A'}
+                                                    {followUp.created_time ? formatDate(followUp.created_time) : 'N/A'}
                                                 </td>
                                                 <td className="px-4 py-3 text-sm">
                                                     {followUp.user_name || 'N/A'}
@@ -687,6 +937,69 @@ export default function DriversShow({
                             <div className="py-8 text-center text-neutral-500">
                                 No follow-ups found for this driver.
                             </div>
+                        )}
+                    </Card>
+                )}
+
+                {activeTab === 'duplicates' && (
+                    <Card className="p-6">
+                        <h2 className="mb-4 text-lg font-semibold">Duplicate Drivers ({driver.duplicate})</h2>
+                        <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+                            Drivers with the same phone number or WhatsApp number as this driver.
+                        </p>
+                        {duplicate_drivers.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Full Name</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">WhatsApp</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Email</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Campaign</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Source</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Assigned To</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {duplicate_drivers.map((dup) => (
+                                            <tr key={dup.id} className="border-t hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => window.location.href = `/drivers/drivers/${dup.id}`}>
+                                                <td className="px-4 py-3 text-sm">{dup.full_name || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">{dup.phone || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">{dup.whatsapp_phone || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">{dup.email || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">{dup.riding_company?.name || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">{dup.campaign?.name || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">{dup.lead_source?.name || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {dup.lead_status ? (
+                                                        <Badge style={{ backgroundColor: dup.lead_status.color || '#6b7280' }}>
+                                                            {dup.lead_status.name}
+                                                        </Badge>
+                                                    ) : '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">{dup.lead_stage?.name || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {dup.assigned_to?.name || (dup.assigned_users && dup.assigned_users.length > 0 ? dup.assigned_users.map(u => u.name).join(', ') : '-')}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    <Link href={`/drivers/drivers/${dup.id}`} onClick={(e) => e.stopPropagation()}>
+                                                        <Button variant="outline" size="sm">
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                    </Link>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <p className="text-neutral-500 dark:text-neutral-400">No duplicate drivers found.</p>
                         )}
                     </Card>
                 )}

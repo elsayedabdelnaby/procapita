@@ -53,6 +53,7 @@ interface DriversCreateProps {
     leadSources: LeadSource[];
     leadStatuses: LeadStatus[];
     users: User[];
+    defaultRidingCompanyId?: number;
 }
 
 export default function DriversCreate({
@@ -62,6 +63,7 @@ export default function DriversCreate({
     leadSources: initialLeadSources,
     leadStatuses: initialLeadStatuses,
     users: initialUsers,
+    defaultRidingCompanyId,
 }: DriversCreateProps) {
     const page = usePage<SharedData>();
     const { selectedCompany } = page.props;
@@ -86,7 +88,7 @@ export default function DriversCreate({
         phone: '',
         whatsapp_phone: '',
         email: '',
-        riding_company_id: '',
+        riding_company_id: defaultRidingCompanyId ? String(defaultRidingCompanyId) : '',
         campaign_id: '',
         lead_source_id: '',
         assigned_users: [] as number[],
@@ -111,8 +113,10 @@ export default function DriversCreate({
         const companyId = selectedCompany ? selectedCompany.id : (data.company_id ? Number(data.company_id) : null);
         
         if (companyId) {
-            // Reset dependent fields when company changes
+            // Reset dependent fields when company changes (but keep default riding company)
+            if (!defaultRidingCompanyId) {
             setData('riding_company_id', '');
+            }
             setData('campaign_id', '');
             setData('lead_source_id', '');
             setData('lead_status_id', '');
@@ -262,9 +266,46 @@ export default function DriversCreate({
         }
     }, [data.riding_company_id]);
 
+    const [showValidation, setShowValidation] = useState(false);
+    const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+
+    // Check if required fields are filled
+    const validateForm = () => {
+        const newErrors: Record<string, string> = {};
+        
+        if (!data.full_name.trim()) {
+            newErrors.full_name = 'Full name is required.';
+        }
+        if (!data.phone.trim()) {
+            newErrors.phone = 'Phone is required.';
+        }
+        if (data.assigned_users.length === 0) {
+            newErrors.assigned_users = 'At least one user must be assigned.';
+        }
+        
+        setClientErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post('/drivers/drivers');
+        setShowValidation(true);
+        
+        // Validate form before submitting
+        const isValid = validateForm();
+        console.log('Form validation:', { isValid, data, clientErrors });
+        
+        // Only submit if form is valid
+        if (!isValid) {
+            console.log('Form is invalid, not submitting');
+            return;
+        }
+        
+        console.log('Form is valid, submitting...');
+        post('/drivers/drivers', {
+            preserveScroll: true,
+            preserveState: true,
+        });
     };
 
     return (
@@ -345,26 +386,43 @@ export default function DriversCreate({
                             )}
 
                             <div className="md:col-span-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="full_name" className="flex items-center gap-2">
+                                        Full Name <span className="text-red-500">*</span>
+                                        {!data.full_name && (
+                                            <span className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded">Required</span>
+                                        )}
+                                    </Label>
                                 <FormField
-                                    label="Full Name"
+                                        label=""
                                     name="full_name"
                                     value={data.full_name}
                                     onChange={(e) => setData('full_name', e.target.value)}
                                     error={errors.full_name}
-                                    required
                                     placeholder="e.g., John Doe"
+                                        className={showValidation && !data.full_name ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}
                                 />
+                                </div>
                             </div>
 
+                            <div className="space-y-2">
+                                <Label htmlFor="phone" className="flex items-center gap-2">
+                                    Phone <span className="text-red-500">*</span>
+                                    {!data.phone && (
+                                        <span className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded">Required</span>
+                                    )}
+                                </Label>
                             <FormField
-                                label="Phone"
+                                    label=""
                                 name="phone"
                                 value={data.phone}
                                 onChange={(e) => setData('phone', e.target.value)}
                                 error={errors.phone}
+                                    className={showValidation && !data.phone ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}
                                 required
                                 placeholder="+1234567890"
                             />
+                            </div>
 
                             <FormField
                                 label="WhatsApp Phone"
@@ -656,8 +714,11 @@ export default function DriversCreate({
                             </div>
 
                             <div className="md:col-span-2">
-                                <Label>
+                                <Label className="flex items-center gap-2">
                                     Assigned Users <span className="text-red-500">*</span>
+                                    {data.assigned_users.length === 0 && (
+                                        <span className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded">Required</span>
+                                    )}
                                 </Label>
                                 {loadingUsers ? (
                                     <div className="mt-1">
@@ -680,12 +741,12 @@ export default function DriversCreate({
                                         value={data.assigned_users}
                                         onChange={(value) => setData('assigned_users', value.map(v => typeof v === 'string' ? Number(v) : v))}
                                         placeholder="Select users..."
-                                        className="mt-1"
+                                        className={`mt-1 ${showValidation && data.assigned_users.length === 0 ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 rounded-md' : ''}`}
                                         disabled={loadingUsers}
                                     />
                                 )}
-                                {errors.assigned_users && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.assigned_users}</p>
+                                {(clientErrors.assigned_users || errors.assigned_users) && (
+                                    <p className="text-sm text-red-500 mt-1">{clientErrors.assigned_users || errors.assigned_users}</p>
                                 )}
                                 {(errors as Record<string, string>)['assigned_users.*'] && (
                                     <p className="text-sm text-red-500 mt-1">{(errors as Record<string, string>)['assigned_users.*']}</p>
