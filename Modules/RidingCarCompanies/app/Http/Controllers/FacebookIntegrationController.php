@@ -531,5 +531,76 @@ class FacebookIntegrationController extends Controller
 
         return $leadStatus->id;
     }
+
+    /**
+     * Handle Facebook Data Deletion Callback
+     * This endpoint is called by Facebook when a user requests data deletion
+     * 
+     * Facebook expects a JSON response with 'url' and 'confirmation_code'
+     */
+    public function dataDeletionCallback(Request $request)
+    {
+        // Facebook sends a POST request with signed_request
+        $signedRequest = $request->input('signed_request');
+        
+        // For GET requests (Facebook validation), return simple JSON
+        if ($request->isMethod('get')) {
+            return response()->json([
+                'url' => url('/ridingcarcompanies/facebook/data-deletion-callback'),
+                'confirmation_code' => 'deletion_confirmed',
+            ], 200, [], JSON_UNESCAPED_SLASHES);
+        }
+        
+        if (!$signedRequest) {
+            // If no signed_request, return a simple confirmation
+            return response()->json([
+                'url' => url('/ridingcarcompanies/facebook/data-deletion-callback'),
+                'confirmation_code' => 'deletion_confirmed',
+            ], 200, [], JSON_UNESCAPED_SLASHES);
+        }
+
+        // Parse signed_request (Facebook format)
+        try {
+            list($encodedSig, $payload) = explode('.', $signedRequest, 2);
+            $data = json_decode(base64_decode(strtr($payload, '-_', '+/')), true);
+            
+            if (isset($data['user_id'])) {
+                $userId = $data['user_id'];
+                
+                // Here you would delete user data associated with this Facebook user ID
+                \Log::info('Facebook data deletion request', [
+                    'facebook_user_id' => $userId,
+                    'request_data' => $data,
+                ]);
+                
+                // Delete Facebook integration data for this user
+                // Find and delete integration settings for this Facebook user
+                $integrations = RidingCompanyIntegrationSetting::where('facebook_user_id', $userId)->get();
+                foreach ($integrations as $integration) {
+                    $integration->update([
+                        'facebook_access_token' => null,
+                        'facebook_user_id' => null,
+                        'facebook_token_expires_at' => null,
+                        'active' => false,
+                    ]);
+                }
+                
+                return response()->json([
+                    'url' => url('/ridingcarcompanies/facebook/data-deletion-callback'),
+                    'confirmation_code' => 'deletion_confirmed_' . $userId,
+                ], 200, [], JSON_UNESCAPED_SLASHES);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error processing Facebook data deletion callback', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Default response
+        return response()->json([
+            'url' => url('/ridingcarcompanies/facebook/data-deletion-callback'),
+            'confirmation_code' => 'deletion_confirmed',
+        ], 200, [], JSON_UNESCAPED_SLASHES);
+    }
 }
 
