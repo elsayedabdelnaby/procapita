@@ -193,11 +193,11 @@ export default function RecycleBinIndex({ modelType, modelName, records }: Recyc
                             </div>
 
                             {/* Table */}
-                            <div className="overflow-x-auto">
+                            <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800 shadow-sm">
                                 <table className="w-full">
-                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left">
+                                    <thead>
+                                        <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border-b-2 border-blue-200 dark:border-blue-800/50">
+                                            <th className="px-4 py-4 text-left">
                                                 <Checkbox
                                                     checked={allSelected}
                                                     onCheckedChange={handleSelectAll}
@@ -208,39 +208,46 @@ export default function RecycleBinIndex({ modelType, modelName, records }: Recyc
                                                     }}
                                                 />
                                             </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            <th className="px-4 py-4 text-left text-sm font-semibold text-blue-900 dark:text-blue-100 uppercase tracking-wide">
                                                 Name
                                             </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            <th className="px-4 py-4 text-left text-sm font-semibold text-blue-900 dark:text-blue-100 uppercase tracking-wide">
                                                 Deleted At
                                             </th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            <th className="px-4 py-4 text-left text-sm font-semibold text-blue-900 dark:text-blue-100 uppercase tracking-wide">
                                                 Deleted By
                                             </th>
-                                            <th className="px-4 py-3 text-right text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            <th className="px-4 py-4 text-right text-sm font-semibold text-blue-900 dark:text-blue-100 uppercase tracking-wide">
                                                 Restore
                                             </th>
-                                            <th className="px-4 py-3 text-right text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            <th className="px-4 py-4 text-right text-sm font-semibold text-blue-900 dark:text-blue-100 uppercase tracking-wide">
                                                 Actions
                                             </th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                                    <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800/50">
                                         {paginatedRecords.length === 0 ? (
                                             <tr>
-                                                <td colSpan={6} className="px-4 py-8 text-center text-sm text-neutral-500">
+                                                <td colSpan={6} className="px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400 bg-white dark:bg-neutral-950">
                                                     No records found
                                                 </td>
                                             </tr>
                                         ) : (
-                                            paginatedRecords.map((record) => {
+                                            paginatedRecords.map((record, index) => {
                                                 const isRestoring = restoringId === record.id;
                                                 const isSelected = selectedRecords.has(record.id);
 
                                                 return (
                                                     <tr
                                                         key={record.id}
-                                                        className="hover:bg-neutral-50 dark:hover:bg-neutral-900/50"
+                                                        className={`
+                                                            transition-all duration-200 ease-in-out
+                                                            ${
+                                                                index % 2 === 0
+                                                                    ? 'bg-white dark:bg-neutral-950 hover:bg-blue-50/30 dark:hover:bg-blue-950/20'
+                                                                    : 'bg-neutral-50/60 dark:bg-neutral-900/40 hover:bg-blue-50/40 dark:hover:bg-blue-950/30'
+                                                            }
+                                                        `}
                                                     >
                                                         <td className="px-4 py-3">
                                                             <Checkbox
@@ -250,8 +257,8 @@ export default function RecycleBinIndex({ modelType, modelName, records }: Recyc
                                                                 }
                                                             />
                                                         </td>
-                                                        <td className="px-4 py-3 text-sm">{record.display_name}</td>
-                                                        <td className="px-4 py-3 text-sm">
+                                                        <td className="px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">{record.display_name}</td>
+                                                        <td className="px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">
                                                             <div className="flex flex-col">
                                                                 <span>
                                                                     {record.deleted_at_human ||
@@ -264,11 +271,11 @@ export default function RecycleBinIndex({ modelType, modelName, records }: Recyc
                                                                 </span>
                                                             </div>
                                                         </td>
-                                                        <td className="px-4 py-3 text-sm">
+                                                        <td className="px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">
                                                             {record.deleted_by ? (
                                                                 record.deleted_by.name
                                                             ) : (
-                                                                <span className="text-neutral-500">Unknown</span>
+                                                                <span className="text-neutral-500 dark:text-neutral-400">Unknown</span>
                                                             )}
                                                         </td>
                                                         <td className="px-4 py-3 text-right">

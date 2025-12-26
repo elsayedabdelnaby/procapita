@@ -99,6 +99,7 @@ const ALL_FOLLOWUP_COLUMNS = [
     { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 7 },
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 7.5 },
     { id: 'lead_status_comment', label: 'Feedback Comment', defaultVisible: false, defaultOrder: 7.6 },
+    { id: 'cancel_reason', label: 'Cancel Reasons', defaultVisible: false, defaultOrder: 7.65 },
     { id: 'next_follow_up_drivers', label: 'Next Follow-up (Drivers)', defaultVisible: false, defaultOrder: 7.7 },
     { id: 'last_follow_up_drivers', label: 'Last Follow-up (Drivers)', defaultVisible: false, defaultOrder: 7.8 },
     { id: 'notes', label: 'Notes', defaultVisible: false, defaultOrder: 8 },
@@ -608,6 +609,10 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                         aValue = a.lead_status_comment || '';
                         bValue = b.lead_status_comment || '';
                         break;
+                    case 'cancel_reason':
+                        aValue = a.driver?.cancel_reason || '';
+                        bValue = b.driver?.cancel_reason || '';
+                        break;
                     case 'next_follow_up_drivers':
                         aValue = a.driver?.next_follow_up || '';
                         bValue = b.driver?.next_follow_up || '';
@@ -1058,7 +1063,7 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                         }
                                     `}</style>
                                     <table className="w-full">
-                                    <thead className="bg-neutral-50 dark:bg-neutral-900 sticky top-0 z-20">
+                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm sticky top-0 z-20">
                                         <tr>
                                             <th className="px-4 py-3 text-left w-12">
                                                 <Checkbox
@@ -1312,10 +1317,19 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                                 </td>
                                             </tr>
                                         ) : (
-                                            (paginatedFollowUps || []).map((followUp) => (
+                                            (paginatedFollowUps || []).map((followUp, index) => (
                                                 <tr
                                                     key={followUp.id}
-                                                    className="hover:bg-neutral-50 dark:hover:bg-neutral-900/50"
+                                                    className={`
+                                                        transition-colors duration-150
+                                                        ${
+                                                            index === 0
+                                                                ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                                : index % 2 === 0
+                                                                  ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                                  : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                        }
+                                                    `}
                                                 >
                                                     <td className="px-4 py-3">
                                                         <Checkbox
@@ -1407,6 +1421,9 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                                                         {followUp.lead_status_comment}
                                                                     </div>
                                                                 ) : 'N/A';
+                                                                break;
+                                                            case 'cancel_reason':
+                                                                cellContent = followUp.driver?.cancel_reason || '-';
                                                                 break;
                                                             case 'notes':
                                                                 cellContent = followUp.notes ? (

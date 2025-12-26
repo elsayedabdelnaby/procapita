@@ -1998,7 +1998,7 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                         }
                                     `}</style>
                                     <table className="w-full">
-                                    <thead className="bg-neutral-50 dark:bg-neutral-900 sticky top-0 z-20">
+                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm sticky top-0 z-20">
                                         <tr>
                                             <th className="px-4 py-3 text-left w-12">
                                                 <Checkbox
@@ -2502,10 +2502,19 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                                 </td>
                                             </tr>
                                         ) : (
-                                            (paginatedDrivers || []).map((driver) => (
+                                            (paginatedDrivers || []).map((driver, index) => (
                                                 <tr
                                                     key={driver.id}
-                                                    className="hover:bg-neutral-50 dark:hover:bg-neutral-900/50 cursor-pointer"
+                                                    className={`
+                                                        transition-colors duration-150 cursor-pointer
+                                                        ${
+                                                            index === 0
+                                                                ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                                : index % 2 === 0
+                                                                  ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                                  : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                        }
+                                                    `}
                                                     onClick={(e) => {
                                                         // Don't navigate if clicking on interactive elements
                                                         const target = e.target as HTMLElement;
@@ -2971,7 +2980,7 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                             <div className="flex-1 overflow-y-auto">
                                 <div className="overflow-x-auto">
                                     <table className="w-full border-collapse">
-                                        <thead className="bg-neutral-50 dark:bg-neutral-900 sticky top-0 z-10">
+                                        <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm sticky top-0 z-10">
                                             <tr>
                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300 border-b">Fields</th>
                                                 {mergeDrivers.map((driver, index) => (
@@ -3891,7 +3900,7 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                         {driverFollowUps.length > 0 ? (
                                             <div className="overflow-x-auto">
                                                 <table className="w-full">
-                                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
                                                         <tr>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
@@ -3903,8 +3912,20 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {driverFollowUps.map((followUp) => (
-                                                            <tr key={followUp.id} className="border-t hover:bg-muted/50 transition-colors">
+                                                        {driverFollowUps.map((followUp, index) => (
+                                                            <tr 
+                                                                key={followUp.id} 
+                                                                className={`
+                                                                    border-t transition-colors duration-150
+                                                                    ${
+                                                                        index === 0
+                                                                            ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                                            : index % 2 === 0
+                                                                              ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                                              : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                                    }
+                                                                `}
+                                                            >
                                                                 <td className="px-4 py-3 text-sm">
                                                                     {followUp.created_time ? formatDate(followUp.created_time) : 'N/A'}
                                                                 </td>
@@ -3956,7 +3977,7 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                         {driverDuplicateDrivers.length > 0 ? (
                                             <div className="overflow-x-auto">
                                                 <table className="w-full">
-                                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
                                                         <tr>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Full Name</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</th>
@@ -3972,8 +3993,20 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {driverDuplicateDrivers.map((dup) => (
-                                                            <tr key={dup.id} className="border-t hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => {
+                                                        {driverDuplicateDrivers.map((dup, index) => (
+                                                            <tr 
+                                                                key={dup.id} 
+                                                                className={`
+                                                                    border-t transition-colors duration-150 cursor-pointer
+                                                                    ${
+                                                                        index === 0
+                                                                            ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                                            : index % 2 === 0
+                                                                              ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                                              : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                                    }
+                                                                `} 
+                                                                onClick={() => {
                                                                 setViewDialogOpen(false);
                                                                 router.visit(`/drivers/drivers/${dup.id}`);
                                                             }}>

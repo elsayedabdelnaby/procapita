@@ -132,6 +132,7 @@ class DriverUpdateRequest extends FormRequest
             ],
             'next_time' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
+            'cancel_reason' => ['nullable', 'string', 'in:Not interested,Wrong Number,Under Age,Duplicated,Wrong Documents,Car Not Accepted,Other,Already driver,Expired,Cities,Dont have driving license'],
         ];
 
         if ($user->isSuperAdmin()) {

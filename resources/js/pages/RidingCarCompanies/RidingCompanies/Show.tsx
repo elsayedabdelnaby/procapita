@@ -779,7 +779,7 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                                 )}
                                 <div className="overflow-x-auto rounded-lg border">
                                     <table className="w-full">
-                                        <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                        <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
                                             <tr>
                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
                                                     Name
@@ -922,10 +922,19 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                                                     </td>
                                                 </tr>
                                             ) : (
-                                                paginatedUsers.map((user) => (
+                                                paginatedUsers.map((user, index) => (
                                                     <tr
                                                         key={user.id}
-                                                        className="hover:bg-neutral-50 dark:hover:bg-neutral-900/50"
+                                                        className={`
+                                                            transition-colors duration-150
+                                                            ${
+                                                                index === 0
+                                                                    ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                                    : index % 2 === 0
+                                                                      ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                                      : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                            }
+                                                        `}
                                                     >
                                                         <td className="px-4 py-3 text-sm">{user.name}</td>
                                                         <td className="px-4 py-3 text-sm">{user.email}</td>

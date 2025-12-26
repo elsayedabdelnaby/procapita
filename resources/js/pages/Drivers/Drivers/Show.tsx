@@ -149,6 +149,7 @@ interface Driver {
         name: string;
     };
     notes?: string;
+    cancel_reason?: string;
     stages_progress?: {
         total: number;
         completed: number;
@@ -187,6 +188,7 @@ interface FollowUp {
     lead_status?: string;
     lead_status_comment?: string;
     notes?: string;
+    cancel_reason?: string;
     assigned_to_user?: {
         id: number;
         name: string;
@@ -791,10 +793,18 @@ export default function DriversShow({
                         )}
 
                         {/* Notes */}
-                        {driver.notes && (
+                        {canViewDriverField('notes') && driver.notes && (
                             <Card className="p-6">
                                 <h2 className="mb-4 text-lg font-semibold">Notes</h2>
                                 <p className="text-sm whitespace-pre-wrap">{driver.notes}</p>
+                            </Card>
+                        )}
+
+                        {/* Cancel Reasons */}
+                        {canViewDriverField('cancel_reason') && driver.cancel_reason && (
+                            <Card className="p-6">
+                                <h2 className="mb-4 text-lg font-semibold">Cancel Reasons</h2>
+                                <p className="text-sm">{driver.cancel_reason}</p>
                             </Card>
                         )}
                     </div>
@@ -885,7 +895,7 @@ export default function DriversShow({
                         {follow_ups.length > 0 ? (
                             <div className="overflow-x-auto">
                                 <table className="w-full">
-                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
                                         <tr>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
@@ -897,8 +907,20 @@ export default function DriversShow({
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {follow_ups.map((followUp) => (
-                                            <tr key={followUp.id} className="border-t hover:bg-muted/50 transition-colors">
+                                        {follow_ups.map((followUp, index) => (
+                                            <tr 
+                                                key={followUp.id} 
+                                                className={`
+                                                    border-t transition-colors duration-150
+                                                    ${
+                                                        index === 0
+                                                            ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                            : index % 2 === 0
+                                                              ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                              : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                    }
+                                                `}
+                                            >
                                                 <td className="px-4 py-3 text-sm">
                                                     {followUp.created_time ? formatDate(followUp.created_time) : 'N/A'}
                                                 </td>
@@ -950,7 +972,7 @@ export default function DriversShow({
                         {duplicate_drivers.length > 0 ? (
                             <div className="overflow-x-auto">
                                 <table className="w-full">
-                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
                                         <tr>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Full Name</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</th>
@@ -966,8 +988,21 @@ export default function DriversShow({
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {duplicate_drivers.map((dup) => (
-                                            <tr key={dup.id} className="border-t hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => window.location.href = `/drivers/drivers/${dup.id}`}>
+                                        {duplicate_drivers.map((dup, index) => (
+                                            <tr 
+                                                key={dup.id} 
+                                                className={`
+                                                    border-t transition-colors duration-150 cursor-pointer
+                                                    ${
+                                                        index === 0
+                                                            ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                            : index % 2 === 0
+                                                              ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                              : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                    }
+                                                `} 
+                                                onClick={() => window.location.href = `/drivers/drivers/${dup.id}`}
+                                            >
                                                 <td className="px-4 py-3 text-sm">{dup.full_name || '-'}</td>
                                                 <td className="px-4 py-3 text-sm">{dup.phone || '-'}</td>
                                                 <td className="px-4 py-3 text-sm">{dup.whatsapp_phone || '-'}</td>

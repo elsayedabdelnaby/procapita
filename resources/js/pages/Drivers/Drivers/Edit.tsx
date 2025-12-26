@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm, router } from '@inertiajs/react';
 import axios from 'axios';
@@ -106,6 +107,7 @@ export default function DriversEdit({
         lead_stage_id: driver.lead_stage_id ? String(driver.lead_stage_id) : '',
         current_stage_id: driver.current_stage_id ? String(driver.current_stage_id) : '',
         notes: driver.notes || '',
+        cancel_reason: driver.cancel_reason || '',
     });
 
     // Fetch lead stages when riding company changes
@@ -371,6 +373,35 @@ export default function DriversEdit({
                                     />
                                     {errors.lead_status_comment && (
                                         <p className="text-sm text-red-500">{errors.lead_status_comment}</p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <Label htmlFor="cancel_reason" className="font-bold text-green-700 dark:text-green-300">Cancel Reasons</Label>
+                                    <Select
+                                        value={data.cancel_reason || ''}
+                                        onValueChange={(value) => setData('cancel_reason', value)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select cancel reason..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="">-- None --</SelectItem>
+                                            <SelectItem value="Not interested">Not interested</SelectItem>
+                                            <SelectItem value="Wrong Number">Wrong Number</SelectItem>
+                                            <SelectItem value="Under Age">Under Age</SelectItem>
+                                            <SelectItem value="Duplicated">Duplicated</SelectItem>
+                                            <SelectItem value="Wrong Documents">Wrong Documents</SelectItem>
+                                            <SelectItem value="Car Not Accepted">Car Not Accepted</SelectItem>
+                                            <SelectItem value="Other">Other</SelectItem>
+                                            <SelectItem value="Already driver">Already driver</SelectItem>
+                                            <SelectItem value="Expired">Expired</SelectItem>
+                                            <SelectItem value="Cities">Cities</SelectItem>
+                                            <SelectItem value="Dont have driving license">Dont have driving license</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.cancel_reason && (
+                                        <p className="text-sm text-red-500">{errors.cancel_reason}</p>
                                     )}
                                 </div>
 

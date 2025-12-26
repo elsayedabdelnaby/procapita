@@ -71,6 +71,7 @@ class DriverFollowUpController extends Controller
                     ])->toArray(),
                     'next_follow_up' => $followUp->driver->next_follow_up?->format('Y-m-d'),
                     'last_follow_up' => $followUp->driver->last_follow_up?->format('Y-m-d'),
+                    'cancel_reason' => $followUp->driver->cancel_reason,
                     'created_at' => $followUp->driver->created_at?->toISOString(),
                     'updated_at' => $followUp->driver->updated_at?->toISOString(),
                 ] : null,

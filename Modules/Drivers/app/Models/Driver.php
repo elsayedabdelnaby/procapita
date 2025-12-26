@@ -44,6 +44,7 @@ class Driver extends Model
         'lead_stage_id',
         'current_stage_id',
         'notes',
+        'cancel_reason',
         'driver_num',
         'duplicate',
     ];

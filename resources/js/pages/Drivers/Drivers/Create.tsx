@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
@@ -58,15 +59,15 @@ interface DriversCreateProps {
 
 export default function DriversCreate({
     companies,
-    ridingCompanies: initialRidingCompanies,
-    campaigns: initialCampaigns,
-    leadSources: initialLeadSources,
-    leadStatuses: initialLeadStatuses,
-    users: initialUsers,
+    ridingCompanies: initialRidingCompanies = [],
+    campaigns: initialCampaigns = [],
+    leadSources: initialLeadSources = [],
+    leadStatuses: initialLeadStatuses = [],
+    users: initialUsers = [],
     defaultRidingCompanyId,
 }: DriversCreateProps) {
     const page = usePage<SharedData>();
-    const { selectedCompany } = page.props;
+    const { selectedCompany } = page.props || {};
     
     const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies || []);
     const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns || []);
@@ -99,6 +100,7 @@ export default function DriversCreate({
         lead_stage_id: '',
         current_stage_id: '',
         notes: '',
+        cancel_reason: '',
     });
 
     // Update company_id when selectedCompany changes
@@ -766,6 +768,35 @@ export default function DriversCreate({
                                 />
                                 {errors.notes && (
                                     <p className="text-sm text-red-500">{errors.notes}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="cancel_reason">Cancel Reasons</Label>
+                                <Select
+                                    value={data.cancel_reason}
+                                    onValueChange={(value) => setData('cancel_reason', value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select cancel reason..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="">-- None --</SelectItem>
+                                        <SelectItem value="Not interested">Not interested</SelectItem>
+                                        <SelectItem value="Wrong Number">Wrong Number</SelectItem>
+                                        <SelectItem value="Under Age">Under Age</SelectItem>
+                                        <SelectItem value="Duplicated">Duplicated</SelectItem>
+                                        <SelectItem value="Wrong Documents">Wrong Documents</SelectItem>
+                                        <SelectItem value="Car Not Accepted">Car Not Accepted</SelectItem>
+                                        <SelectItem value="Other">Other</SelectItem>
+                                        <SelectItem value="Already driver">Already driver</SelectItem>
+                                        <SelectItem value="Expired">Expired</SelectItem>
+                                        <SelectItem value="Cities">Cities</SelectItem>
+                                        <SelectItem value="Dont have driving license">Dont have driving license</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {errors.cancel_reason && (
+                                    <p className="text-sm text-red-500">{errors.cancel_reason}</p>
                                 )}
                             </div>
                         </div>

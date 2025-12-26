@@ -75,6 +75,7 @@ interface Driver {
     assigned_users?: User[];
     lead_status?: LeadStatus;
     lead_status_comment?: string;
+    cancel_reason?: string;
     next_follow_up?: string;
     last_follow_up?: string;
     assigned_time?: string;
@@ -130,6 +131,7 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'last_assigned_time', label: 'Last Assigned Time', defaultVisible: false, defaultOrder: 10.5 },
     { id: 'last_assigned_by', label: 'Last Assigned By', defaultVisible: false, defaultOrder: 10.6 },
     { id: 'notes', label: 'Notes', defaultVisible: false, defaultOrder: 10.7 },
+    { id: 'cancel_reason', label: 'Cancel Reasons', defaultVisible: false, defaultOrder: 10.8 },
     { id: 'uuid', label: 'UUID', defaultVisible: false, defaultOrder: 11 },
     { id: 'created_at', label: 'Created At', defaultVisible: false, defaultOrder: 12 },
     { id: 'updated_at', label: 'Updated At', defaultVisible: false, defaultOrder: 13 },
@@ -423,6 +425,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         lead_source_id: null,
         lead_status_id: null,
         lead_status_comment: '',
+        cancel_reason: '',
         lead_stage_id: null,
         assigned_to: null,
         last_assigned_time_from: '',
@@ -471,6 +474,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         { value: 'lead_status_id', label: 'Lead Status' },
         { value: 'assigned_to', label: 'Assigned To' },
         { value: 'notes', label: 'Notes' },
+        { value: 'cancel_reason', label: 'Cancel Reasons' },
     ];
 
     const availableFields = importAvailableFields || defaultAvailableFields;
@@ -920,6 +924,16 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                     console.error('Error parsing updated_at:', e);
                 }
             }
+            // Cancel Reason filter
+            if (filters.cancel_reason) {
+                if (filters.cancel_reason === 'is_empty') {
+                    if (driver.cancel_reason && driver.cancel_reason.trim() !== '') {
+                        return false;
+                    }
+                } else if (!driver.cancel_reason || !driver.cancel_reason.toLowerCase().includes(String(filters.cancel_reason).toLowerCase())) {
+                    return false;
+                }
+            }
             return true;
         });
     }, [safeDrivers, filters, activeTab]);
@@ -1102,6 +1116,10 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                         aValue = (a as any).notes || '';
                         bValue = (b as any).notes || '';
                         break;
+                    case 'cancel_reason':
+                        aValue = (a as any).cancel_reason || '';
+                        bValue = (b as any).cancel_reason || '';
+                        break;
                     case 'assigned_time':
                         aValue = (a as any).assigned_time || '';
                         bValue = (b as any).assigned_time || '';
@@ -1265,11 +1283,12 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
             created_at_to: '',
             created_at_from_time: '',
             created_at_to_time: '',
-            updated_at_from: '',
-            updated_at_to: '',
-            updated_at_from_time: '',
-            updated_at_to_time: '',
-        });
+        updated_at_from: '',
+        updated_at_to: '',
+        updated_at_from_time: '',
+        updated_at_to_time: '',
+        cancel_reason: '',
+    });
     };
 
     const handleSort = (field: string) => {
@@ -1339,6 +1358,8 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
             campaign_id: driver.campaign?.id || null,
             lead_source_id: driver.lead_source?.id || null,
             lead_status_id: driver.lead_status?.id || null,
+            lead_status_comment: driver.lead_status_comment || '',
+            cancel_reason: driver.cancel_reason || '',
             lead_stage_id: driver.lead_stage?.id || null,
             assigned_to: driver.assigned_to?.id || null,
         });
@@ -1405,6 +1426,12 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         if (savedData.lead_status_id) {
             submitData.lead_status_id = savedData.lead_status_id;
         }
+        if (savedData.lead_status_comment !== undefined) {
+            submitData.lead_status_comment = savedData.lead_status_comment;
+        }
+        if (savedData.cancel_reason !== undefined) {
+            submitData.cancel_reason = savedData.cancel_reason;
+        }
         if (savedData.assigned_to) {
             submitData.assigned_to = savedData.assigned_to;
         }
@@ -1439,6 +1466,8 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                 const leadStatus = filterOptions?.leadStatuses?.find(ls => ls.value === savedData.lead_status_id);
                 updatedDriver.lead_status = leadStatus ? { id: leadStatus.value, name: leadStatus.label, color: leadStatus.color } : null;
             }
+            if (savedData.lead_status_comment !== undefined) updatedDriver.lead_status_comment = savedData.lead_status_comment;
+            if (savedData.cancel_reason !== undefined) updatedDriver.cancel_reason = savedData.cancel_reason;
             if (savedData.assigned_to !== undefined) {
                 const assignedUser = filterOptions?.users?.find(u => u.value === savedData.assigned_to);
                 updatedDriver.assigned_to = assignedUser ? { id: assignedUser.value, name: assignedUser.label } : null;
@@ -2038,7 +2067,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                         }
                                     `}</style>
                                     <table className="w-full">
-                                    <thead className="bg-neutral-50 dark:bg-neutral-900 sticky top-0 z-20">
+                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm sticky top-0 z-20">
                                         <tr>
                                             <th className="px-4 py-3 text-left w-12">
                                                 <Checkbox
@@ -2542,10 +2571,19 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                 </td>
                                             </tr>
                                         ) : (
-                                            (paginatedDrivers || []).map((driver) => (
+                                            (paginatedDrivers || []).map((driver, index) => (
                                                 <tr
                                                     key={driver.id}
-                                                    className="hover:bg-neutral-50 dark:hover:bg-neutral-900/50 cursor-pointer"
+                                                    className={`
+                                                        transition-colors duration-150 cursor-pointer
+                                                        ${
+                                                            index === 0
+                                                                ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                                : index % 2 === 0
+                                                                  ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                                  : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                        }
+                                                    `}
                                                     onClick={(e) => {
                                                         // Don't navigate if clicking on interactive elements
                                                         const target = e.target as HTMLElement;
@@ -2565,8 +2603,8 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                         const now = Date.now();
                                                         const timeSinceLastClick = now - lastClickTimeRef.current;
                                                         
-                                                        // If this is a potential double click (within 300ms), wait a bit
-                                                        if (timeSinceLastClick < 300) {
+                                                        // If this is a potential double click (within 500ms), wait a bit
+                                                        if (timeSinceLastClick < 500) {
                                                             // This might be a double click, don't navigate yet
                                                             return;
                                                         }
@@ -2582,7 +2620,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                 console.error('Error saving filtered IDs:', e);
                                                             }
                                                             router.visit(`/drivers/drivers/${driver.id}`);
-                                                        }, 300);
+                                                        }, 500);
                                                         
                                                         lastClickTimeRef.current = now;
                                                     }}
@@ -2931,6 +2969,9 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                     </div>
                                                                 ) : '-';
                                                                 break;
+                                                            case 'cancel_reason':
+                                                                cellContent = (driver as any).cancel_reason || '-';
+                                                                break;
                                                             case 'assigned_time':
                                                                 cellContent = (driver as any).assigned_time ? formatDate((driver as any).assigned_time) : '-';
                                                                 break;
@@ -2977,11 +3018,16 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                 />
 
                 {/* Quick Edit Dialog */}
-                {quickEditDialog.driver && (
+                {quickEditDialog.driver && quickEditDialog.open && (
                     <QuickEditDialog
+                        key={`quick-edit-dialog-${quickEditDialog.driver.id}`}
                         driver={quickEditDialog.driver}
                         open={quickEditDialog.open}
-                        onOpenChange={(open) => setQuickEditDialog({ open, driver: null })}
+                        onOpenChange={(open) => {
+                            if (!open) {
+                                setQuickEditDialog({ open: false, driver: null });
+                            }
+                        }}
                         filterOptions={filterOptions}
                     />
                 )}
@@ -3008,7 +3054,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                             <div className="flex-1 overflow-y-auto">
                                 <div className="overflow-x-auto">
                                     <table className="w-full border-collapse">
-                                        <thead className="bg-neutral-50 dark:bg-neutral-900 sticky top-0 z-10">
+                                        <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm sticky top-0 z-10">
                                             <tr>
                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300 border-b">Fields</th>
                                                 {mergeDrivers.map((driver, index) => (
@@ -3588,6 +3634,14 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                         )}
                                                     </div>
                                                     <div>
+                                                        <p className="text-sm text-neutral-500">Cancel Reasons</p>
+                                                        {driverDetails.cancel_reason ? (
+                                                            <p className="font-medium">{driverDetails.cancel_reason}</p>
+                                                        ) : (
+                                                            <span className="text-neutral-400 italic">Not Set</span>
+                                                        )}
+                                                    </div>
+                                                    <div>
                                                         <p className="text-sm text-neutral-500">Next Follow-up</p>
                                                         {driverDetails.next_follow_up ? (
                                                             <p className="font-medium">{formatDate(driverDetails.next_follow_up)}</p>
@@ -3928,7 +3982,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                         {driverFollowUps.length > 0 ? (
                                             <div className="overflow-x-auto">
                                                 <table className="w-full">
-                                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
                                                         <tr>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
@@ -3940,8 +3994,20 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {driverFollowUps.map((followUp) => (
-                                                            <tr key={followUp.id} className="border-t hover:bg-muted/50 transition-colors">
+                                                        {driverFollowUps.map((followUp, index) => (
+                                                            <tr 
+                                                                key={followUp.id} 
+                                                                className={`
+                                                                    border-t transition-colors duration-150
+                                                                    ${
+                                                                        index === 0
+                                                                            ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                                            : index % 2 === 0
+                                                                              ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                                              : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                                    }
+                                                                `}
+                                                            >
                                                                 <td className="px-4 py-3 text-sm">
                                                                     {followUp.created_time ? formatDate(followUp.created_time) : 'N/A'}
                                                                 </td>
@@ -3993,7 +4059,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                         {driverDuplicateDrivers.length > 0 ? (
                                             <div className="overflow-x-auto">
                                                 <table className="w-full">
-                                                    <thead className="bg-neutral-50 dark:bg-neutral-900">
+                                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
                                                         <tr>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Full Name</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</th>
@@ -4009,8 +4075,20 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {driverDuplicateDrivers.map((dup) => (
-                                                            <tr key={dup.id} className="border-t hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => {
+                                                        {driverDuplicateDrivers.map((dup, index) => (
+                                                            <tr 
+                                                                key={dup.id} 
+                                                                className={`
+                                                                    border-t transition-colors duration-150 cursor-pointer
+                                                                    ${
+                                                                        index === 0
+                                                                            ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                                            : index % 2 === 0
+                                                                              ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                                              : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                                    }
+                                                                `} 
+                                                                onClick={() => {
                                                                 setViewDialogOpen(false);
                                                                 router.visit(`/drivers/drivers/${dup.id}`);
                                                             }}>
@@ -4205,27 +4283,63 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
     const [leadStages, setLeadStages] = useState<FilterOption[]>([]);
     const [loadingLeadStages, setLoadingLeadStages] = useState(false);
     
+    // Early return if no driver
+    if (!driver) {
+        console.warn('QuickEditDialog: No driver provided');
+        return null;
+    }
+    
+    // Initialize form data
     const { data, setData, put, processing, errors, transform } = useForm({
-        company_id: driver.company_id ? String(driver.company_id) : '',
-        full_name: driver.full_name || '',
-        phone: driver.phone || '',
-        whatsapp_phone: driver.whatsapp_phone || '',
-        email: driver.email || '',
-        riding_company_id: driver.riding_company?.id ? String(driver.riding_company.id) : '',
-        campaign_id: driver.campaign?.id ? String(driver.campaign.id) : '',
-        lead_source_id: driver.lead_source?.id ? String(driver.lead_source.id) : '',
-        assigned_to: driver.assigned_to?.id ? String(driver.assigned_to.id) : '',
-        assigned_users: (driver.assigned_users && Array.isArray(driver.assigned_users) && driver.assigned_users.length > 0) 
+        company_id: driver?.company_id ? String(driver.company_id) : '',
+        full_name: driver?.full_name || '',
+        phone: driver?.phone || '',
+        whatsapp_phone: driver?.whatsapp_phone || '',
+        email: driver?.email || '',
+        riding_company_id: driver?.riding_company?.id ? String(driver.riding_company.id) : '',
+        campaign_id: driver?.campaign?.id ? String(driver.campaign.id) : '',
+        lead_source_id: driver?.lead_source?.id ? String(driver.lead_source.id) : '',
+        assigned_to: driver?.assigned_to?.id ? String(driver.assigned_to.id) : '',
+        assigned_users: (driver?.assigned_users && Array.isArray(driver.assigned_users) && driver.assigned_users.length > 0) 
             ? driver.assigned_users.map((u) => typeof u === 'object' ? u.id : u) 
             : [],
-        lead_status_id: driver.lead_status?.id ? String(driver.lead_status.id) : '',
-        lead_status_comment: driver.lead_status_comment || '',
-        next_follow_up: driver.next_follow_up || '',
-        last_follow_up: driver.last_follow_up || '',
-        lead_stage_id: driver.lead_stage?.id ? String(driver.lead_stage.id) : '',
+        lead_status_id: driver?.lead_status?.id ? String(driver.lead_status.id) : '',
+        lead_status_comment: driver?.lead_status_comment || '',
+        cancel_reason: driver?.cancel_reason || '',
+        next_follow_up: driver?.next_follow_up || '',
+        last_follow_up: driver?.last_follow_up || '',
+        lead_stage_id: driver?.lead_stage?.id ? String(driver.lead_stage.id) : '',
         current_stage_id: '',
-        notes: driver.notes || '',
+        notes: driver?.notes || '',
     });
+    
+    // Update form data when driver changes or dialog opens
+    useEffect(() => {
+        if (open && driver) {
+            setData({
+                company_id: driver.company_id ? String(driver.company_id) : '',
+                full_name: driver.full_name || '',
+                phone: driver.phone || '',
+                whatsapp_phone: driver.whatsapp_phone || '',
+                email: driver.email || '',
+                riding_company_id: driver.riding_company?.id ? String(driver.riding_company.id) : '',
+                campaign_id: driver.campaign?.id ? String(driver.campaign.id) : '',
+                lead_source_id: driver.lead_source?.id ? String(driver.lead_source.id) : '',
+                assigned_to: driver.assigned_to?.id ? String(driver.assigned_to.id) : '',
+                assigned_users: (driver.assigned_users && Array.isArray(driver.assigned_users) && driver.assigned_users.length > 0) 
+                    ? driver.assigned_users.map((u) => typeof u === 'object' ? u.id : u) 
+                    : [],
+                lead_status_id: driver.lead_status?.id ? String(driver.lead_status.id) : '',
+                lead_status_comment: driver.lead_status_comment || '',
+                cancel_reason: driver.cancel_reason || '',
+                next_follow_up: driver.next_follow_up || '',
+                last_follow_up: driver.last_follow_up || '',
+                lead_stage_id: driver.lead_stage?.id ? String(driver.lead_stage.id) : '',
+                current_stage_id: '',
+                notes: driver.notes || '',
+            });
+        }
+    }, [open, driver?.id, setData]);
 
     // Transform data before submitting - convert empty strings to null
     transform((data) => {
@@ -4243,6 +4357,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                 : null,
             lead_status_id: data.lead_status_id ? Number(data.lead_status_id) : null,
             lead_status_comment: data.lead_status_comment || null,
+            cancel_reason: data.cancel_reason || null,
             next_follow_up: data.next_follow_up || null,
             lead_stage_id: data.lead_stage_id ? Number(data.lead_stage_id) : null,
             current_stage_id: data.current_stage_id || null,
@@ -4326,16 +4441,17 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         });
     };
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="!max-w-6xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>Quick Edit Driver</DialogTitle>
-                    <DialogDescription>
-                        Edit driver details: {driver.full_name}
-                    </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+    try {
+        return (
+            <Dialog key={`quick-edit-${driver.id}`} open={open} onOpenChange={onOpenChange}>
+                <DialogContent className="!max-w-6xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Quick Edit Driver</DialogTitle>
+                        <DialogDescription>
+                            Edit driver details: {driver?.full_name || 'Driver'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium mb-1">Full Name</label>
@@ -4467,6 +4583,34 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                 />
                                 {errors.lead_status_comment && (
                                     <p className="text-sm text-red-500 mt-1">{errors.lead_status_comment}</p>
+                                )}
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">Cancel Reasons</label>
+                                <Select
+                                    value={data.cancel_reason || ''}
+                                    onValueChange={(value) => setData('cancel_reason', value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select cancel reason..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="">-- None --</SelectItem>
+                                        <SelectItem value="Not interested">Not interested</SelectItem>
+                                        <SelectItem value="Wrong Number">Wrong Number</SelectItem>
+                                        <SelectItem value="Under Age">Under Age</SelectItem>
+                                        <SelectItem value="Duplicated">Duplicated</SelectItem>
+                                        <SelectItem value="Wrong Documents">Wrong Documents</SelectItem>
+                                        <SelectItem value="Car Not Accepted">Car Not Accepted</SelectItem>
+                                        <SelectItem value="Other">Other</SelectItem>
+                                        <SelectItem value="Already driver">Already driver</SelectItem>
+                                        <SelectItem value="Expired">Expired</SelectItem>
+                                        <SelectItem value="Cities">Cities</SelectItem>
+                                        <SelectItem value="Dont have driving license">Dont have driving license</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {errors.cancel_reason && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.cancel_reason}</p>
                                 )}
                             </div>
                             <div 
@@ -4617,6 +4761,22 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                 </form>
             </DialogContent>
         </Dialog>
-    );
+        );
+    } catch (error) {
+        console.error('Error rendering QuickEditDialog:', error);
+        return (
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Error</DialogTitle>
+                        <DialogDescription>
+                            An error occurred while loading the dialog. Please try again.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <Button onClick={() => onOpenChange(false)}>Close</Button>
+                </DialogContent>
+            </Dialog>
+        );
+    }
 }
 
