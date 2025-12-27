@@ -210,12 +210,18 @@ class FacebookIntegrationController extends Controller
 
         // Save integration with User Delegated Access Token
         // هذا التوكن خاص بالمستخدم ويمكن استخدامه للوصول لصفحاته واللييدز
+        // Get existing integration to preserve config if updating
+        $existingIntegration = RidingCompanyIntegrationSetting::where('riding_company_id', $ridingCompanyId)
+            ->where('type', 'facebook')
+            ->first();
+        
         $integration = RidingCompanyIntegrationSetting::updateOrCreate(
             [
                 'riding_company_id' => $ridingCompanyId,
                 'type' => 'facebook',
             ],
             [
+                'config' => $existingIntegration?->config ?? [], // Always include config - preserve existing or use empty array
                 'facebook_access_token' => $accessToken, // User Delegated Access Token
                 'facebook_user_id' => $userInfo['success'] ? ($userInfo['data']['id'] ?? null) : null,
                 'facebook_user_name' => $userInfo['success'] ? ($userInfo['data']['name'] ?? null) : null,

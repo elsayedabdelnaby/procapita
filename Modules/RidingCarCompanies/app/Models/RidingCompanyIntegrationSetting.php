@@ -47,6 +47,17 @@ class RidingCompanyIntegrationSetting extends Model
             if (! isset($model->active)) {
                 $model->active = true;
             }
+            // Set config to empty array if not set (required field - MySQL doesn't allow default for JSON)
+            if (! isset($model->config) || $model->config === null) {
+                $model->config = [];
+            }
+        });
+        
+        static::saving(function ($model) {
+            // Ensure config is always set before saving (safety check)
+            if (! isset($model->config) || $model->config === null) {
+                $model->config = [];
+            }
         });
     }
 
