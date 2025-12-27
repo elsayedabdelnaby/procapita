@@ -232,9 +232,13 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
 
             const data = await response.json();
             if (data.success && data.fields) {
-                setFormFields(data.fields);
-                if (data.fields.length === 0) {
-                    alert('No fields found in this form. The form might be empty or there was an error loading it.');
+                // Filter out fields with empty or invalid keys
+                const validFields = data.fields.filter((field: { key: string; label: string; type: string }) => 
+                    field.key && field.key.trim() !== ''
+                );
+                setFormFields(validFields);
+                if (validFields.length === 0) {
+                    alert('No valid fields found in this form. The form might be empty or there was an error loading it.');
                 }
             } else {
                 alert(data.error || 'Failed to load form fields. Please try selecting a different form.');
@@ -544,8 +548,8 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                                 <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
                                             </div>
                                         ) : formFields.length > 0 ? (
-                                            formFields.map((field) => (
-                                                <div key={field.key} className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700">
+                                            formFields.map((field, index) => (
+                                                <div key={field.key || `field-${index}`} className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700">
                                                     <div className="flex items-start justify-between gap-2">
                                                         <div className="flex-1">
                                                             <p className="text-sm font-medium">{field.label}</p>
@@ -553,7 +557,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                                                 <Badge variant="outline" className="text-xs">
                                                                     {field.type}
                                                                 </Badge>
-                                                                <p className="text-xs text-neutral-500">Key: {field.key}</p>
+                                                                <p className="text-xs text-neutral-500">Key: {field.key || '(no key)'}</p>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -572,11 +576,11 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                     <Label className="text-base font-medium mb-3 block">Map to CRM Driver Fields</Label>
                                     <div className="space-y-3">
                                         {formFields.length > 0 ? (
-                                            formFields.map((field) => {
+                                            formFields.map((field, index) => {
                                                 const mappedField = fieldMapping[field.key];
                                                 const driverField = driverFields.find(f => f.value === mappedField);
                                                 return (
-                                                    <div key={field.key} className="space-y-2">
+                                                    <div key={field.key || `mapping-${index}`} className="space-y-2">
                                                         <div className="flex items-center gap-2">
                                                             <Label className="text-sm font-medium flex-1">
                                                                 {field.label}
@@ -586,11 +590,11 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                                             </Label>
                                                         </div>
                                                         <Select
-                                                            value={mappedField || ''}
+                                                            value={mappedField && mappedField !== '' ? mappedField : '__none__'}
                                                             onValueChange={(value) => {
                                                                 setFieldMapping({
                                                                     ...fieldMapping,
-                                                                    [field.key]: value,
+                                                                    [field.key]: value === '__none__' ? '' : value,
                                                                 });
                                                             }}
                                                         >
@@ -598,7 +602,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                                                 <SelectValue placeholder="Select CRM field..." />
                                                             </SelectTrigger>
                                                             <SelectContent>
-                                                                <SelectItem value="">-- Don't map --</SelectItem>
+                                                                <SelectItem value="__none__">-- Don't map --</SelectItem>
                                                                 {driverFields.map((driverField) => (
                                                                     <SelectItem key={driverField.value} value={driverField.value}>
                                                                         {driverField.label}
@@ -609,7 +613,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                                                 ))}
                                                             </SelectContent>
                                                         </Select>
-                                                        {mappedField && (
+                                                        {mappedField && mappedField !== '' && (
                                                             <p className="text-xs text-green-600 dark:text-green-400">
                                                                 ✓ Mapped to {driverField?.label || mappedField}
                                                             </p>
