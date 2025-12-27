@@ -3,7 +3,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "build": "php artisan wayfinder:generate --with-form || echo 'Wayfinder generation skipped' && vite build",
+        "build:skip-wayfinder": "vite build",
         "build:ssr": "vite build && vite build --ssr",
         "dev": "concurrently \"vite\" \"node whatsapp-service/index.js\"",
         "dev:vite": "vite",
