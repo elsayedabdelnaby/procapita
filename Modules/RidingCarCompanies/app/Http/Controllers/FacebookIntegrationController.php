@@ -404,6 +404,11 @@ class FacebookIntegrationController extends Controller
             return redirect()->back()->with('error', 'Facebook integration not found');
         }
 
+        // Check if configuration is complete before allowing field mapping
+        if (!$integration->facebook_page_id || !$integration->facebook_form_id) {
+            return redirect()->back()->with('error', 'Please complete the Configure step (select page and form) before saving field mapping.');
+        }
+
         $integration->update([
             'facebook_field_mapping' => $request->field_mapping,
             'active' => true, // Activate integration when mapping is saved
@@ -419,13 +424,40 @@ class FacebookIntegrationController extends Controller
     {
         $integration = RidingCompanyIntegrationSetting::where('riding_company_id', $ridingCompanyId)
             ->where('type', 'facebook')
-            ->where('active', true)
             ->first();
 
-        if (!$integration || !$integration->facebook_access_token || !$integration->facebook_form_id) {
+        if (!$integration) {
             return response()->json([
                 'success' => false,
-                'error' => 'Facebook integration not configured',
+                'error' => 'Facebook integration not found. Please connect your Facebook account first.',
+            ], 400);
+        }
+
+        if (!$integration->facebook_access_token) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Facebook access token not found. Please reconnect your Facebook account.',
+            ], 400);
+        }
+
+        if (!$integration->facebook_page_id) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Facebook page not selected. Please select a page in the Configure step.',
+            ], 400);
+        }
+
+        if (!$integration->facebook_form_id) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Facebook form not selected. Please select a form in the Configure step.',
+            ], 400);
+        }
+
+        if (!$integration->active) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Facebook integration is not active. Please save the field mapping to activate it.',
             ], 400);
         }
 
