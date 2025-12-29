@@ -27,17 +27,30 @@ class FacebookIntegrationController extends Controller
         $ridingCompany = RidingCompany::findOrFail($ridingCompanyId);
         
         // Get or create Facebook integration setting
-        $integration = RidingCompanyIntegrationSetting::firstOrCreate(
+        // Use firstOrNew + explicit save to ensure config is always set
+        $integration = RidingCompanyIntegrationSetting::firstOrNew(
             [
                 'riding_company_id' => $ridingCompanyId,
                 'type' => 'facebook',
-            ],
-            [
-                'config' => [],
-                'active' => false,
             ]
         );
-
+        
+        // Ensure config is set explicitly
+        if (!isset($integration->config) || $integration->config === null) {
+            $integration->setAttribute('config', []);
+        }
+        
+        // Set other defaults if creating new
+        if (!$integration->exists) {
+            $integration->active = false;
+        }
+        
+        // Double-check config is in attributes before saving
+        if (!isset($integration->attributes['config']) || !array_key_exists('config', $integration->attributes)) {
+            $integration->setAttribute('config', $integration->config ?? []);
+        }
+        
+        $integration->save();
         $integration->load('ridingCompany');
 
         return Inertia::render('RidingCarCompanies/FacebookIntegration/Show', [
