@@ -16,7 +16,7 @@
         "laravel/reverb": "^1.0",
         "laravel/telescope": "^5.15",
         "laravel/tinker": "^2.10.1",
-        "laravel/wayfinder": "*",
+        "laravel/wayfinder": "^0.1.12",
         "nwidart/laravel-modules": "^12.0",
         "spatie/laravel-activitylog": "^4.10",
         "spatie/laravel-permission": "^6.22"
