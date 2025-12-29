@@ -160,13 +160,40 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
     const loadPages = async () => {
         setLoadingPages(true);
         try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            if (!csrfToken) {
+                alert('CSRF token not found. Please refresh the page and try again.');
+                setLoadingPages(false);
+                return;
+            }
+
             const response = await fetch(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/pages`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
                 },
+                credentials: 'same-origin',
             });
+
+            // Check if response is OK
+            if (!response.ok) {
+                if (response.status === 419) {
+                    alert('Session expired. Please refresh the page and try again.');
+                    window.location.reload();
+                    return;
+                }
+                const text = await response.text();
+                throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+            }
+
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                throw new Error('Server returned non-JSON response. Please refresh the page.');
+            }
 
             const data = await response.json();
             if (data.success && data.pages) {
