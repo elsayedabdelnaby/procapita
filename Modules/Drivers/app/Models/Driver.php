@@ -47,6 +47,9 @@ class Driver extends Model
         'cancel_reason',
         'driver_num',
         'duplicate',
+        'worked_with_us_before',
+        'vehicle_type_and_year',
+        'city',
     ];
 
     protected function casts(): array

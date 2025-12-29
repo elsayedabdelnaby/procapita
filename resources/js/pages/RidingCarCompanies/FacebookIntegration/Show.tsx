@@ -351,6 +351,9 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         { value: 'phone', label: 'Phone', required: true },
         { value: 'whatsapp_phone', label: 'WhatsApp Phone', required: false },
         { value: 'email', label: 'Email', required: false },
+        { value: 'city', label: 'City', required: false },
+        { value: 'worked_with_us_before', label: 'Worked With Us Before', required: false },
+        { value: 'vehicle_type_and_year', label: 'Vehicle Type and Year', required: false },
         { value: 'notes', label: 'Notes', required: false },
     ];
 
@@ -371,7 +374,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
 
                 {/* Progress Steps */}
                 <div className="flex items-center gap-2 text-sm">
-                    <div className={`flex items-center gap-2 ${currentStep === 'setup' ? 'text-blue-600 font-semibold' : currentStep !== 'setup' ? 'text-green-600' : 'text-neutral-500'}`}>
+                    <div className={`flex items-center gap-2 ${currentStep === 'setup' ? 'text-blue-600 font-semibold' : hasToken ? 'text-green-600' : 'text-neutral-500'}`}>
                         {currentStep !== 'setup' && hasToken ? (
                             <CheckCircle2 className="h-4 w-4" />
                         ) : (
