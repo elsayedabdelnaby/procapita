@@ -5,6 +5,7 @@ namespace Modules\RidingCarCompanies\app\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\RidingCarCompanies\app\Models\RidingCompany;
@@ -78,7 +79,7 @@ class FacebookIntegrationController extends Controller
     public function getOAuthUrl(Request $request, int $ridingCompanyId): \Illuminate\Http\JsonResponse
     {
         try {
-            \Log::info('Getting Facebook OAuth URL', [
+            Log::info('Getting Facebook OAuth URL', [
                 'riding_company_id' => $ridingCompanyId,
                 'user_id' => Auth::id(),
             ]);
@@ -112,7 +113,7 @@ class FacebookIntegrationController extends Controller
             // Final check - if appId is still empty, we can't proceed
             // But we can use the constructed redirectUri if appId exists
             if (empty($appId)) {
-                \Log::warning('Facebook App ID not configured', [
+                Log::warning('Facebook App ID not configured', [
                     'config_app_id' => config('services.facebook.app_id') ? 'set' : 'empty',
                     'env_app_id' => env('FACEBOOK_APP_ID') ? 'set' : 'empty',
                     'env_file_exists' => file_exists(base_path('.env')),
@@ -131,7 +132,7 @@ class FacebookIntegrationController extends Controller
                 ], 400);
             }
 
-            \Log::info('Facebook credentials check', [
+            Log::info('Facebook credentials check', [
                 'app_id_set' => !empty($appId),
                 'redirect_uri_set' => !empty($redirectUri),
                 'app_id' => $appId ? '***' . substr($appId, -4) : 'empty',
@@ -145,7 +146,7 @@ class FacebookIntegrationController extends Controller
 
             $url = $this->facebookService->getOAuthUrl($state);
 
-            \Log::info('Facebook OAuth URL generated successfully', [
+            Log::info('Facebook OAuth URL generated successfully', [
                 'riding_company_id' => $ridingCompanyId,
             ]);
 
@@ -154,7 +155,7 @@ class FacebookIntegrationController extends Controller
                 'url' => $url,
             ]);
         } catch (\Exception $e) {
-            \Log::error('Error getting Facebook OAuth URL', [
+            Log::error('Error getting Facebook OAuth URL', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'riding_company_id' => $ridingCompanyId,
@@ -243,7 +244,7 @@ class FacebookIntegrationController extends Controller
             ]
         );
 
-        \Log::info('Facebook User Delegated Access saved', [
+        Log::info('Facebook User Delegated Access saved', [
             'riding_company_id' => $ridingCompanyId,
             'facebook_user_id' => $userInfo['success'] ? ($userInfo['data']['id'] ?? null) : null,
             'token_expires_at' => $expiresIn ? now()->addSeconds($expiresIn)->toDateTimeString() : null,
@@ -394,6 +395,8 @@ class FacebookIntegrationController extends Controller
     {
         $request->validate([
             'field_mapping' => 'required|array',
+            'page_id' => 'sometimes|string',
+            'form_id' => 'sometimes|string',
         ]);
 
         $integration = RidingCompanyIntegrationSetting::where('riding_company_id', $ridingCompanyId)
@@ -404,15 +407,30 @@ class FacebookIntegrationController extends Controller
             return redirect()->back()->with('error', 'Facebook integration not found');
         }
 
-        // Check if configuration is complete before allowing field mapping
-        if (!$integration->facebook_page_id || !$integration->facebook_form_id) {
-            return redirect()->back()->with('error', 'Please complete the Configure step (select page and form) before saving field mapping.');
-        }
-
-        $integration->update([
+        // Prepare update data
+        $updateData = [
             'facebook_field_mapping' => $request->field_mapping,
             'active' => true, // Activate integration when mapping is saved
-        ]);
+        ];
+
+        // If page_id and form_id are provided but not saved yet, save them too
+        if ($request->has('page_id') && $request->page_id && !$integration->facebook_page_id) {
+            $updateData['facebook_page_id'] = $request->page_id;
+        }
+
+        if ($request->has('form_id') && $request->form_id && !$integration->facebook_form_id) {
+            $updateData['facebook_form_id'] = $request->form_id;
+        }
+
+        // Check if configuration is complete (either already saved or provided in request)
+        $hasPageId = $integration->facebook_page_id || ($request->has('page_id') && $request->page_id);
+        $hasFormId = $integration->facebook_form_id || ($request->has('form_id') && $request->form_id);
+
+        if (!$hasPageId || !$hasFormId) {
+            return redirect()->back()->with('error', 'Please select both page and form before saving field mapping.');
+        }
+
+        $integration->update($updateData);
 
         return redirect()->back()->with('success', 'Field mapping saved successfully');
     }
@@ -621,7 +639,7 @@ class FacebookIntegrationController extends Controller
                 $userId = $data['user_id'];
                 
                 // Here you would delete user data associated with this Facebook user ID
-                \Log::info('Facebook data deletion request', [
+                Log::info('Facebook data deletion request', [
                     'facebook_user_id' => $userId,
                     'request_data' => $data,
                 ]);
@@ -644,7 +662,7 @@ class FacebookIntegrationController extends Controller
                 ], 200, [], JSON_UNESCAPED_SLASHES);
             }
         } catch (\Exception $e) {
-            \Log::error('Error processing Facebook data deletion callback', [
+            Log::error('Error processing Facebook data deletion callback', [
                 'error' => $e->getMessage(),
             ]);
         }

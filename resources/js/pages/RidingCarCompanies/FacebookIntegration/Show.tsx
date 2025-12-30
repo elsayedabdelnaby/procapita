@@ -307,6 +307,8 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         try {
             await router.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/field-mapping`, {
                 field_mapping: fieldMapping,
+                page_id: selectedPageId, // Include page_id if not saved yet
+                form_id: selectedFormId, // Include form_id if not saved yet
             }, {
                 preserveScroll: true,
                 onSuccess: () => {
