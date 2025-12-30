@@ -774,14 +774,14 @@ export default function DriversCreate({
                             <div>
                                 <Label htmlFor="cancel_reason">Cancel Reasons</Label>
                                 <Select
-                                    value={data.cancel_reason}
-                                    onValueChange={(value) => setData('cancel_reason', value)}
+                                    value={data.cancel_reason || '__none__'}
+                                    onValueChange={(value) => setData('cancel_reason', value === '__none__' ? '' : value)}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select cancel reason..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">-- None --</SelectItem>
+                                        <SelectItem value="__none__">-- None --</SelectItem>
                                         <SelectItem value="Not interested">Not interested</SelectItem>
                                         <SelectItem value="Wrong Number">Wrong Number</SelectItem>
                                         <SelectItem value="Under Age">Under Age</SelectItem>

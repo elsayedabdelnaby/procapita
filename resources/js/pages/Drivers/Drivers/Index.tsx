@@ -133,8 +133,8 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'notes', label: 'Notes', defaultVisible: false, defaultOrder: 10.7 },
     { id: 'cancel_reason', label: 'Cancel Reasons', defaultVisible: false, defaultOrder: 10.8 },
     { id: 'uuid', label: 'UUID', defaultVisible: false, defaultOrder: 11 },
-    { id: 'created_at', label: 'Created At', defaultVisible: false, defaultOrder: 12 },
-    { id: 'updated_at', label: 'Updated At', defaultVisible: false, defaultOrder: 13 },
+    { id: 'created_at', label: 'Created At', defaultVisible: true, defaultOrder: 12 },
+    { id: 'updated_at', label: 'Updated At', defaultVisible: true, defaultOrder: 13 },
 ];
 
 // Generate time options from 08:00 AM to 11:30 PM in 30-minute intervals
@@ -359,31 +359,37 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     
     // Merge saved columns with new columns to ensure all columns are present
     const mergeColumns = (saved: Array<{ id: string; visible: boolean; order: number }> | null) => {
+        // Always start with ALL_DRIVER_COLUMNS to ensure all columns are present
+        const allColumns = ALL_DRIVER_COLUMNS.map(col => ({
+            id: col.id,
+            visible: col.defaultVisible,
+            order: col.defaultOrder,
+        }));
+        
         if (!saved || !Array.isArray(saved)) {
-            return ALL_DRIVER_COLUMNS.map(col => ({
-                id: col.id,
-                visible: col.defaultVisible,
-                order: col.defaultOrder,
-            }));
+            return allColumns;
         }
         
-        // Create a map of saved columns
-        const savedMap = new Map(saved.map(col => [col.id, col]));
+        // Check if saved columns contain all required columns
+        const savedColumnIds = new Set(saved.map(col => col.id));
+        const allColumnIds = new Set(ALL_DRIVER_COLUMNS.map(col => col.id));
+        const hasAllColumns = Array.from(allColumnIds).every(id => savedColumnIds.has(id));
         
-        // Merge: use saved settings if exists, otherwise use defaults
-        return ALL_DRIVER_COLUMNS.map(col => {
-            const savedCol = savedMap.get(col.id);
+        // Merge saved settings with defaults
+        const savedMap = new Map(saved.map(col => [col.id, col]));
+        return ALL_DRIVER_COLUMNS.map(colDef => {
+            const savedCol = savedMap.get(colDef.id);
             if (savedCol) {
                 return {
-                    id: col.id,
-                    visible: savedCol.visible !== undefined ? savedCol.visible : col.defaultVisible,
-                    order: savedCol.order !== undefined ? savedCol.order : col.defaultOrder,
+                    id: colDef.id,
+                    visible: savedCol.visible !== undefined ? savedCol.visible : colDef.defaultVisible,
+                    order: savedCol.order !== undefined ? savedCol.order : colDef.defaultOrder,
                 };
             }
             return {
-                id: col.id,
-                visible: col.defaultVisible,
-                order: col.defaultOrder,
+                id: colDef.id,
+                visible: colDef.defaultVisible,
+                order: colDef.defaultOrder,
             };
         });
     };
@@ -941,6 +947,41 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         });
     }, [safeDrivers, filters, activeTab]);
 
+    // Ensure all columns from ALL_DRIVER_COLUMNS are present in columns state
+    useEffect(() => {
+        // Wait a bit to ensure columns state is initialized
+        const timer = setTimeout(() => {
+            if (columns.length === 0) return;
+            
+            const allColumnIds = new Set(ALL_DRIVER_COLUMNS.map(col => col.id));
+            const currentColumnIds = new Set(columns.map(col => col.id));
+            
+            // Check if any columns are missing
+            const missingColumns = ALL_DRIVER_COLUMNS.filter(col => !currentColumnIds.has(col.id));
+            
+            if (missingColumns.length > 0) {
+                // Add missing columns with their default settings
+                setColumns(prev => {
+                    const existingIds = new Set(prev.map(col => col.id));
+                    const newColumns = [...prev];
+                    missingColumns.forEach(col => {
+                        if (!existingIds.has(col.id)) {
+                            newColumns.push({
+                                id: col.id,
+                                visible: col.defaultVisible,
+                                order: col.defaultOrder,
+                            });
+                        }
+                    });
+                    // Re-sort by order
+                    return newColumns.sort((a, b) => (a.order || 0) - (b.order || 0));
+                });
+            }
+        }, 100);
+        
+        return () => clearTimeout(timer);
+    }, []); // Run only once on mount
+
     // Save column preferences to localStorage
     useEffect(() => {
         try {
@@ -1181,13 +1222,11 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
 
     const handlePageChange = (newPage: number) => {
         setCurrentPage(newPage);
-        setShowAllDrivers(false);
     };
 
     const handlePageSizeChange = (newSize: number) => {
         setPageSize(newSize);
         setCurrentPage(1);
-        setShowAllDrivers(false);
     };
 
     // Handle select all in current page only
