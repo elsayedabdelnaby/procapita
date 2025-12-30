@@ -506,7 +506,7 @@ class FacebookIntegrationController extends Controller
         $fieldMapping = $integration->facebook_field_mapping ?? [];
         $ridingCompany = $integration->ridingCompany;
         $createdCount = 0;
-        $updatedCount = 0;
+        $skippedCount = 0;
 
         foreach ($leads as $lead) {
             $fieldData = [];
@@ -526,7 +526,7 @@ class FacebookIntegrationController extends Controller
                 continue;
             }
 
-            // Check if driver exists by phone
+            // Check if driver exists by phone and riding company
             $phone = $driverData['phone'] ?? $driverData['whatsapp_phone'] ?? null;
             if ($phone) {
                 $phone = $this->driverService->reformatPhoneNumber($phone);
@@ -537,9 +537,9 @@ class FacebookIntegrationController extends Controller
                     })
                     ->first();
 
+                // Skip if driver already exists with same phone and riding company
                 if ($existingDriver) {
-                    $existingDriver->update($driverData);
-                    $updatedCount++;
+                    $skippedCount++;
                     continue;
                 }
             }
@@ -561,9 +561,9 @@ class FacebookIntegrationController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => "Synced {$createdCount} new leads and updated {$updatedCount} existing leads",
+            'message' => "Synced {$createdCount} new leads. Skipped {$skippedCount} duplicate leads (same phone and riding company).",
             'created' => $createdCount,
-            'updated' => $updatedCount,
+            'skipped' => $skippedCount,
         ]);
     }
 
