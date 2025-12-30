@@ -43,7 +43,9 @@ class RidingCarCompaniesServiceProvider extends ServiceProvider
      */
     protected function registerCommands(): void
     {
-        // $this->commands([]);
+        $this->commands([
+            \Modules\RidingCarCompanies\app\Console\Commands\SyncFacebookLeadsCommand::class,
+        ]);
     }
 
     /**

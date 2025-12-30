@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 
 Schedule::command('telescope:prune --hours=48')->daily();
+
+// Sync Facebook leads automatically every 5 minutes
+Schedule::command('facebook:sync-leads')->everyFiveMinutes();
