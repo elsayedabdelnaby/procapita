@@ -467,6 +467,10 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
         { value: 'lead_status_id', label: 'Lead Status' },
         { value: 'assigned_to', label: 'Assigned To' },
         { value: 'notes', label: 'Notes' },
+        { value: 'cancel_reason', label: 'Cancel Reason' },
+        { value: 'worked_with_us_before', label: 'Worked With Us Before' },
+        { value: 'vehicle_type_and_year', label: 'Vehicle Type and Year' },
+        { value: 'city', label: 'City' },
     ];
 
     const availableFields = importAvailableFields || defaultAvailableFields;
