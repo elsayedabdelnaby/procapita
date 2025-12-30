@@ -19,7 +19,9 @@ import {
     ChevronLeft,
     ChevronRight,
     MessageCircle,
-    Eye
+    Eye,
+    MapPin,
+    Car
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useState, useEffect } from 'react';
@@ -150,6 +152,9 @@ interface Driver {
     };
     notes?: string;
     cancel_reason?: string;
+    worked_with_us_before?: string;
+    vehicle_type_and_year?: string;
+    city?: string;
     stages_progress?: {
         total: number;
         completed: number;
@@ -473,6 +478,15 @@ export default function DriversShow({
                                             <div className="flex-1">
                                                 <p className="text-sm text-neutral-500">Email</p>
                                                 <p className="font-medium">{driver.email}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('city') && driver.city && (
+                                        <div className="flex items-start gap-2">
+                                            <MapPin className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                            <div className="flex-1">
+                                                <p className="text-sm text-neutral-500">City</p>
+                                                <p className="font-medium">{driver.city}</p>
                                             </div>
                                         </div>
                                     )}
@@ -807,6 +821,31 @@ export default function DriversShow({
                                 <p className="text-sm">{driver.cancel_reason}</p>
                             </Card>
                         )}
+
+                        {/* Facebook Form Fields */}
+                        {(canViewDriverField('worked_with_us_before') && driver.worked_with_us_before) ||
+                         (canViewDriverField('vehicle_type_and_year') && driver.vehicle_type_and_year) ? (
+                            <Card className="p-6">
+                                <h2 className="mb-4 text-lg font-semibold">Additional Information</h2>
+                                <div className="space-y-4">
+                                    {canViewDriverField('worked_with_us_before') && driver.worked_with_us_before && (
+                                        <div>
+                                            <p className="text-sm text-neutral-500 mb-1">Worked With Us Before</p>
+                                            <p className="text-sm whitespace-pre-wrap">{driver.worked_with_us_before}</p>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('vehicle_type_and_year') && driver.vehicle_type_and_year && (
+                                        <div>
+                                            <p className="text-sm text-neutral-500 mb-1 flex items-center gap-2">
+                                                <Car className="h-4 w-4" />
+                                                Vehicle Type and Year
+                                            </p>
+                                            <p className="text-sm whitespace-pre-wrap">{driver.vehicle_type_and_year}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </Card>
+                        ) : null}
                     </div>
                 )}
 

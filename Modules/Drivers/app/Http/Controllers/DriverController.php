@@ -490,6 +490,10 @@ class DriverController extends Controller
                     'name' => $driverModel->currentStage->name,
                 ] : null,
                 'notes' => $driverModel->notes,
+                'cancel_reason' => $driverModel->cancel_reason,
+                'worked_with_us_before' => $driverModel->worked_with_us_before,
+                'vehicle_type_and_year' => $driverModel->vehicle_type_and_year,
+                'city' => $driverModel->city,
                 'stages_progress' => $stagesProgress,
                 'stages_status' => $stagesStatus,
                 'next_stage' => $nextStage ? [
@@ -683,6 +687,10 @@ class DriverController extends Controller
                     'name' => $driverModel->currentStage->name,
                 ] : null,
                 'notes' => $driverModel->notes,
+                'cancel_reason' => $driverModel->cancel_reason,
+                'worked_with_us_before' => $driverModel->worked_with_us_before,
+                'vehicle_type_and_year' => $driverModel->vehicle_type_and_year,
+                'city' => $driverModel->city,
                 'stages_progress' => $stagesProgress,
                 'stages_status' => $stagesStatus,
                 'next_stage' => $nextStage ? [

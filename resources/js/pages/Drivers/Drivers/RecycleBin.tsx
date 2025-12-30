@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMe
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router, usePage, useForm } from '@inertiajs/react';
-import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown, User, Mail, CheckCircle2, FileText, Activity, Settings2, GripVertical, ChevronLeft, ChevronRight, Upload, Edit, Users, UserPlus, Calendar, AlertCircle, RotateCcw, Trash2 } from 'lucide-react';
+import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown, User, Mail, CheckCircle2, FileText, Activity, Settings2, GripVertical, ChevronLeft, ChevronRight, Upload, Edit, Users, UserPlus, Calendar, AlertCircle, RotateCcw, Trash2, MapPin, Car } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { type SharedData } from '@/types';
 import axios from 'axios';
@@ -3505,6 +3505,15 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                                             </div>
                                                         </div>
                                                     )}
+                                                    {driverDetails.city && (
+                                                        <div className="flex items-start gap-2">
+                                                            <MapPin className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                                            <div className="flex-1">
+                                                                <p className="text-sm text-neutral-500">City</p>
+                                                                <p className="font-medium">{driverDetails.city}</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                     {driverDetails.uuid && (
                                                         <div>
                                                             <p className="text-sm text-neutral-500">UUID</p>
@@ -3575,6 +3584,27 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                                             <span className="text-neutral-400 italic">Not Set</span>
                                                         )}
                                                     </div>
+                                                    {driverDetails.city && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">City</p>
+                                                            <p className="font-medium">{driverDetails.city}</p>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.worked_with_us_before && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Worked With Us Before</p>
+                                                            <p className="font-medium whitespace-pre-wrap">{driverDetails.worked_with_us_before}</p>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.vehicle_type_and_year && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500 flex items-center gap-2">
+                                                                <Car className="h-4 w-4" />
+                                                                Vehicle Type and Year
+                                                            </p>
+                                                            <p className="font-medium whitespace-pre-wrap">{driverDetails.vehicle_type_and_year}</p>
+                                                        </div>
+                                                    )}
                                                     {driverDetails.assigned_to && (
                                                         <div>
                                                             <p className="text-sm text-neutral-500">Assigned To</p>

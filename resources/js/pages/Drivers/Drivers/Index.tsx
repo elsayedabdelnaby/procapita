@@ -3641,6 +3641,24 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                             <span className="text-neutral-400 italic">Not Set</span>
                                                         )}
                                                     </div>
+                                                    {driverDetails.city && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">City</p>
+                                                            <p className="font-medium">{driverDetails.city}</p>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.worked_with_us_before && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Worked With Us Before</p>
+                                                            <p className="font-medium whitespace-pre-wrap">{driverDetails.worked_with_us_before}</p>
+                                                        </div>
+                                                    )}
+                                                    {driverDetails.vehicle_type_and_year && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Vehicle Type and Year</p>
+                                                            <p className="font-medium whitespace-pre-wrap">{driverDetails.vehicle_type_and_year}</p>
+                                                        </div>
+                                                    )}
                                                     <div>
                                                         <p className="text-sm text-neutral-500">Next Follow-up</p>
                                                         {driverDetails.next_follow_up ? (
