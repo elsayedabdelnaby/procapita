@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('riding_company_id')->constrained('riding_companies')->onDelete('cascade');
             $table->string('type'); // webhook | api | csv
-            $table->json('config');
+            $table->json('config')->nullable();
             $table->boolean('active')->default(true);
             $table->timestamps();
 
