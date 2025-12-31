@@ -164,7 +164,7 @@ export default function LeadStagesEdit({ leadStage, ridingCompanies = [] }: Lead
                             />
 
                             <FormField
-                                label="Order"
+                                label="Trip"
                                 name="order"
                                 type="number"
                                 value={data.order}

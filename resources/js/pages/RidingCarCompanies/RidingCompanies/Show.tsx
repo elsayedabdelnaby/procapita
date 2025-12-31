@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { CoreUser } from '@/types/core';
 import { Head, Link, router } from '@inertiajs/react';
-import { Building2, ChevronLeft, ChevronRight, Mail, MapPin, Phone, Trash2, Users as UsersIcon, X, Plug, GitBranch, RefreshCw, Facebook } from 'lucide-react';
+import { Building2, ChevronLeft, ChevronRight, Mail, MapPin, Phone, Trash2, Users as UsersIcon, X, Plug, GitBranch, RefreshCw, Facebook, Plus } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { WhatsAppLinkDeviceRidingCompanyTab } from '@/components/whatsapp/whatsapp-link-device-riding-company-tab';
 import { useEffect, useMemo, useState } from 'react';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -37,6 +38,15 @@ interface RidingCompany {
     distribution_type?: string | null;
     max_drivers_per_day?: number;
     distribution_users?: number[];
+    distribution_scenarios?: Array<{
+        id?: string;
+        distribution_from_users: number[];
+        max_drivers_per_day: number;
+        distribution_by_lead_source_enabled: boolean;
+        distribution_by_lead_sources: number[];
+        assigned_to_users: number[];
+        assigned_to_roles: number[];
+    }>;
     last_distribution_date?: string | null;
     stage_templates?: Array<{
         id: number;
@@ -83,9 +93,17 @@ interface RidingCompanyShowProps {
         name: string;
         email: string;
     }>;
+    leadSources?: Array<{
+        id: number;
+        name: string;
+    }>;
+    roles?: Array<{
+        id: number;
+        name: string;
+    }>;
 }
 
-export default function RidingCompaniesShow({ ridingCompany, users = [], availableUsers = [] }: RidingCompanyShowProps) {
+export default function RidingCompaniesShow({ ridingCompany, users = [], availableUsers = [], leadSources = [], roles = [] }: RidingCompanyShowProps) {
     const { can } = usePermissions();
     // Preserve active tab in localStorage
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'distribution' | 'rotation' | 'integrations'>(() => {
@@ -98,52 +116,108 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
         localStorage.setItem('ridingCompanyActiveTab', activeTab);
     }, [activeTab]);
 
-    // Distribution settings state
-    const [distributionType, setDistributionType] = useState<string>(ridingCompany.distribution_type || '');
-    // Handle distribution_users - it might be array of IDs or array of objects with user_id
-    const initialDistributionUsers = useMemo(() => {
-        const users = ridingCompany.distribution_users || [];
-        if (users.length === 0) return [];
-        // Check if it's array of objects (with user_id) or array of numbers (IDs)
-        if (typeof users[0] === 'object' && users[0] !== null && 'user_id' in users[0]) {
-            return (users as Array<{ user_id: number }>).map(u => u.user_id);
+    // Distribution scenarios state
+    interface DistributionScenario {
+        id: string; // Temporary ID for new scenarios
+        distribution_from_users: number[]; // Required
+        max_drivers_per_day: number; // Default 10
+        distribution_by_lead_source_enabled: boolean;
+        distribution_by_lead_sources: number[];
+        assigned_to_users: number[];
+        assigned_to_roles: number[];
+    }
+
+    const [scenarios, setScenarios] = useState<DistributionScenario[]>(() => {
+        // Initialize with one empty scenario if no existing data
+        if (!ridingCompany.distribution_scenarios || (Array.isArray(ridingCompany.distribution_scenarios) && ridingCompany.distribution_scenarios.length === 0)) {
+            return [{
+                id: 'scenario-1',
+                distribution_from_users: [],
+                max_drivers_per_day: 10,
+                distribution_by_lead_source_enabled: false,
+                distribution_by_lead_sources: [],
+                assigned_to_users: [],
+                assigned_to_roles: [],
+            }];
         }
-        return users as number[];
-    }, [ridingCompany.distribution_users]);
-    const [distributionUsers, setDistributionUsers] = useState<number[]>(initialDistributionUsers);
-    const [maxDriversPerDay, setMaxDriversPerDay] = useState<number>(ridingCompany.max_drivers_per_day || 50);
+        // Load existing scenarios from backend
+        return (ridingCompany.distribution_scenarios as any[]).map((scenario, index) => ({
+            id: scenario.id || `scenario-${index + 1}`,
+            distribution_from_users: scenario.distribution_from_users || [],
+            max_drivers_per_day: scenario.max_drivers_per_day || 10,
+            distribution_by_lead_source_enabled: scenario.distribution_by_lead_source_enabled || false,
+            distribution_by_lead_sources: scenario.distribution_by_lead_sources || [],
+            assigned_to_users: scenario.assigned_to_users || [],
+            assigned_to_roles: scenario.assigned_to_roles || [],
+        }));
+    });
+
     const [savingDistribution, setSavingDistribution] = useState(false);
 
-    // Update distributionUsers when ridingCompany changes
+    // Update scenarios when ridingCompany changes
     useEffect(() => {
-        const users = ridingCompany.distribution_users || [];
-        if (users.length === 0) {
-            setDistributionUsers([]);
-        } else {
-            // Check if it's array of objects (with user_id) or array of numbers (IDs)
-            if (typeof users[0] === 'object' && users[0] !== null && 'user_id' in users[0]) {
-                setDistributionUsers((users as Array<{ user_id: number }>).map(u => u.user_id));
-            } else {
-                setDistributionUsers(users as number[]);
-            }
+        if (ridingCompany.distribution_scenarios && Array.isArray(ridingCompany.distribution_scenarios) && ridingCompany.distribution_scenarios.length > 0) {
+            setScenarios((ridingCompany.distribution_scenarios as any[]).map((scenario, index) => ({
+                id: scenario.id || `scenario-${index + 1}`,
+                distribution_from_users: scenario.distribution_from_users || [],
+                max_drivers_per_day: scenario.max_drivers_per_day || 10,
+                distribution_by_lead_source_enabled: scenario.distribution_by_lead_source_enabled || false,
+                distribution_by_lead_sources: scenario.distribution_by_lead_sources || [],
+                assigned_to_users: scenario.assigned_to_users || [],
+                assigned_to_roles: scenario.assigned_to_roles || [],
+            })));
         }
-        setDistributionType(ridingCompany.distribution_type || '');
-        setMaxDriversPerDay(ridingCompany.max_drivers_per_day || 50);
-    }, [ridingCompany.distribution_users, ridingCompany.distribution_type, ridingCompany.max_drivers_per_day]);
+    }, [ridingCompany.distribution_scenarios]);
 
     // Filter out fresh-Leads user from available users
     const filteredAvailableUsers = useMemo(() => {
         return availableUsers.filter(user => !user.name.startsWith('fresh-Leads-'));
     }, [availableUsers]);
 
+    // Handle adding new scenario
+    const handleAddScenario = () => {
+        const newScenarioId = `scenario-${scenarios.length + 1}`;
+        setScenarios([...scenarios, {
+            id: newScenarioId,
+            distribution_from_users: [],
+            max_drivers_per_day: 10,
+            distribution_by_lead_source_enabled: false,
+            distribution_by_lead_sources: [],
+            assigned_to_users: [],
+            assigned_to_roles: [],
+        }]);
+    };
+
+    // Handle updating a scenario
+    const updateScenario = (scenarioId: string, updates: Partial<DistributionScenario>) => {
+        setScenarios(scenarios.map(scenario => 
+            scenario.id === scenarioId ? { ...scenario, ...updates } : scenario
+        ));
+    };
+
+    // Handle removing a scenario
+    const handleRemoveScenario = (scenarioId: string) => {
+        if (scenarios.length > 1) {
+            setScenarios(scenarios.filter(scenario => scenario.id !== scenarioId));
+        }
+    };
+
     // Handle distribution settings save
     const handleSaveDistribution = async () => {
+        // Validate all scenarios
+        const hasInvalidScenario = scenarios.some(scenario => 
+            scenario.distribution_from_users.length === 0
+        );
+        
+        if (hasInvalidScenario) {
+            alert('Please select at least one user in "Distribution From User" for all scenarios.');
+            return;
+        }
+
         setSavingDistribution(true);
         try {
             await router.put(`/ridingcarcompanies/riding-companies/${ridingCompany.id}`, {
-                distribution_type: distributionType,
-                distribution_users: distributionUsers,
-                max_drivers_per_day: maxDriversPerDay,
+                distribution_scenarios: scenarios,
             }, {
                 preserveScroll: true,
                 preserveState: true,
@@ -995,71 +1069,169 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                                     Configure how leads are distributed among team members in this riding company.
                                 </p>
                                 
-                                <div className="space-y-4">
-                                    <div>
-                                        <Label className="text-base font-medium mb-3 block">Distribution Method</Label>
-                                        <RadioGroup
-                                            value={distributionType}
-                                            onValueChange={setDistributionType}
-                                            className="space-y-3"
-                                        >
-                                            <div className="flex items-center space-x-2">
-                                                <RadioGroupItem value="equal" id="equal" />
-                                                <Label htmlFor="equal" className="font-normal cursor-pointer flex-1">
-                                                    Equal distribution (driver for each user)
-                                                </Label>
-                                            </div>
-                                        </RadioGroup>
-                                    </div>
-
-                                    {distributionType === 'equal' && (
-                                        <div className="space-y-4 mt-6">
-                                            <div>
-                                                <Label htmlFor="max_drivers_per_day" className="mb-2 block">
-                                                    Max drivers per day per user
-                                                </Label>
-                                                <Input
-                                                    id="max_drivers_per_day"
-                                                    type="number"
-                                                    min="1"
-                                                    value={maxDriversPerDay}
-                                                    onChange={(e) => setMaxDriversPerDay(parseInt(e.target.value) || 50)}
-                                                    className="w-full max-w-xs"
-                                                />
+                                <div className="space-y-6">
+                                    {scenarios.map((scenario, index) => (
+                                        <Card key={scenario.id} className="p-6 border-2">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h3 className="text-base font-semibold">Scenario {index + 1}</h3>
+                                                {scenarios.length > 1 && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleRemoveScenario(scenario.id)}
+                                                        className="text-red-600 hover:text-red-700"
+                                                    >
+                                                        <X className="h-4 w-4 mr-1" />
+                                                        Remove
+                                                    </Button>
+                                                )}
                                             </div>
 
-                                            <div>
-                                                <Label htmlFor="distribution_users" className="mb-2 block">
-                                                    Assigned To
-                                                </Label>
-                                                <MultiSelect
-                                                    options={filteredAvailableUsers.map((user) => ({
-                                                        value: user.id,
-                                                        label: user.name,
-                                                    }))}
-                                                    value={distributionUsers}
-                                                    onChange={(value) => {
-                                                        const newValue = value.map(v => typeof v === 'string' ? parseInt(v) : v);
-                                                        setDistributionUsers(newValue);
-                                                    }}
-                                                    placeholder="Select users..."
-                                                    className="w-full"
-                                                    searchable={true}
-                                                />
-                                                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                                                    Select team members who will receive distributed drivers. You can select multiple users. The fresh-Leads user is automatically excluded.
-                                                </p>
-                                            </div>
+                                            <div className="space-y-4">
+                                                {/* Distribution From User - Required */}
+                                                <div>
+                                                    <Label htmlFor={`distribution_from_users_${scenario.id}`} className="mb-2 block">
+                                                        Distribution From User <span className="text-red-500">*</span>
+                                                    </Label>
+                                                    <MultiSelect
+                                                        options={filteredAvailableUsers.map((user) => ({
+                                                            value: user.id,
+                                                            label: user.name,
+                                                        }))}
+                                                        value={scenario.distribution_from_users}
+                                                        onChange={(value) => {
+                                                            const newValue = value.map(v => typeof v === 'string' ? parseInt(v) : v);
+                                                            updateScenario(scenario.id, { distribution_from_users: newValue });
+                                                        }}
+                                                        placeholder="Select users..."
+                                                        className="w-full"
+                                                        searchable={true}
+                                                    />
+                                                    <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                                                        Select users from whom leads will be distributed. You can select multiple users. This field is required.
+                                                    </p>
+                                                </div>
 
-                                            <Button
-                                                onClick={handleSaveDistribution}
-                                                disabled={savingDistribution || distributionUsers.length === 0}
-                                                className="mt-4"
-                                            >
-                                                {savingDistribution ? 'Saving...' : 'Save Distribution Settings'}
-                                            </Button>
-                                        </div>
-                                    )}
+                                                {/* Max drivers per day per user */}
+                                                <div>
+                                                    <Label htmlFor={`max_drivers_per_day_${scenario.id}`} className="mb-2 block">
+                                                        Max drivers per day per user
+                                                    </Label>
+                                                    <Input
+                                                        id={`max_drivers_per_day_${scenario.id}`}
+                                                        type="number"
+                                                        min="1"
+                                                        value={scenario.max_drivers_per_day}
+                                                        onChange={(e) => updateScenario(scenario.id, { max_drivers_per_day: parseInt(e.target.value) || 10 })}
+                                                        className="w-full max-w-xs"
+                                                    />
+                                                </div>
+
+                                                {/* Distribution By Lead Source - Optional */}
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center space-x-2">
+                                                        <Checkbox
+                                                            id={`distribution_by_lead_source_${scenario.id}`}
+                                                            checked={scenario.distribution_by_lead_source_enabled}
+                                                            onCheckedChange={(checked) => {
+                                                                updateScenario(scenario.id, { 
+                                                                    distribution_by_lead_source_enabled: checked === true,
+                                                                    distribution_by_lead_sources: checked === true ? scenario.distribution_by_lead_sources : []
+                                                                });
+                                                            }}
+                                                        />
+                                                        <Label htmlFor={`distribution_by_lead_source_${scenario.id}`} className="cursor-pointer">
+                                                            Distribution By Lead Source
+                                                        </Label>
+                                                    </div>
+                                                    {scenario.distribution_by_lead_source_enabled && (
+                                                        <MultiSelect
+                                                            options={leadSources.map((source) => ({
+                                                                value: source.id,
+                                                                label: source.name,
+                                                            }))}
+                                                            value={scenario.distribution_by_lead_sources}
+                                                            onChange={(value) => {
+                                                                const newValue = value.map(v => typeof v === 'string' ? parseInt(v) : v);
+                                                                updateScenario(scenario.id, { distribution_by_lead_sources: newValue });
+                                                            }}
+                                                            placeholder="Select lead sources..."
+                                                            className="w-full"
+                                                            searchable={true}
+                                                        />
+                                                    )}
+                                                </div>
+
+                                                {/* Assigned To - Users and Roles */}
+                                                <div>
+                                                    <Label htmlFor={`assigned_to_${scenario.id}`} className="mb-2 block">
+                                                        Assigned To
+                                                    </Label>
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <Label className="text-sm text-neutral-600 dark:text-neutral-400 mb-1 block">Users</Label>
+                                                            <MultiSelect
+                                                                options={filteredAvailableUsers.map((user) => ({
+                                                                    value: user.id,
+                                                                    label: user.name,
+                                                                }))}
+                                                                value={scenario.assigned_to_users}
+                                                                onChange={(value) => {
+                                                                    const newValue = value.map(v => typeof v === 'string' ? parseInt(v) : v);
+                                                                    updateScenario(scenario.id, { assigned_to_users: newValue });
+                                                                }}
+                                                                placeholder="Select users..."
+                                                                className="w-full"
+                                                                searchable={true}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <Label className="text-sm text-neutral-600 dark:text-neutral-400 mb-1 block">Roles</Label>
+                                                            <MultiSelect
+                                                                options={roles.map((role) => ({
+                                                                    value: role.id,
+                                                                    label: role.name,
+                                                                }))}
+                                                                value={scenario.assigned_to_roles}
+                                                                onChange={(value) => {
+                                                                    const newValue = value.map(v => typeof v === 'string' ? parseInt(v) : v);
+                                                                    updateScenario(scenario.id, { assigned_to_roles: newValue });
+                                                                }}
+                                                                placeholder="Select roles..."
+                                                                className="w-full"
+                                                                searchable={true}
+                                                            />
+                                                            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                                                                When a role is selected, all users in that role will be included in the distribution, each with the maximum drivers per day limit.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
+                                                        Select team members who will receive distributed drivers. You can select multiple users and/or roles. The fresh-Leads user is automatically excluded.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </Card>
+                                    ))}
+
+                                    {/* Add Scenario Button */}
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleAddScenario}
+                                        className="w-full"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Add Scenario
+                                    </Button>
+
+                                    {/* Save Button */}
+                                    <Button
+                                        onClick={handleSaveDistribution}
+                                        disabled={savingDistribution}
+                                        className="mt-4"
+                                    >
+                                        {savingDistribution ? 'Saving...' : 'Save Distribution Settings'}
+                                    </Button>
                                 </div>
                             </div>
                         </div>

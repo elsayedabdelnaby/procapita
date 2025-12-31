@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Modules\RecycleBin\app\Services\RecycleBinService;
 
 class RecycleBinController extends Controller
@@ -19,7 +20,7 @@ class RecycleBinController extends Controller
     /**
      * Display a listing of all deleted records grouped by model type
      */
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $user = Auth::user();
         $companyId = $user->isSuperAdmin() ? null : $user->company_id;
@@ -27,6 +28,11 @@ class RecycleBinController extends Controller
         $modelType = $request->get('type');
         
         if ($modelType) {
+            // For drivers, redirect to the dedicated Drivers RecycleBin page
+            if ($modelType === 'drivers') {
+                return redirect()->route('drivers.drivers.recycle-bin');
+            }
+            
             // Show records for a specific model type
             $records = $this->recycleBinService->getDeletedRecords($modelType, $companyId);
             $models = $this->recycleBinService->getAvailableModels();

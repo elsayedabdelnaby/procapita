@@ -75,6 +75,7 @@ interface Driver {
     assigned_users?: User[];
     lead_status?: LeadStatus;
     lead_status_comment?: string;
+    cancel_reason?: string;
     next_follow_up?: string;
     last_follow_up?: string;
     assigned_time?: string;
@@ -92,6 +93,12 @@ interface FilterOption {
 
 interface DriversRecycleBinProps {
     drivers: Driver[];
+    importAvailableFields?: Array<{ 
+        value: string; 
+        label: string; 
+        type?: 'text' | 'email' | 'phone' | 'date' | 'picklist' | 'textarea';
+        options?: Array<{ value: string | number; label: string }>;
+    }>;
     filterOptions?: {
         companies: FilterOption[];
         ridingCompanies: FilterOption[];
@@ -125,6 +132,7 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'last_assigned_time', label: 'Last Assigned Time', defaultVisible: false, defaultOrder: 10.5 },
     { id: 'last_assigned_by', label: 'Last Assigned By', defaultVisible: false, defaultOrder: 10.6 },
     { id: 'notes', label: 'Notes', defaultVisible: false, defaultOrder: 10.7 },
+    { id: 'cancel_reason', label: 'Cancel Reasons', defaultVisible: false, defaultOrder: 10.8 },
     { id: 'deleted_at', label: 'Deleted At', defaultVisible: true, defaultOrder: 11 },
     { id: 'uuid', label: 'UUID', defaultVisible: false, defaultOrder: 12 },
     { id: 'created_at', label: 'Created At', defaultVisible: false, defaultOrder: 13 },
@@ -148,7 +156,7 @@ const generateTimeOptions = (): string[] => {
 
 const TIME_OPTIONS = generateTimeOptions();
 
-export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: DriversRecycleBinProps) {
+export default function DriversRecycleBin({ drivers = [], importAvailableFields, filterOptions = {} }: DriversRecycleBinProps) {
     const page = usePage<SharedData>();
     
     // Local state for optimistic updates
@@ -419,6 +427,7 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
         lead_source_id: null,
         lead_status_id: null,
         lead_status_comment: '',
+        cancel_reason: '',
         lead_stage_id: null,
         assigned_to: null,
         last_assigned_time_from: '',
@@ -467,6 +476,7 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
         { value: 'lead_status_id', label: 'Lead Status' },
         { value: 'assigned_to', label: 'Assigned To' },
         { value: 'notes', label: 'Notes' },
+        { value: 'cancel_reason', label: 'Cancel Reasons' },
     ];
 
     const availableFields = importAvailableFields || defaultAvailableFields;
@@ -490,6 +500,22 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                 router.reload({ only: ['drivers'] });
             },
         });
+    };
+
+    const handleDelete = (driver: Driver) => {
+        setDeleteDialog({ open: true, driver });
+    };
+
+    const confirmDelete = () => {
+        if (deleteDialog.driver) {
+            router.delete(`/recyclebin/drivers/${deleteDialog.driver.id}`, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setDeleteDialog({ open: false, driver: null });
+                    router.reload({ only: ['drivers'] });
+                },
+            });
+        }
     };
 
     const handleForceDelete = (driver: Driver) => {
@@ -667,6 +693,16 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                         return false;
                     }
                 } else if (!driver.lead_status_comment || !driver.lead_status_comment.toLowerCase().includes(String(filters.lead_status_comment).toLowerCase())) {
+                    return false;
+                }
+            }
+            // Cancel Reason filter
+            if (filters.cancel_reason) {
+                if (filters.cancel_reason === 'is_empty') {
+                    if (driver.cancel_reason && driver.cancel_reason.trim() !== '') {
+                        return false;
+                    }
+                } else if (!driver.cancel_reason || !driver.cancel_reason.toLowerCase().includes(String(filters.cancel_reason).toLowerCase())) {
                     return false;
                 }
             }
@@ -1079,6 +1115,10 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                         aValue = a.lead_status_comment || '';
                         bValue = b.lead_status_comment || '';
                         break;
+                    case 'cancel_reason':
+                        aValue = (a as any).cancel_reason || '';
+                        bValue = (b as any).cancel_reason || '';
+                        break;
                     case 'next_follow_up':
                         aValue = a.next_follow_up || '';
                         bValue = b.next_follow_up || '';
@@ -1310,18 +1350,36 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
     };
 
     const confirmMassDelete = () => {
-        if (selectedDrivers.size > 0) {
-            router.post('/drivers/drivers/mass-delete', {
-                ids: Array.from(selectedDrivers),
-            }, {
+        if (selectedDrivers.size === 0) return;
+        
+        const ids = Array.from(selectedDrivers);
+        let completed = 0;
+        const total = ids.length;
+        
+        // Delete each driver permanently sequentially
+        const deleteNext = () => {
+            if (completed >= total) {
+                setSelectedDrivers(new Set());
+                setMassDeleteDialog(false);
+                router.reload({ only: ['drivers'] });
+                return;
+            }
+            
+            const id = ids[completed];
+            router.delete(`/recyclebin/drivers/${id}`, {
+                preserveScroll: true,
                 onSuccess: () => {
-                    setSelectedDrivers(new Set());
-                    setMassDeleteDialog(false);
-                    // Reload current page
-                    router.reload({ only: ['drivers'] });
+                    completed++;
+                    deleteNext();
+                },
+                onError: () => {
+                    completed++;
+                    deleteNext();
                 },
             });
-        }
+        };
+        
+        deleteNext();
     };
 
     const handleMassEdit = () => {
@@ -1739,16 +1797,6 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        {selectedDrivers.size > 0 && (
-                            <Button
-                                type="button"
-                                variant="default"
-                                onClick={handleRestoreMultiple}
-                            >
-                                <RotateCcw className="h-4 w-4 mr-2" />
-                                Restore Selected ({selectedDrivers.size})
-                            </Button>
-                        )}
                         <Link href="/drivers/drivers">
                             <Button variant="outline">Back to Drivers</Button>
                         </Link>
@@ -1773,6 +1821,15 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                         >
                                             <RotateCcw className="h-4 w-4 mr-2" />
                                             Restore Selected
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={handleMassDelete}
+                                        >
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Delete Selected
                                         </Button>
                                     </div>
                                 </div>
@@ -2105,6 +2162,7 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                                                   col.id === 'lead_source' ? 'lead_source_id' :
                                                                   col.id === 'lead_status' ? 'lead_status_id' :
                                                                   col.id === 'lead_status_comment' ? 'lead_status_comment' :
+                                                                  col.id === 'cancel_reason' ? 'cancel_reason' :
                                                                   col.id === 'lead_stage' ? 'lead_stage_id' :
                                                                   col.id === 'assigned_to' ? 'assigned_to' :
                                                                   col.id === 'campaign' ? 'campaign_id' :
@@ -2842,6 +2900,9 @@ export default function DriversRecycleBin({ drivers = [], filterOptions = {} }: 
                                                                         {driver.lead_status_comment}
                                                                     </div>
                                                                 ) : '-';
+                                                                break;
+                                                            case 'cancel_reason':
+                                                                cellContent = (driver as any).cancel_reason || '-';
                                                                 break;
                                                             case 'next_follow_up':
                                                                 cellContent = driver.next_follow_up ? (

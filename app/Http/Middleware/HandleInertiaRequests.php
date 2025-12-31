@@ -169,12 +169,17 @@ class HandleInertiaRequests extends Middleware
                 $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $selectedCompany->id)
                     ->active()
                     ->orderBy('name')
-                    ->get(['id', 'name']);
+                    ->get();
                     
                 // Get selected riding company from session
                 $selectedRidingCompanyId = $request->session()->get('selected_riding_company_id');
                 if ($selectedRidingCompanyId) {
-                    $selectedRidingCompany = $ridingCompanies->firstWhere('id', $selectedRidingCompanyId);
+                    // Reload from database to ensure we have the latest data including logo_url
+                    $selectedRidingCompany = \Modules\RidingCarCompanies\app\Models\RidingCompany::find($selectedRidingCompanyId);
+                    // If not found in database, fallback to collection
+                    if (!$selectedRidingCompany) {
+                        $selectedRidingCompany = $ridingCompanies->firstWhere('id', $selectedRidingCompanyId);
+                    }
                 }
             }
         } elseif ($user && $user->is_company_admin && !$user->riding_company_id) {
@@ -184,12 +189,17 @@ class HandleInertiaRequests extends Middleware
                 $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $companyId)
                     ->active()
                     ->orderBy('name')
-                    ->get(['id', 'name']);
+                    ->get();
                     
                 // Get selected riding company from session
                 $selectedRidingCompanyId = $request->session()->get('selected_riding_company_id');
                 if ($selectedRidingCompanyId) {
-                    $selectedRidingCompany = $ridingCompanies->firstWhere('id', $selectedRidingCompanyId);
+                    // Reload from database to ensure we have the latest data including logo_url
+                    $selectedRidingCompany = \Modules\RidingCarCompanies\app\Models\RidingCompany::find($selectedRidingCompanyId);
+                    // If not found in database, fallback to collection
+                    if (!$selectedRidingCompany) {
+                        $selectedRidingCompany = $ridingCompanies->firstWhere('id', $selectedRidingCompanyId);
+                    }
                 }
             }
         }
@@ -232,6 +242,7 @@ class HandleInertiaRequests extends Middleware
                     'riding_company' => $user->ridingCompany ? [
                         'id' => $user->ridingCompany->id,
                         'name' => $user->ridingCompany->name,
+                        'logo_url' => $user->ridingCompany->logo_url,
                     ] : null,
                     'permissions' => $allPermissions->map(fn($p) => [
                         'id' => $p->id,
@@ -266,10 +277,12 @@ class HandleInertiaRequests extends Middleware
             'ridingCompanies' => $ridingCompanies->map(fn($rc) => [
                 'id' => $rc->id,
                 'name' => $rc->name,
+                'logo_url' => $rc->logo_url,
             ])->toArray(),
             'selectedRidingCompany' => $selectedRidingCompany ? [
                 'id' => $selectedRidingCompany->id,
                 'name' => $selectedRidingCompany->name,
+                'logo_url' => $selectedRidingCompany->logo_url,
             ] : null,
         ];
     }

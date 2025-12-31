@@ -116,7 +116,7 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
                             data={leadStages}
                             columns={[
                                 {
-                                    header: 'Order',
+                                    header: 'Trip',
                                     accessor: (row) => {
                                         const index = leadStages.findIndex((s) => s.id === row.id);
                                         return (

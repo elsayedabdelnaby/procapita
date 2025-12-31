@@ -264,6 +264,14 @@ export default function DriversShow({
     // Get riding company ID from props or driver
     const page = usePage();
     const auth = (page.props as any).auth;
+    const currentUser = auth?.user;
+    const userRidingCompanyId = (currentUser as any)?.riding_company_id || null;
+    const isCompanyAdmin = currentUser?.is_company_admin || false;
+    const isSuperAdmin = currentUser?.is_super_admin || false;
+    
+    // Hide riding company field if user has a specific riding company assigned (not admin)
+    const showRidingCompanyField = isSuperAdmin || isCompanyAdmin || !userRidingCompanyId;
+    
     const effectiveRidingCompanyId = riding_company_id || driver.riding_company?.id || (page.props as any).selectedRidingCompany?.id;
     
     // Field-level permissions
@@ -488,7 +496,7 @@ export default function DriversShow({
                             <Card className="p-6">
                                 <h2 className="mb-4 text-lg font-semibold">CRM Information</h2>
                                 <div className="space-y-4">
-                                    {canViewDriverField('riding_company') && (
+                                    {canViewDriverField('riding_company') && showRidingCompanyField && (
                                         <div>
                                             <p className="text-sm text-neutral-500">Riding Company</p>
                                             <p className="font-medium">
@@ -550,6 +558,16 @@ export default function DriversShow({
                                                         <span className="text-neutral-400 italic">Not Set</span>
                                                     )}
                                                 </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {canViewDriverField('cancel_reason') && (
+                                        <div>
+                                            <p className="text-sm text-neutral-500">Cancel Reasons</p>
+                                            {driver.cancel_reason ? (
+                                                <p className="font-medium">{driver.cancel_reason}</p>
+                                            ) : (
+                                                <span className="text-neutral-400 italic">Not Set</span>
                                             )}
                                         </div>
                                     )}
@@ -800,13 +818,6 @@ export default function DriversShow({
                             </Card>
                         )}
 
-                        {/* Cancel Reasons */}
-                        {canViewDriverField('cancel_reason') && driver.cancel_reason && (
-                            <Card className="p-6">
-                                <h2 className="mb-4 text-lg font-semibold">Cancel Reasons</h2>
-                                <p className="text-sm">{driver.cancel_reason}</p>
-                            </Card>
-                        )}
                     </div>
                 )}
 

@@ -47,6 +47,7 @@ class Driver extends Model
         'cancel_reason',
         'driver_num',
         'duplicate',
+        'next_time',
     ];
 
     protected function casts(): array
@@ -173,7 +174,7 @@ class Driver extends Model
 
             // Update last_follow_up if any relevant field changed
             if ($shouldUpdateLastFollowUp) {
-                $driver->last_follow_up = now()->toDateString();
+                $driver->last_follow_up = now(); // Use now() instead of now()->toDateString() to include time
                 // Save without triggering events to avoid infinite loop
                 $driver->saveQuietly();
             }

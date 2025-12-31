@@ -361,6 +361,17 @@ class DriverController extends Controller
             // Remove driver_num from data if present - it's auto-generated
             unset($data['driver_num']);
 
+            // Convert next_follow_up from datetime-local format (Y-m-d\TH:i) to datetime format (Y-m-d H:i:s)
+            if (isset($data['next_follow_up']) && $data['next_follow_up']) {
+                $nextFollowUp = $data['next_follow_up'];
+                if (strpos($nextFollowUp, 'T') !== false) {
+                    // Format: Y-m-d\TH:i -> Y-m-d H:i:s
+                    $data['next_follow_up'] = str_replace('T', ' ', $nextFollowUp) . ':00';
+                }
+                // Set last_follow_up to current datetime when creating with next_follow_up
+                $data['last_follow_up'] = now();
+            }
+
             $this->driverService->createDriver($data);
 
             return redirect()
@@ -808,6 +819,7 @@ class DriverController extends Controller
                 'current_stage_id' => $driverModel->current_stage_id,
                 'notes' => $driverModel->notes,
                 'cancel_reason' => $driverModel->cancel_reason,
+                'next_time' => $driverModel->next_time,
             ],
             'companies' => $companies,
             'ridingCompanies' => $ridingCompanies,
@@ -876,6 +888,17 @@ class DriverController extends Controller
             // Ensure assigned_users is in data if provided
             if (!isset($data['assigned_users']) && !empty($assignedUsers)) {
                 $data['assigned_users'] = $assignedUsers;
+            }
+
+            // Convert next_follow_up from datetime-local format (Y-m-d\TH:i) to datetime format (Y-m-d H:i:s)
+            if (isset($data['next_follow_up']) && $data['next_follow_up']) {
+                $nextFollowUp = $data['next_follow_up'];
+                if (strpos($nextFollowUp, 'T') !== false) {
+                    // Format: Y-m-d\TH:i -> Y-m-d H:i:s
+                    $data['next_follow_up'] = str_replace('T', ' ', $nextFollowUp) . ':00';
+                }
+                // Update last_follow_up to current datetime when next_follow_up is updated
+                $data['last_follow_up'] = now();
             }
 
             $this->driverService->updateDriver($driver, $data);
@@ -1738,7 +1761,15 @@ class DriverController extends Controller
             $updateData['lead_status_comment'] = $request->lead_status_comment;
         }
         if ($request->filled('next_follow_up') && ! in_array('next_follow_up', $clearFields)) {
-            $updateData['next_follow_up'] = $request->next_follow_up;
+            // Convert datetime-local format (Y-m-d\TH:i) to datetime format (Y-m-d H:i:s)
+            $nextFollowUp = $request->next_follow_up;
+            if (strpos($nextFollowUp, 'T') !== false) {
+                // Format: Y-m-d\TH:i -> Y-m-d H:i:s
+                $nextFollowUp = str_replace('T', ' ', $nextFollowUp) . ':00';
+            }
+            $updateData['next_follow_up'] = $nextFollowUp;
+            // Update last_follow_up to current datetime when next_follow_up is updated
+            $updateData['last_follow_up'] = now();
         }
         if ($request->filled('assigned_to') && ! in_array('assigned_to', $clearFields)) {
             $updateData['assigned_to'] = $request->assigned_to ? (int) $request->assigned_to : null;

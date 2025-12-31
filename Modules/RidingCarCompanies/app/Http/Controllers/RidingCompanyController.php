@@ -18,6 +18,7 @@ use Modules\Core\app\Services\RoleService;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Modules\Drivers\app\Models\LeadSource;
 
 class RidingCompanyController extends Controller
 {
@@ -258,6 +259,7 @@ class RidingCompanyController extends Controller
                 'distribution_type' => $ridingCompany->distribution_type,
                 'max_drivers_per_day' => $ridingCompany->max_drivers_per_day ?? 50,
                 'distribution_users' => $this->extractUserIdsFromDistributionUsers($ridingCompany->distribution_users ?? []),
+                'distribution_scenarios' => $ridingCompany->distribution_scenarios ?? [],
                 'last_distribution_date' => $ridingCompany->last_distribution_date,
                 'created_at' => $ridingCompany->created_at,
                 'updated_at' => $ridingCompany->updated_at,
@@ -305,6 +307,21 @@ class RidingCompanyController extends Controller
                 'name' => $user['name'],
                 'email' => $user['email'],
             ])->toArray(),
+            'leadSources' => LeadSource::where('company_id', $ridingCompany->company_id)
+                ->active()
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn($source) => [
+                    'id' => $source->id,
+                    'name' => $source->name,
+                ])->toArray(),
+            'roles' => Role::where('team_id', $ridingCompany->company_id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn($role) => [
+                    'id' => $role->id,
+                    'name' => $role->name,
+                ])->toArray(),
             'activities' => $activities,
         ]);
     }
@@ -324,8 +341,15 @@ class RidingCompanyController extends Controller
             $companies = Company::active()->orderBy('name')->get();
         }
 
+        // Refresh to ensure we have the latest data
+        $ridingCompany->refresh();
+        
+        $ridingCompanyData = $ridingCompany->load('company')->toArray();
+        // Ensure logo_url is included (accessor may not be in toArray())
+        $ridingCompanyData['logo_url'] = $ridingCompany->logo_url;
+
         return Inertia::render('RidingCarCompanies/RidingCompanies/Edit', [
-            'ridingCompany' => $ridingCompany->load('company'),
+            'ridingCompany' => $ridingCompanyData,
             'companies' => $companies,
         ]);
     }
@@ -349,150 +373,38 @@ class RidingCompanyController extends Controller
                 }
             }
 
-            // Return to the show page with updated data using Inertia::render to preserve state
-            // Get the updated riding company
-            $ridingCompany = $this->ridingCompanyService->getRidingCompanyById($id);
-            $ridingCompany->load(['company', 'creator', 'defaultDriverUser', 'stageTemplates', 'documentRequirements', 'integrations', 'integrationSettings']);
-            
-            // Get users for this riding company (for distribution settings and available users dropdown)
-            // For distribution settings, we need users visible to the admin based on permissions
-            $currentUser = auth()->user();
-            $users = \App\Models\User::query();
-            
-            if ($currentUser->isSuperAdmin()) {
-                // Super admin can see all users in the company for distribution settings
-                $users->where('company_id', $ridingCompany->company_id);
-            } elseif ($currentUser->isCompanyAdmin()) {
-                // Company admin can see all users in their company
-                $users->where('company_id', $currentUser->company_id);
-            } else {
-                // Regular users can see users in their riding company
-                $users->where('riding_company_id', $ridingCompany->id);
-            }
-            
-            $users = $users
-                ->with('roles', 'company', 'ridingCompany')
-                ->get()
-                ->map(function ($user) {
-                    return [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'mobile1' => $user->mobile1,
-                        'mobile2' => $user->mobile2,
-                        'is_active' => $user->is_active,
-                        'is_super_admin' => $user->is_super_admin,
-                        'is_company_admin' => $user->is_company_admin,
-                        'company_id' => $user->company_id,
-                        'company' => $user->company ? [
-                            'id' => $user->company->id,
-                            'name' => $user->company->name,
-                        ] : null,
-                        'riding_company_id' => $user->riding_company_id,
-                        'ridingCompany' => $user->ridingCompany ? [
-                            'id' => $user->ridingCompany->id,
-                            'name' => $user->ridingCompany->name,
-                        ] : null,
-                        'roles' => $user->roles->map(fn($role) => [
-                            'id' => $role->id,
-                            'name' => $role->name,
-                        ])->toArray(),
-                    ];
-                });
-            
-            // Load activity logs
-            $activities = \Spatie\Activitylog\Models\Activity::forSubject($ridingCompany)
-                ->with('causer:id,name,email')
-                ->latest()
-                ->get()
-                ->map(function ($activity) {
-                    return [
-                        'id' => $activity->id,
-                        'description' => $activity->description,
-                        'event' => $activity->event,
-                        'properties' => $activity->properties,
-                        'causer' => $activity->causer ? [
-                            'id' => $activity->causer->id,
-                            'name' => $activity->causer->name,
-                            'email' => $activity->causer->email,
-                        ] : null,
-                        'created_at' => $activity->created_at->toISOString(),
-                    ];
-                });
-
-            return Inertia::render('RidingCarCompanies/RidingCompanies/Show', [
-                'ridingCompany' => [
-                    'id' => $ridingCompany->id,
-                    'uuid' => $ridingCompany->uuid,
-                    'name' => $ridingCompany->name,
-                    'slug' => $ridingCompany->slug,
-                    'description' => $ridingCompany->description,
-                    'country' => $ridingCompany->country,
-                    'city' => $ridingCompany->city,
-                    'logo_path' => $ridingCompany->logo_path,
-                    'contact_email' => $ridingCompany->contact_email,
-                    'contact_phone' => $ridingCompany->contact_phone,
-                    'active' => $ridingCompany->active,
-                    'default_driver_user_id' => $ridingCompany->default_driver_user_id,
-                    'default_driver_user' => $ridingCompany->defaultDriverUser ? [
-                        'id' => $ridingCompany->defaultDriverUser->id,
-                        'name' => $ridingCompany->defaultDriverUser->name,
-                        'email' => $ridingCompany->defaultDriverUser->email,
-                    ] : null,
-                    'created_at' => $ridingCompany->created_at,
-                    'updated_at' => $ridingCompany->updated_at,
-                    'company' => $ridingCompany->company ? [
-                        'id' => $ridingCompany->company->id,
-                        'name' => $ridingCompany->company->name,
-                    ] : null,
-                    'creator' => $ridingCompany->creator ? [
-                        'id' => $ridingCompany->creator->id,
-                        'name' => $ridingCompany->creator->name,
-                        'email' => $ridingCompany->creator->email,
-                    ] : null,
-                    'stage_templates' => $ridingCompany->stageTemplates->map(fn($template) => [
-                        'id' => $template->id,
-                        'name' => $template->name,
-                        'order' => $template->order,
-                        'target_value' => $template->target_value,
-                        'target_unit' => $template->target_unit,
-                        'duration_days' => $template->duration_days,
-                        'strict_sequence' => $template->strict_sequence,
-                        'allow_cumulative' => $template->allow_cumulative,
-                        'active' => $template->active,
-                    ])->toArray(),
-                    'document_requirements' => $ridingCompany->documentRequirements->map(fn($req) => [
-                        'id' => $req->id,
-                        'name' => $req->name,
-                        'type' => $req->type,
-                        'required' => $req->required,
-                        'active' => $req->active,
-                    ])->toArray(),
-                    'integrations' => $ridingCompany->integrations->map(fn($integration) => [
-                        'id' => $integration->id,
-                        'type' => $integration->type,
-                        'active' => $integration->active,
-                    ])->toArray(),
-                    'integration_settings' => $ridingCompany->integrationSettings->map(fn($setting) => [
-                        'id' => $setting->id,
-                        'type' => $setting->type,
-                        'active' => $setting->active,
-                    ])->toArray(),
-                ],
-                'users' => $users,
-                'availableUsers' => $users->map(fn($user) => [
-                    'id' => $user['id'],
-                    'name' => $user['name'],
-                    'email' => $user['email'],
-                ])->toArray(),
-                'activities' => $activities,
-            ])->with('success', $successMessage);
+            // Redirect back to edit page with success message
+            return redirect()
+                ->route('ridingcarcompanies.ridingcompanies.edit', $id)
+                ->with('success', $successMessage);
         } catch (\Exception $e) {
             return redirect()
                 ->back()
                 ->withInput()
                 ->with('error', $e->getMessage());
         }
+    }
+
+    public function getLogo(int $id): \Symfony\Component\HttpFoundation\BinaryFileResponse|\Symfony\Component\HttpFoundation\Response
+    {
+        $ridingCompany = $this->ridingCompanyService->getRidingCompanyById($id);
+
+        if (! $ridingCompany || ! $ridingCompany->logo_path) {
+            abort(404, 'Logo not found.');
+        }
+
+        // Check if file exists
+        if (! Storage::disk('public')->exists($ridingCompany->logo_path)) {
+            abort(404, 'Logo file not found.');
+        }
+
+        $filePath = Storage::disk('public')->path($ridingCompany->logo_path);
+        $mimeType = \Illuminate\Support\Facades\Storage::disk('public')->mimeType($ridingCompany->logo_path) ?? 'image/png';
+
+        return response()->file($filePath, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . basename($ridingCompany->logo_path) . '"',
+        ]);
     }
 
     public function destroy(int $id): RedirectResponse

@@ -34,6 +34,7 @@ class RidingCompany extends Model
         'distribution_type',
         'max_drivers_per_day',
         'distribution_users',
+        'distribution_scenarios',
         'last_distribution_date',
     ];
 
@@ -43,6 +44,7 @@ class RidingCompany extends Model
             'active' => 'boolean',
             'api_settings' => 'array',
             'distribution_users' => 'array',
+            'distribution_scenarios' => 'array',
             'last_distribution_date' => 'date',
         ];
     }
@@ -180,6 +182,24 @@ class RidingCompany extends Model
     {
         return $this->hasMany(RidingCompanyIntegrationSetting::class)
             ->where('active', true);
+    }
+
+    /**
+     * Get the logo URL.
+     */
+    public function getLogoUrlAttribute(): ?string
+    {
+        if (! $this->logo_path) {
+            return null;
+        }
+
+        // If logo_path is already a full URL, return it
+        if (filter_var($this->logo_path, FILTER_VALIDATE_URL)) {
+            return $this->logo_path;
+        }
+
+        // Otherwise, return route URL for logo
+        return route('ridingcarcompanies.ridingcompanies.logo', $this->id);
     }
 }
 

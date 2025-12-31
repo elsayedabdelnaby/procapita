@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, router } from '@inertiajs/react';
+import { useState, useRef, useEffect } from 'react';
 
 interface Company {
     id: number;
@@ -22,6 +23,8 @@ interface RidingCompany {
     contact_email?: string;
     contact_phone?: string;
     active: boolean;
+    logo_path?: string;
+    logo_url?: string;
 }
 
 interface RidingCompanyEditProps {
@@ -30,7 +33,20 @@ interface RidingCompanyEditProps {
 }
 
 export default function RidingCompaniesEdit({ ridingCompany, companies }: RidingCompanyEditProps) {
-    const { data, setData, put, processing, errors } = useForm({
+    const [logoPreview, setLogoPreview] = useState<string | null>(ridingCompany.logo_url || null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const formRef = useRef<HTMLFormElement>(null);
+
+    // Update logoPreview when ridingCompany.logo_url changes (after redirect from update)
+    useEffect(() => {
+        if (ridingCompany.logo_url) {
+            setLogoPreview(ridingCompany.logo_url);
+        } else {
+            setLogoPreview(null);
+        }
+    }, [ridingCompany.logo_url]);
+
+    const { data, setData, processing, errors } = useForm({
         company_id: ridingCompany.company_id?.toString() || '',
         name: ridingCompany.name || '',
         slug: ridingCompany.slug || '',
@@ -40,11 +56,100 @@ export default function RidingCompaniesEdit({ ridingCompany, companies }: Riding
         contact_email: ridingCompany.contact_email || '',
         contact_phone: ridingCompany.contact_phone || '',
         active: ridingCompany.active ?? true,
+        logo: null as File | null,
     });
+
+    const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // Validate file type
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/pjpeg', 'image/x-png'];
+            const validExtensions = ['.jpeg', '.jpg', '.png', '.gif', '.pjpeg', '.x-png'];
+            const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+            
+            if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
+                alert('Only .jpeg, .jpg, .png, .gif, .pjpeg, .x-png files are allowed.');
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+                return;
+            }
+
+            // Validate image dimensions
+            const img = new Image();
+            img.onload = () => {
+                if (img.width > 125 || img.height > 40) {
+                    alert(`The logo dimensions must be 125x40 pixels or less. Current dimensions: ${img.width}x${img.height}.`);
+                    if (fileInputRef.current) {
+                        fileInputRef.current.value = '';
+                    }
+                    return;
+                }
+                
+                setData('logo', file);
+
+                // Create preview
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setLogoPreview(reader.result as string);
+                };
+                reader.readAsDataURL(file);
+            };
+            img.onerror = () => {
+                alert('Unable to read image file.');
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+            };
+            img.src = URL.createObjectURL(file);
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/ridingcarcompanies/riding-companies/${ridingCompany.id}`);
+        
+        // Get values directly from form elements
+        const form = formRef.current;
+        if (!form) return;
+        
+        const companyIdInput = form.querySelector('[name="company_id"]') as HTMLSelectElement;
+        const nameInput = form.querySelector('[name="name"]') as HTMLInputElement;
+        
+        const companyId = companyIdInput?.value || data.company_id || ridingCompany.company_id?.toString() || '';
+        const name = nameInput?.value || data.name || ridingCompany.name || '';
+        
+        // Create FormData manually
+        const formData = new FormData();
+        formData.append('company_id', companyId);
+        formData.append('name', name);
+        formData.append('slug', data.slug || '');
+        formData.append('description', data.description || '');
+        formData.append('country', data.country || '');
+        formData.append('city', data.city || '');
+        formData.append('contact_email', data.contact_email || '');
+        formData.append('contact_phone', data.contact_phone || '');
+        formData.append('active', data.active ? '1' : '0');
+        
+        if (data.logo instanceof File) {
+            formData.append('logo', data.logo);
+        }
+        
+        // Add _method for PUT request (Laravel requires this for PUT/PATCH with FormData)
+        formData.append('_method', 'PUT');
+        
+        // Debug log
+        console.log('Submitting - company_id:', companyId, 'name:', name);
+        console.log('Submitting - FormData entries:', Array.from(formData.entries()));
+        
+        // Use router.post with _method: PUT instead of router.put
+        // This is the correct way to send FormData with PUT in Laravel
+        router.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}`, formData, {
+            preserveScroll: true,
+            forceFormData: true,
+            onError: (errors) => {
+                console.error('Form errors:', errors);
+            },
+        });
     };
 
     return (
@@ -92,7 +197,7 @@ export default function RidingCompaniesEdit({ ridingCompany, companies }: Riding
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
@@ -190,6 +295,63 @@ export default function RidingCompaniesEdit({ ridingCompany, companies }: Riding
                                 onChange={(e) => setData('contact_phone', e.target.value)}
                                 error={errors.contact_phone}
                             />
+
+                            <div className="md:col-span-2">
+                                <div className="space-y-4">
+                                    <h3 className="text-md font-semibold">Company Logo</h3>
+                                    
+                                    {/* Current Logo Preview */}
+                                    {logoPreview && (
+                                        <div className="space-y-2">
+                                            <Label>Current Logo</Label>
+                                            <div className="flex items-center gap-4">
+                                                <img
+                                                    src={logoPreview}
+                                                    alt="Riding Company Logo"
+                                                    className="h-10 w-40 object-contain border rounded p-2"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setLogoPreview(null);
+                                                        setData('logo', null);
+                                                        if (fileInputRef.current) {
+                                                            fileInputRef.current.value = '';
+                                                        }
+                                                    }}
+                                                >
+                                                    Remove Logo
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Logo Upload */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="logo">Company Logo</Label>
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            id="logo"
+                                            name="logo"
+                                            accept=".jpeg,.jpg,.png,.gif,.pjpeg,.x-png"
+                                            onChange={handleLogoChange}
+                                            className="w-full rounded-md border px-3 py-2"
+                                        />
+                                        {errors.logo && (
+                                            <p className="text-sm text-red-500">{errors.logo}</p>
+                                        )}
+                                        <p className="text-xs text-neutral-500">
+                                            Allowed size 125X40 pixels( .jpeg , .jpg , .png , .gif , .pjpeg , .x-png format ).
+                                        </p>
+                                        <p className="text-xs text-neutral-500 mt-1">
+                                            The logo dimensions must be 125x40 pixels or less.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
 
                             <div>
                                 <Label htmlFor="active" className="flex items-center gap-2">

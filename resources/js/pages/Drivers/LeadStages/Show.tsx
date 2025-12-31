@@ -163,7 +163,7 @@ export default function LeadStagesShow({ leadStage, activities = [] }: LeadStage
                                     </div>
                                 )}
                                 <div>
-                                    <p className="text-sm text-neutral-500">Order</p>
+                                    <p className="text-sm text-neutral-500">Trip</p>
                                     <p className="font-medium">{leadStage.order}</p>
                                 </div>
                                 <div>

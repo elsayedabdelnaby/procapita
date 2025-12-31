@@ -115,11 +115,44 @@ class DriverStoreRequest extends FormRequest
                 },
             ],
             'current_stage_id' => ['nullable', 'exists:riding_company_stage_templates,id'],
-            'lead_status_comment' => ['nullable', 'string'],
-            'next_follow_up' => [
-                'nullable',
-                'date',
+            'lead_status_comment' => [
                 function ($attribute, $value, $fail) {
+                    $leadStatusId = $this->input('lead_status_id');
+                    if ($leadStatusId) {
+                        $leadStatus = \Modules\Drivers\app\Models\LeadStatus::find($leadStatusId);
+                        $requiredStatuses = [
+                            'Probleme with link', 'Whats app Message', 'Follow Documents', 'Follow Up', 'Need Recall',
+                            'Link Not Done', 'Missing Documents', 'Waiting Activation', 'Need To Visit GL', 'Active',
+                            'Sign Up', 'Sign up Cities', 'DFT', 'Complete 50', 'Complete 100', 'Complete 120',
+                            'DFT Old', 'Fresh stage'
+                        ];
+                        if ($leadStatus && in_array($leadStatus->name, $requiredStatuses)) {
+                            if (empty($value)) {
+                                $fail('The feedback comment field is required for this lead status.');
+                            }
+                        }
+                    }
+                },
+                'nullable',
+                'string',
+            ],
+            'next_follow_up' => [
+                function ($attribute, $value, $fail) {
+                    $leadStatusId = $this->input('lead_status_id');
+                    if ($leadStatusId) {
+                        $leadStatus = \Modules\Drivers\app\Models\LeadStatus::find($leadStatusId);
+                        $requiredStatuses = [
+                            'Probleme with link', 'Whats app Message', 'Follow Documents', 'Follow Up', 'Need Recall',
+                            'Link Not Done', 'Missing Documents', 'Waiting Activation', 'Need To Visit GL', 'Active',
+                            'Sign Up', 'Sign up Cities', 'DFT', 'Complete 50', 'Complete 100', 'Complete 120',
+                            'DFT Old', 'Fresh stage'
+                        ];
+                        if ($leadStatus && in_array($leadStatus->name, $requiredStatuses)) {
+                            if (empty($value)) {
+                                $fail('The next follow-up field is required for this lead status.');
+                            }
+                        }
+                    }
                     if ($value) {
                         $selectedDate = \Carbon\Carbon::parse($value)->startOfDay();
                         $today = \Carbon\Carbon::today();
@@ -128,10 +161,27 @@ class DriverStoreRequest extends FormRequest
                         }
                     }
                 },
+                'nullable',
+                'date_format:Y-m-d\TH:i',
             ],
             'next_time' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
-            'cancel_reason' => ['nullable', 'string', 'in:Not interested,Wrong Number,Under Age,Duplicated,Wrong Documents,Car Not Accepted,Other,Already driver,Expired,Cities,Dont have driving license'],
+            'cancel_reason' => [
+                function ($attribute, $value, $fail) {
+                    $leadStatusId = $this->input('lead_status_id');
+                    if ($leadStatusId) {
+                        $leadStatus = \Modules\Drivers\app\Models\LeadStatus::find($leadStatusId);
+                        if ($leadStatus && in_array($leadStatus->name, ['Rejected', 'Deleted lead', 'Expired Account'])) {
+                            if (empty($value)) {
+                                $fail('The cancel reason field is required when lead status is Rejected, Deleted lead, or Expired Account.');
+                            }
+                        }
+                    }
+                },
+                'nullable',
+                'string',
+                'in:Not interested,Wrong Number,Under Age,Duplicated,Wrong Documents,Car Not Accepted,Other,Already driver,Expired,Cities,Dont have driving license',
+            ],
         ];
 
         if ($user->isSuperAdmin()) {

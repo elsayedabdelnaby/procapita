@@ -23,6 +23,7 @@ Route::middleware(['auth', 'verified'])->prefix('ridingcarcompanies')->name('rid
     Route::delete('riding-companies/{id}', [RidingCompanyController::class, 'destroy'])->name('ridingcompanies.destroy');
     Route::post('riding-companies/{id}/toggle-active', [RidingCompanyController::class, 'toggleActive'])->name('ridingcompanies.toggle-active');
     Route::post('riding-companies/{id}/upload-logo', [RidingCompanyController::class, 'uploadLogo'])->name('ridingcompanies.upload-logo');
+    Route::get('riding-companies/{id}/logo', [RidingCompanyController::class, 'getLogo'])->name('ridingcompanies.logo');
     Route::post('riding-companies/{id}/distribute-drivers', [RidingCompanyController::class, 'distributeDrivers'])->name('ridingcompanies.distribute-drivers');
 
     // Stage Templates

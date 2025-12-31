@@ -35,9 +35,26 @@ class RidingCompanyService
     public function updateRidingCompany(int $id, array $data): RidingCompany
     {
         $ridingCompany = RidingCompany::findOrFail($id);
+
+        // Handle logo upload
+        if (isset($data['logo']) && $data['logo'] instanceof \Illuminate\Http\UploadedFile) {
+            // Delete old logo if exists
+            if ($ridingCompany->logo_path && Storage::disk('public')->exists($ridingCompany->logo_path)) {
+                Storage::disk('public')->delete($ridingCompany->logo_path);
+            }
+
+            // Store new logo
+            $logoPath = $data['logo']->store('riding-companies/logos', 'public');
+            $data['logo_path'] = $logoPath;
+            unset($data['logo']);
+        }
+
         $ridingCompany->update($data);
 
-        return $ridingCompany->fresh();
+        // Refresh the model to ensure logo_url accessor works correctly
+        $ridingCompany->refresh();
+        
+        return $ridingCompany;
     }
 
     public function deleteRidingCompany(int $id): bool

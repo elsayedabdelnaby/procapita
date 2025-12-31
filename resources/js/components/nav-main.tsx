@@ -27,6 +27,7 @@ import { usePermissions } from '@/hooks/use-permissions';
 interface RidingCompany {
     id: number;
     name: string;
+    logo_url?: string;
 }
 
 interface NavMainProps {
@@ -235,14 +236,29 @@ export function NavMain({ navigation }: NavMainProps) {
                                             )}
                                             {/* Show View-Only Riding Company for users with assigned riding company - in collapsed state */}
                                             {item.title === 'Riding Companies' && showRidingCompanyViewOnly && (
-                                                <div className="mt-1 px-2">
-                                                    <div className={`flex items-center w-full text-xs h-7 bg-muted/50 rounded-md px-2 border ${isCollapsed ? 'w-8 h-8 p-0 justify-center' : ''}`}>
-                                                        <Car className={`h-3 w-3 text-muted-foreground ${isCollapsed ? 'mr-0' : 'mr-1'}`} />
-                                                        {!isCollapsed && (
-                                                            <span className="text-muted-foreground">{userRidingCompany?.name}</span>
-                                                        )}
+                                                <>
+                                                    <div className="mt-1 px-2">
+                                                        <div className={`flex items-center gap-2 w-full text-xs h-7 bg-muted/50 rounded-md px-2 border ${isCollapsed ? 'w-8 h-8 p-0 justify-center' : ''}`}>
+                                                            <Car className={`h-3 w-3 text-muted-foreground ${isCollapsed ? 'mr-0' : ''}`} />
+                                                            {!isCollapsed && (
+                                                                <span className="text-muted-foreground">{userRidingCompany?.name}</span>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                    {/* Show Riding Company Logo for users with assigned riding company - in collapsed state */}
+                                                    {!isCollapsed && userRidingCompany?.logo_url && (
+                                                        <div className="flex items-center gap-2 mt-1 px-2">
+                                                            <img
+                                                                src={userRidingCompany.logo_url}
+                                                                alt={userRidingCompany.name || 'Logo'}
+                                                                className="h-10 w-40 object-contain"
+                                                                onError={(e) => {
+                                                                    e.currentTarget.style.display = 'none';
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </>
                                             )}
                                         </SidebarMenuItem>
                                     ))}
@@ -294,6 +310,31 @@ export function NavMain({ navigation }: NavMainProps) {
                                                                 <span>{item.title}</span>
                                                             </Link>
                                                         </SidebarMenuSubButton>
+                                                        {/* Show Riding Company Logo - inside group/menu-sub-item relative */}
+                                                        {item.title === 'Riding Companies' && (selectedRidingCompany || userRidingCompany) && (
+                                                            <div className="group/menu-sub-item relative mt-2 px-2">
+                                                                {(() => {
+                                                                    const logoUrl = selectedRidingCompany?.logo_url || userRidingCompany?.logo_url;
+                                                                    const companyName = selectedRidingCompany?.name || userRidingCompany?.name;
+                                                                    
+                                                                    if (logoUrl) {
+                                                                        return (
+                                                                            <div className="flex items-center justify-center">
+                                                                                <img
+                                                                                    src={logoUrl}
+                                                                                    alt={companyName || 'Logo'}
+                                                                                    className="h-10 w-40 object-contain"
+                                                                                    onError={(e) => {
+                                                                                        e.currentTarget.style.display = 'none';
+                                                                                    }}
+                                                                                />
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                    return null;
+                                                                })()}
+                                                            </div>
+                                                        )}
                                                         {/* Show Riding Company Selector after "Riding Companies" item - for admins */}
                                                         {item.title === 'Riding Companies' && showRidingCompanySelector && (
                                                             <div className="mt-1 px-2">
@@ -320,12 +361,27 @@ export function NavMain({ navigation }: NavMainProps) {
                                                         )}
                                                         {/* Show View-Only Riding Company for users with assigned riding company */}
                                                         {item.title === 'Riding Companies' && showRidingCompanyViewOnly && (
-                                                            <div className="mt-1 px-2">
-                                                                <div className="flex items-center w-full text-xs h-7 bg-muted/50 rounded-md px-2 border">
-                                                                    <Car className="mr-1 h-3 w-3 text-muted-foreground" />
-                                                                    <span className="text-muted-foreground">{userRidingCompany?.name}</span>
+                                                            <>
+                                                                <div className="mt-1 px-2">
+                                                                    <div className="flex items-center gap-2 w-full text-xs h-7 bg-muted/50 rounded-md px-2 border">
+                                                                        <Car className="h-3 w-3 text-muted-foreground" />
+                                                                        <span className="text-muted-foreground">{userRidingCompany?.name}</span>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
+                                                                {/* Show Riding Company Logo for users with assigned riding company */}
+                                                                {userRidingCompany?.logo_url && (
+                                                                    <div className="flex items-center gap-2 mt-1 px-2">
+                                                                        <img
+                                                                            src={userRidingCompany.logo_url}
+                                                                            alt={userRidingCompany.name || 'Logo'}
+                                                                            className="h-10 w-40 object-contain"
+                                                                            onError={(e) => {
+                                                                                e.currentTarget.style.display = 'none';
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                            </>
                                                         )}
                                                     </SidebarMenuSubItem>
                                                 ))}

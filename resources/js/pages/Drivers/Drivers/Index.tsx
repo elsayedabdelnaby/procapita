@@ -4279,9 +4279,17 @@ interface QuickEditDialogProps {
 
 function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEditDialogProps) {
     const page = usePage<SharedData>();
-    const isSuperAdmin = page.props.auth?.user?.is_super_admin;
+    const currentUser = page.props.auth?.user;
+    const isSuperAdmin = currentUser?.is_super_admin || false;
+    const isCompanyAdmin = currentUser?.is_company_admin || false;
+    const userRidingCompanyId = (currentUser as any)?.riding_company_id || null;
+    
+    // Hide riding company field if user has a specific riding company assigned (not admin)
+    const showRidingCompanyField = isSuperAdmin || isCompanyAdmin || !userRidingCompanyId;
+    
     const [leadStages, setLeadStages] = useState<FilterOption[]>([]);
     const [loadingLeadStages, setLoadingLeadStages] = useState(false);
+    const [timeEditingState, setTimeEditingState] = useState<'hours' | 'minutes' | null>(null);
     
     // Early return if no driver
     if (!driver) {
@@ -4296,22 +4304,88 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         phone: driver?.phone || '',
         whatsapp_phone: driver?.whatsapp_phone || '',
         email: driver?.email || '',
-        riding_company_id: driver?.riding_company?.id ? String(driver.riding_company.id) : '',
+        riding_company_id: driver?.riding_company?.id ? String(driver.riding_company.id) : (userRidingCompanyId ? String(userRidingCompanyId) : ''),
         campaign_id: driver?.campaign?.id ? String(driver.campaign.id) : '',
         lead_source_id: driver?.lead_source?.id ? String(driver.lead_source.id) : '',
         assigned_to: driver?.assigned_to?.id ? String(driver.assigned_to.id) : '',
         assigned_users: (driver?.assigned_users && Array.isArray(driver.assigned_users) && driver.assigned_users.length > 0) 
             ? driver.assigned_users.map((u) => typeof u === 'object' ? u.id : u) 
             : [],
-        lead_status_id: driver?.lead_status?.id ? String(driver.lead_status.id) : '',
-        lead_status_comment: driver?.lead_status_comment || '',
+        lead_status_id: '', // Always clear on edit - user must select
+        lead_status_comment: '', // Always clear on edit - user must enter
         cancel_reason: driver?.cancel_reason || '',
-        next_follow_up: driver?.next_follow_up || '',
+        next_follow_up: '', // Always clear on edit - user must enter
         last_follow_up: driver?.last_follow_up || '',
         lead_stage_id: driver?.lead_stage?.id ? String(driver.lead_stage.id) : '',
         current_stage_id: '',
         notes: driver?.notes || '',
     });
+    
+    // Check if cancel_reason is required based on lead_status
+    const isCancelReasonRequired = () => {
+        if (!data.lead_status_id) return false;
+        const selectedStatus = filterOptions?.leadStatuses?.find(s => String(s.id) === String(data.lead_status_id));
+        return selectedStatus && ['Rejected', 'Deleted lead', 'Expired Account'].includes(selectedStatus.name);
+    };
+
+    // Check if next_follow_up and lead_status_comment are required based on lead_status
+    const isFollowUpRequired = () => {
+        if (!data.lead_status_id) return false;
+        const selectedStatus = filterOptions?.leadStatuses?.find(s => String(s.id) === String(data.lead_status_id));
+        const requiredStatuses = [
+            'Probleme with link', 'Whats app Message', 'Follow Documents', 'Follow Up', 'Need Recall',
+            'Link Not Done', 'Missing Documents', 'Waiting Activation', 'Need To Visit GL', 'Active',
+            'Sign Up', 'Sign up Cities', 'DFT', 'Complete 50', 'Complete 100', 'Complete 120',
+            'DFT Old', 'Fresh stage'
+        ];
+        return selectedStatus && requiredStatuses.includes(selectedStatus.name);
+    };
+
+    // Auto-set next_follow_up and cancel_reason based on lead status
+    useEffect(() => {
+        if (data.lead_status_id && filterOptions?.leadStatuses) {
+            const selectedStatus = filterOptions.leadStatuses.find(s => String(s.id) === String(data.lead_status_id));
+            if (selectedStatus) {
+                if (selectedStatus.name === 'No Answer 1st Call') {
+                    // For "No Answer 1st Call": Today's date + 2 hours from now
+                    const today = new Date();
+                    const twoHoursLater = new Date(today.getTime() + 2 * 60 * 60 * 1000); // Add 2 hours
+                    const year = today.getFullYear();
+                    const month = String(today.getMonth() + 1).padStart(2, '0');
+                    const day = String(today.getDate()).padStart(2, '0');
+                    const hours = String(twoHoursLater.getHours()).padStart(2, '0');
+                    const minutes = String(twoHoursLater.getMinutes()).padStart(2, '0');
+                    const dateStr = `${year}-${month}-${day}`;
+                    const datetimeStr = `${dateStr}T${hours}:${minutes}`;
+                    if (data.next_follow_up !== datetimeStr) {
+                        setData('next_follow_up', datetimeStr);
+                    }
+                } else if (selectedStatus.name.toLowerCase().includes('answer') && selectedStatus.name !== 'No Answer 1st Call') {
+                    // For Lead Statuses containing "Answer" (except "No Answer 1st Call"): Tomorrow's date + current time
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const now = new Date();
+                    const year = tomorrow.getFullYear();
+                    const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+                    const day = String(tomorrow.getDate()).padStart(2, '0');
+                    const hours = String(now.getHours()).padStart(2, '0');
+                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                    const dateStr = `${year}-${month}-${day}`;
+                    const datetimeStr = `${dateStr}T${hours}:${minutes}`;
+                    if (data.next_follow_up !== datetimeStr) {
+                        setData('next_follow_up', datetimeStr);
+                    }
+                }
+                
+                // Auto-set cancel_reason to "Expired" when "Expired Account" is selected
+                if (selectedStatus.name === 'Expired Account') {
+                    if (data.cancel_reason !== 'Expired') {
+                        setData('cancel_reason', 'Expired');
+                    }
+                }
+            }
+        }
+    }, [data.lead_status_id, setData, filterOptions?.leadStatuses]);
     
     // Update form data when driver changes or dialog opens
     useEffect(() => {
@@ -4329,10 +4403,10 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                 assigned_users: (driver.assigned_users && Array.isArray(driver.assigned_users) && driver.assigned_users.length > 0) 
                     ? driver.assigned_users.map((u) => typeof u === 'object' ? u.id : u) 
                     : [],
-                lead_status_id: driver.lead_status?.id ? String(driver.lead_status.id) : '',
-                lead_status_comment: driver.lead_status_comment || '',
+                lead_status_id: '', // Always clear on edit - user must select
+                lead_status_comment: '', // Always clear on edit - user must enter
                 cancel_reason: driver.cancel_reason || '',
-                next_follow_up: driver.next_follow_up || '',
+                next_follow_up: '', // Always clear on edit - user must enter
                 last_follow_up: driver.last_follow_up || '',
                 lead_stage_id: driver.lead_stage?.id ? String(driver.lead_stage.id) : '',
                 current_stage_id: '',
@@ -4498,24 +4572,29 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                 <p className="text-sm text-red-500 mt-1">{errors.email}</p>
                             )}
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Riding Company</label>
-                            <Select
-                                value={data.riding_company_id}
-                                onValueChange={(value) => setData('riding_company_id', value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Riding Company" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {filterOptions.ridingCompanies?.map((company) => (
-                                        <SelectItem key={company.id} value={String(company.id)}>
-                                            {company.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {showRidingCompanyField && (
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Riding Company</label>
+                                <Select
+                                    value={data.riding_company_id}
+                                    onValueChange={(value) => setData('riding_company_id', value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Riding Company" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {filterOptions.ridingCompanies?.map((company) => (
+                                            <SelectItem key={company.id} value={String(company.id)}>
+                                                {company.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.riding_company_id && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.riding_company_id}</p>
+                                )}
+                            </div>
+                        )}
                         <div>
                             <label className="block text-sm font-medium mb-1">Campaign</label>
                             <Select
@@ -4555,13 +4634,14 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                         {/* Lead Status Group with Green Border */}
                         <div className="col-span-2 rounded-lg border-2 border-green-500 dark:border-green-600 bg-green-100/50 dark:bg-green-900/30 p-4 space-y-4">
                             <div>
-                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">Lead Status</label>
+                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">Lead Status <span className="text-red-500">*</span></label>
                                 <Select
                                     value={data.lead_status_id}
                                     onValueChange={(value) => setData('lead_status_id', value)}
+                                    required
                                 >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Lead Status" />
+                                    <SelectTrigger className={!data.lead_status_id ? 'border-red-500' : ''}>
+                                        <SelectValue placeholder="-- Select Lead Status (Required) --" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {filterOptions.leadStatuses?.map((status) => (
@@ -4571,31 +4651,44 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {!data.lead_status_id && (
+                                    <p className="text-sm text-red-500 mt-1">Lead Status is required.</p>
+                                )}
                             </div>
                             <div>
-                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">Feedback Comment</label>
+                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">
+                                    Feedback Comment
+                                    {isFollowUpRequired() && <span className="text-red-500 ml-1">*</span>}
+                                </label>
                                 <textarea
                                     value={data.lead_status_comment}
                                     onChange={(e) => setData('lead_status_comment', e.target.value)}
                                     rows={3}
-                                    className={`w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y ${errors.lead_status_comment ? 'border-red-500' : ''}`}
+                                    className={`w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y ${(isFollowUpRequired() && !data.lead_status_comment) || errors.lead_status_comment ? 'border-red-500' : ''}`}
                                     placeholder="Enter lead status comment..."
+                                    required={isFollowUpRequired()}
                                 />
                                 {errors.lead_status_comment && (
                                     <p className="text-sm text-red-500 mt-1">{errors.lead_status_comment}</p>
                                 )}
+                                {isFollowUpRequired() && !data.lead_status_comment && !errors.lead_status_comment && (
+                                    <p className="text-sm text-red-500 mt-1">Feedback comment is required for this lead status.</p>
+                                )}
                             </div>
                             <div>
-                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">Cancel Reasons</label>
+                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">
+                                    Cancel Reasons
+                                    {isCancelReasonRequired() && <span className="text-red-500 ml-1">*</span>}
+                                </label>
                                 <Select
-                                    value={data.cancel_reason || ''}
-                                    onValueChange={(value) => setData('cancel_reason', value)}
+                                    value={data.cancel_reason || undefined}
+                                    onValueChange={(value) => setData('cancel_reason', value || '')}
+                                    required={isCancelReasonRequired()}
                                 >
-                                    <SelectTrigger>
+                                    <SelectTrigger className={isCancelReasonRequired() && !data.cancel_reason ? 'border-red-500' : ''}>
                                         <SelectValue placeholder="Select cancel reason..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">-- None --</SelectItem>
                                         <SelectItem value="Not interested">Not interested</SelectItem>
                                         <SelectItem value="Wrong Number">Wrong Number</SelectItem>
                                         <SelectItem value="Under Age">Under Age</SelectItem>
@@ -4612,66 +4705,271 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                 {errors.cancel_reason && (
                                     <p className="text-sm text-red-500 mt-1">{errors.cancel_reason}</p>
                                 )}
+                                {isCancelReasonRequired() && !data.cancel_reason && !errors.cancel_reason && (
+                                    <p className="text-sm text-red-500 mt-1">Cancel reason is required for this lead status.</p>
+                                )}
                             </div>
-                            <div 
-                                className="cursor-pointer relative"
-                                onClick={(e) => {
-                                    const dateInput = document.getElementById('quick-edit-next-follow-up') as HTMLInputElement;
-                                    if (dateInput && e.target !== dateInput && !(e.target as HTMLElement).closest('.date-display-overlay')) {
-                                        dateInput.showPicker?.() || dateInput.focus();
-                                    }
-                                }}
-                            >
-                                <label 
-                                    className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300 cursor-pointer"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        const dateInput = document.getElementById('quick-edit-next-follow-up') as HTMLInputElement;
-                                        if (dateInput) {
-                                            dateInput.showPicker?.() || dateInput.focus();
-                                        }
-                                    }}
-                                >
+                            <div className="col-span-2">
+                                <label className="block text-sm font-bold mb-1 text-green-700 dark:text-green-300">
                                     Next Follow-up
+                                    {isFollowUpRequired() && <span className="text-red-500 ml-1">*</span>}
                                 </label>
-                                <div className="flex gap-2">
-                                    <div className="flex-1 relative">
-                                        <Input
-                                            type="date"
-                                            id="quick-edit-next-follow-up"
-                                            value={data.next_follow_up ? new Date(data.next_follow_up).toISOString().split('T')[0] : ''}
-                                            onChange={(e) => {
-                                                const selectedDate = e.target.value;
-                                                const today = new Date().toISOString().split('T')[0];
-                                                if (selectedDate && selectedDate < today) {
-                                                    alert('Next Follow-up date must be today or a future date.');
+                                <div className="flex gap-2 items-center">
+                                    {/* Date Input (Hidden) */}
+                                    <input
+                                        type="date"
+                                        id="quick-edit-next-follow-up-date"
+                                        value={data.next_follow_up ? (data.next_follow_up.includes('T') ? data.next_follow_up.split('T')[0] : data.next_follow_up) : ''}
+                                        onChange={(e) => {
+                                            const selectedDate = e.target.value;
+                                            if (selectedDate) {
+                                                // Ensure selected date is today or future
+                                                const today = new Date();
+                                                today.setHours(0, 0, 0, 0);
+                                                const selected = new Date(selectedDate);
+                                                selected.setHours(0, 0, 0, 0);
+                                                
+                                                // If selected date is before today, use today instead
+                                                if (selected < today) {
+                                                    const todayStr = today.toISOString().split('T')[0];
+                                                    const existingTime = data.next_follow_up && data.next_follow_up.includes('T') 
+                                                        ? data.next_follow_up.split('T')[1] 
+                                                        : '00:00';
+                                                    setData('next_follow_up', `${todayStr}T${existingTime}`);
                                                     return;
                                                 }
-                                                const existingTime = data.next_follow_up ? new Date(data.next_follow_up).toTimeString().slice(0, 5) : '00:00';
-                                                const datetime = `${selectedDate}T${existingTime}`;
-                                                setData('next_follow_up', datetime);
-                                            }}
-                                            min={new Date().toISOString().split('T')[0]}
-                                            className={`${errors.next_follow_up ? 'border-red-500' : ''} cursor-pointer`}
-                                        />
-                                    </div>
-                                    <div className="w-32">
-                                        <Input
-                                            type="time"
-                                            value={data.next_follow_up ? new Date(data.next_follow_up).toTimeString().slice(0, 5) : ''}
-                                            onChange={(e) => {
-                                                const time = e.target.value;
-                                                const date = data.next_follow_up ? new Date(data.next_follow_up).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-                                                const datetime = `${date}T${time}`;
-                                                setData('next_follow_up', datetime);
-                                            }}
-                                            className={errors.next_follow_up ? 'border-red-500' : ''}
-                                        />
+                                                
+                                                const existingTime = data.next_follow_up && data.next_follow_up.includes('T') 
+                                                    ? data.next_follow_up.split('T')[1] 
+                                                    : '00:00';
+                                                setData('next_follow_up', `${selectedDate}T${existingTime}`);
+                                            } else {
+                                                setData('next_follow_up', '');
+                                            }
+                                        }}
+                                        min={(() => {
+                                            const today = new Date();
+                                            const year = today.getFullYear();
+                                            const month = String(today.getMonth() + 1).padStart(2, '0');
+                                            const day = String(today.getDate()).padStart(2, '0');
+                                            return `${year}-${month}-${day}`;
+                                        })()}
+                                        className="absolute opacity-0 pointer-events-none"
+                                        required={isFollowUpRequired()}
+                                    />
+                                    {/* Time Input (Hidden) */}
+                                    <input
+                                        type="time"
+                                        id="quick-edit-next-follow-up-time"
+                                        value={data.next_follow_up && data.next_follow_up.includes('T') 
+                                            ? data.next_follow_up.split('T')[1].slice(0, 5) 
+                                            : '00:00'}
+                                        onChange={(e) => {
+                                            const selectedTime = e.target.value;
+                                            const existingDate = data.next_follow_up && data.next_follow_up.includes('T')
+                                                ? data.next_follow_up.split('T')[0]
+                                                : (data.next_follow_up || new Date().toISOString().split('T')[0]);
+                                            setData('next_follow_up', `${existingDate}T${selectedTime}`);
+                                        }}
+                                        onFocus={() => setTimeEditingState('hours')}
+                                        onBlur={() => {
+                                            // Delay to allow time picker to close
+                                            setTimeout(() => setTimeEditingState(null), 300);
+                                        }}
+                                        onInput={(e) => {
+                                            // Track which part is being edited
+                                            const timeInput = e.target as HTMLInputElement;
+                                            const currentTime = timeInput.value;
+                                            const prevTime = data.next_follow_up && data.next_follow_up.includes('T')
+                                                ? data.next_follow_up.split('T')[1].slice(0, 5)
+                                                : '00:00';
+                                            
+                                            if (prevTime && currentTime) {
+                                                const [currentHours, currentMinutes] = currentTime.split(':').map(Number);
+                                                const [prevHours, prevMinutes] = prevTime.split(':').map(Number);
+                                                
+                                                if (currentHours !== prevHours) {
+                                                    setTimeEditingState('hours');
+                                                } else if (currentMinutes !== prevMinutes) {
+                                                    setTimeEditingState('minutes');
+                                                }
+                                            }
+                                        }}
+                                        className="absolute opacity-0 pointer-events-none"
+                                    />
+                                    {/* Display */}
+                                    <div className={`flex-1 rounded-md border px-3 py-2 bg-white dark:bg-neutral-800 flex items-center gap-2 ${errors.next_follow_up || (isFollowUpRequired() && !data.next_follow_up) ? 'border-red-500' : 'border-neutral-300 dark:border-neutral-600'}`}>
+                                        {data.next_follow_up ? (() => {
+                                            const date = new Date(data.next_follow_up);
+                                            const day = String(date.getDate()).padStart(2, '0');
+                                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                                            const year = date.getFullYear();
+                                            let hours = date.getHours();
+                                            const minutes = String(date.getMinutes()).padStart(2, '0');
+                                            const ampm = hours >= 12 ? 'PM' : 'AM';
+                                            hours = hours % 12;
+                                            hours = hours ? hours : 12;
+                                            const formattedHours = String(hours).padStart(2, '0');
+                                            return (
+                                                <>
+                                                    <span 
+                                                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                        onClick={() => {
+                                                            const dateInput = document.getElementById('quick-edit-next-follow-up-date') as HTMLInputElement;
+                                                            if (dateInput) {
+                                                                dateInput.showPicker?.() || dateInput.focus();
+                                                            }
+                                                        }}
+                                                    >
+                                                        {day}
+                                                    </span>
+                                                    <span 
+                                                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                        onClick={() => {
+                                                            const dateInput = document.getElementById('quick-edit-next-follow-up-date') as HTMLInputElement;
+                                                            if (dateInput) {
+                                                                dateInput.showPicker?.() || dateInput.focus();
+                                                            }
+                                                        }}
+                                                    >
+                                                        -
+                                                    </span>
+                                                    <span 
+                                                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                        onClick={() => {
+                                                            const dateInput = document.getElementById('quick-edit-next-follow-up-date') as HTMLInputElement;
+                                                            if (dateInput) {
+                                                                dateInput.showPicker?.() || dateInput.focus();
+                                                            }
+                                                        }}
+                                                    >
+                                                        {month}
+                                                    </span>
+                                                    <span 
+                                                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                        onClick={() => {
+                                                            const dateInput = document.getElementById('quick-edit-next-follow-up-date') as HTMLInputElement;
+                                                            if (dateInput) {
+                                                                dateInput.showPicker?.() || dateInput.focus();
+                                                            }
+                                                        }}
+                                                    >
+                                                        -
+                                                    </span>
+                                                    <span 
+                                                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                        onClick={() => {
+                                                            const dateInput = document.getElementById('quick-edit-next-follow-up-date') as HTMLInputElement;
+                                                            if (dateInput) {
+                                                                dateInput.showPicker?.() || dateInput.focus();
+                                                            }
+                                                        }}
+                                                    >
+                                                        {year}
+                                                    </span>
+                                                    <span className="mx-2 text-neutral-400">|</span>
+                                                    <span 
+                                                        className={`cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors ${
+                                                            timeEditingState === 'hours' 
+                                                                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1 rounded' 
+                                                                : ''
+                                                        }`}
+                                                        onClick={() => {
+                                                            setTimeEditingState('hours');
+                                                            const timeInput = document.getElementById('quick-edit-next-follow-up-time') as HTMLInputElement;
+                                                            if (timeInput) {
+                                                                timeInput.showPicker?.() || timeInput.focus();
+                                                            }
+                                                        }}
+                                                    >
+                                                        {formattedHours}
+                                                    </span>
+                                                    <span className="text-neutral-400">:</span>
+                                                    <span 
+                                                        className={`cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors ${
+                                                            timeEditingState === 'minutes' 
+                                                                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1 rounded' 
+                                                                : ''
+                                                        }`}
+                                                        onClick={() => {
+                                                            setTimeEditingState('minutes');
+                                                            const timeInput = document.getElementById('quick-edit-next-follow-up-time') as HTMLInputElement;
+                                                            if (timeInput) {
+                                                                timeInput.showPicker?.() || timeInput.focus();
+                                                            }
+                                                        }}
+                                                    >
+                                                        {minutes}
+                                                    </span>
+                                                    <Select
+                                                        value={ampm}
+                                                        onValueChange={(value) => {
+                                                            const date = new Date(data.next_follow_up);
+                                                            let hours = date.getHours();
+                                                            const minutes = date.getMinutes();
+                                                            const currentHours12 = hours % 12 || 12; // Convert to 12-hour format
+                                                            
+                                                            if (value === 'PM' && ampm === 'AM') {
+                                                                // Convert from AM to PM
+                                                                if (currentHours12 === 12) {
+                                                                    hours = 12; // 12 AM -> 12 PM (noon)
+                                                                } else {
+                                                                    hours = currentHours12 + 12; // 1-11 AM -> 1-11 PM
+                                                                }
+                                                            } else if (value === 'AM' && ampm === 'PM') {
+                                                                // Convert from PM to AM
+                                                                if (currentHours12 === 12) {
+                                                                    hours = 0; // 12 PM -> 12 AM (midnight)
+                                                                } else {
+                                                                    hours = currentHours12; // 1-11 PM -> 1-11 AM
+                                                                }
+                                                            }
+                                                            
+                                                            // Use local date/time instead of UTC to avoid timezone issues
+                                                            const year = date.getFullYear();
+                                                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                                                            const day = String(date.getDate()).padStart(2, '0');
+                                                            const dateStr = `${year}-${month}-${day}`;
+                                                            const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                                                            setData('next_follow_up', `${dateStr}T${timeStr}`);
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="h-auto py-0 px-2 border-0 bg-transparent shadow-none hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                                                            <SelectValue>{ampm}</SelectValue>
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="AM">AM</SelectItem>
+                                                            <SelectItem value="PM">PM</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </>
+                                            );
+                                        })() : (
+                                            <span 
+                                                className="text-neutral-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                onClick={() => {
+                                                    // Try date first, if fails try time
+                                                    const dateInput = document.getElementById('quick-edit-next-follow-up-date') as HTMLInputElement;
+                                                    if (dateInput) {
+                                                        dateInput.showPicker?.() || dateInput.focus();
+                                                    } else {
+                                                        const timeInput = document.getElementById('quick-edit-next-follow-up-time') as HTMLInputElement;
+                                                        if (timeInput) {
+                                                            timeInput.showPicker?.() || timeInput.focus();
+                                                        }
+                                                    }
+                                                }}
+                                            >
+                                                dd-mm-yyyy | hh:mm AM/PM
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                                 {errors.next_follow_up && (
                                     <p className="text-sm text-red-500 mt-1">{errors.next_follow_up}</p>
+                                )}
+                                {isFollowUpRequired() && !data.next_follow_up && !errors.next_follow_up && (
+                                    <p className="text-sm text-red-500 mt-1">Next follow-up is required for this lead status.</p>
                                 )}
                             </div>
                         </div>

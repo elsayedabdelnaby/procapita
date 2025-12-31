@@ -59,6 +59,18 @@ class CompanyService
             $data['slug'] = Str::slug($data['name']);
         }
 
+        // Handle logo upload
+        if (isset($data['logo']) && $data['logo'] instanceof \Illuminate\Http\UploadedFile) {
+            // Delete old logo if exists
+            if ($company->logo && \Illuminate\Support\Facades\Storage::disk('public')->exists($company->logo)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($company->logo);
+            }
+
+            // Store new logo
+            $logoPath = $data['logo']->store('companies/logos', 'public');
+            $data['logo'] = $logoPath;
+        }
+
         $company->update($data);
 
         return $company->fresh(['users', 'modules']);
