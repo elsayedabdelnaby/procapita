@@ -102,6 +102,10 @@ class DriverController extends Controller
                 'options' => $users->map(fn($u) => ['value' => $u->id, 'label' => $u->name])->toArray(),
             ],
             ['value' => 'notes', 'label' => 'Notes', 'type' => 'textarea'],
+            ['value' => 'cancel_reason', 'label' => 'Cancel Reason', 'type' => 'textarea'],
+            ['value' => 'worked_with_us_before', 'label' => 'Worked With Us Before', 'type' => 'textarea'],
+            ['value' => 'vehicle_type_and_year', 'label' => 'Vehicle Type and Year', 'type' => 'textarea'],
+            ['value' => 'city', 'label' => 'City', 'type' => 'text'],
         ];
 
         return Inertia::render('Drivers/Drivers/Index', [
@@ -501,6 +505,10 @@ class DriverController extends Controller
                     'name' => $driverModel->currentStage->name,
                 ] : null,
                 'notes' => $driverModel->notes,
+                'cancel_reason' => $driverModel->cancel_reason,
+                'worked_with_us_before' => $driverModel->worked_with_us_before,
+                'vehicle_type_and_year' => $driverModel->vehicle_type_and_year,
+                'city' => $driverModel->city,
                 'stages_progress' => $stagesProgress,
                 'stages_status' => $stagesStatus,
                 'next_stage' => $nextStage ? [
@@ -694,6 +702,10 @@ class DriverController extends Controller
                     'name' => $driverModel->currentStage->name,
                 ] : null,
                 'notes' => $driverModel->notes,
+                'cancel_reason' => $driverModel->cancel_reason,
+                'worked_with_us_before' => $driverModel->worked_with_us_before,
+                'vehicle_type_and_year' => $driverModel->vehicle_type_and_year,
+                'city' => $driverModel->city,
                 'stages_progress' => $stagesProgress,
                 'stages_status' => $stagesStatus,
                 'next_stage' => $nextStage ? [
@@ -976,7 +988,7 @@ class DriverController extends Controller
         $output = fopen('php://temp', 'r+');
 
         // Headers
-        fputcsv($output, ['ID', 'Full Name', 'Phone', 'WhatsApp', 'Email', 'Riding Company', 'Campaign', 'Lead Source', 'Lead Status', 'Feedback Comment', 'Next Follow-up', 'Next Time', 'Last Follow-up', 'Assigned To', 'Created At']);
+        fputcsv($output, ['ID', 'Full Name', 'Phone', 'WhatsApp', 'Email', 'City', 'Riding Company', 'Campaign', 'Lead Source', 'Lead Status', 'Feedback Comment', 'Cancel Reason', 'Worked With Us Before', 'Vehicle Type and Year', 'Next Follow-up', 'Next Time', 'Last Follow-up', 'Assigned To', 'Created At']);
 
         // Data
         foreach ($drivers as $driver) {
@@ -986,11 +998,15 @@ class DriverController extends Controller
                 $driver->phone,
                 $driver->whatsapp_phone ?? '',
                 $driver->email ?? '',
+                $driver->city ?? '',
                 $driver->ridingCompany?->name ?? '',
                 $driver->campaign?->name ?? '',
                 $driver->leadSource?->name ?? '',
                 $driver->leadStatus?->name ?? '',
                 $driver->lead_status_comment ?? '',
+                $driver->cancel_reason ?? '',
+                $driver->worked_with_us_before ?? '',
+                $driver->vehicle_type_and_year ?? '',
                 $driver->next_follow_up ? $driver->next_follow_up->format('Y-m-d H:i:s') : '',
                 $driver->last_follow_up ? $driver->last_follow_up->format('Y-m-d H:i:s') : '',
                 $driver->assignedTo?->name ?? '',

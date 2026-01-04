@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Modules\Core\app\Models\Company;
 use Modules\Marketing\app\Models\Campaign;
@@ -48,6 +49,9 @@ class Driver extends Model
         'driver_num',
         'duplicate',
         'next_time',
+        'worked_with_us_before',
+        'vehicle_type_and_year',
+        'city',
     ];
 
     protected function casts(): array
@@ -209,14 +213,14 @@ class Driver extends Model
 
         // When a driver is deleted (soft or hard), delete all related data
         static::deleting(function ($driver) {
-            \Log::info('Driver deleting event triggered', ['driver_id' => $driver->id]);
+            Log::info('Driver deleting event triggered', ['driver_id' => $driver->id]);
             
             // Use direct query to get all related data (bypassing soft delete scope if needed)
             // This ensures we get all records even if driver is soft deleted
             $stages = \Modules\Drivers\app\Models\DriverStage::where('driver_id', $driver->id)->get();
             $documents = \Modules\Drivers\app\Models\DriverDocument::where('driver_id', $driver->id)->get();
 
-            \Log::info('Found related data to delete', [
+            Log::info('Found related data to delete', [
                 'driver_id' => $driver->id,
                 'stages_count' => $stages->count(),
                 'documents_count' => $documents->count(),
@@ -224,13 +228,13 @@ class Driver extends Model
 
             // Delete all driver stages using DB delete for immediate deletion
             if ($stages->isNotEmpty()) {
-                \DB::table('driver_stages')->where('driver_id', $driver->id)->delete();
-                \Log::info('Deleted all driver stages from database', ['driver_id' => $driver->id, 'count' => $stages->count()]);
+                DB::table('driver_stages')->where('driver_id', $driver->id)->delete();
+                Log::info('Deleted all driver stages from database', ['driver_id' => $driver->id, 'count' => $stages->count()]);
             }
 
             // Delete all driver documents and their files
             foreach ($documents as $document) {
-                \Log::info('Deleting driver document', [
+                Log::info('Deleting driver document', [
                     'document_id' => $document->id,
                     'driver_id' => $driver->id,
                     'uploaded_path' => $document->uploaded_path,
@@ -239,23 +243,23 @@ class Driver extends Model
                 // Delete the file from storage if it exists
                 if ($document->uploaded_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($document->uploaded_path)) {
                     \Illuminate\Support\Facades\Storage::disk('public')->delete($document->uploaded_path);
-                    \Log::info('Deleted file from storage', ['path' => $document->uploaded_path]);
+                    Log::info('Deleted file from storage', ['path' => $document->uploaded_path]);
                 }
             }
             
             // Delete all driver documents from database using DB delete for immediate deletion
             if ($documents->isNotEmpty()) {
-                \DB::table('driver_documents')->where('driver_id', $driver->id)->delete();
-                \Log::info('Deleted all driver documents from database', ['driver_id' => $driver->id, 'count' => $documents->count()]);
+                DB::table('driver_documents')->where('driver_id', $driver->id)->delete();
+                Log::info('Deleted all driver documents from database', ['driver_id' => $driver->id, 'count' => $documents->count()]);
             }
             
-            \Log::info('Driver deletion completed', ['driver_id' => $driver->id]);
+            Log::info('Driver deletion completed', ['driver_id' => $driver->id]);
         });
 
         // When a driver is force deleted (hard delete), ensure all related data is also deleted
         // Note: DriverStage and DriverDocument don't use SoftDeletes, so regular delete is sufficient
         static::forceDeleting(function ($driver) {
-            \Log::info('Driver force deleting event triggered', ['driver_id' => $driver->id]);
+            Log::info('Driver force deleting event triggered', ['driver_id' => $driver->id]);
             
             // Get all related data before deletion
             $documents = \Modules\Drivers\app\Models\DriverDocument::where('driver_id', $driver->id)->get();
@@ -265,7 +269,7 @@ class Driver extends Model
                 // Delete the file from storage if it exists
                 if ($document->uploaded_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($document->uploaded_path)) {
                     \Illuminate\Support\Facades\Storage::disk('public')->delete($document->uploaded_path);
-                    \Log::info('Deleted file from storage (force delete)', ['path' => $document->uploaded_path]);
+                    Log::info('Deleted file from storage (force delete)', ['path' => $document->uploaded_path]);
                 }
             }
             
@@ -273,7 +277,7 @@ class Driver extends Model
             DB::table('driver_stages')->where('driver_id', $driver->id)->delete();
             DB::table('driver_documents')->where('driver_id', $driver->id)->delete();
             
-            \Log::info('Driver force deletion completed', ['driver_id' => $driver->id]);
+            Log::info('Driver force deletion completed', ['driver_id' => $driver->id]);
         });
     }
 

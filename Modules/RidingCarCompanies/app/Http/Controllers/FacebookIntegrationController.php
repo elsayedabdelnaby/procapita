@@ -5,18 +5,21 @@ namespace Modules\RidingCarCompanies\app\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\RidingCarCompanies\app\Models\RidingCompany;
 use Modules\RidingCarCompanies\app\Models\RidingCompanyIntegrationSetting;
 use Modules\RidingCarCompanies\app\Services\FacebookService;
+use Modules\RidingCarCompanies\app\Services\FacebookLeadsSyncService;
 use Modules\Drivers\app\Services\DriverService;
 
 class FacebookIntegrationController extends Controller
 {
     public function __construct(
         protected FacebookService $facebookService,
-        protected DriverService $driverService
+        protected DriverService $driverService,
+        protected FacebookLeadsSyncService $syncService
     ) {}
 
     /**
@@ -27,17 +30,30 @@ class FacebookIntegrationController extends Controller
         $ridingCompany = RidingCompany::findOrFail($ridingCompanyId);
         
         // Get or create Facebook integration setting
-        $integration = RidingCompanyIntegrationSetting::firstOrCreate(
+        // Use firstOrNew + explicit save to ensure config is always set
+        $integration = RidingCompanyIntegrationSetting::firstOrNew(
             [
                 'riding_company_id' => $ridingCompanyId,
                 'type' => 'facebook',
-            ],
-            [
-                'config' => [],
-                'active' => false,
             ]
         );
-
+        
+        // Ensure config is set explicitly
+        if (!isset($integration->config) || $integration->config === null) {
+            $integration->setAttribute('config', []);
+        }
+        
+        // Set other defaults if creating new
+        if (!$integration->exists) {
+            $integration->active = false;
+        }
+        
+        // Double-check config is in attributes before saving
+        if (!isset($integration->attributes['config']) || !array_key_exists('config', $integration->attributes)) {
+            $integration->setAttribute('config', $integration->config ?? []);
+        }
+        
+        $integration->save();
         $integration->load('ridingCompany');
 
         return Inertia::render('RidingCarCompanies/FacebookIntegration/Show', [
@@ -65,7 +81,7 @@ class FacebookIntegrationController extends Controller
     public function getOAuthUrl(Request $request, int $ridingCompanyId): \Illuminate\Http\JsonResponse
     {
         try {
-            \Log::info('Getting Facebook OAuth URL', [
+            Log::info('Getting Facebook OAuth URL', [
                 'riding_company_id' => $ridingCompanyId,
                 'user_id' => Auth::id(),
             ]);
@@ -99,7 +115,7 @@ class FacebookIntegrationController extends Controller
             // Final check - if appId is still empty, we can't proceed
             // But we can use the constructed redirectUri if appId exists
             if (empty($appId)) {
-                \Log::warning('Facebook App ID not configured', [
+                Log::warning('Facebook App ID not configured', [
                     'config_app_id' => config('services.facebook.app_id') ? 'set' : 'empty',
                     'env_app_id' => env('FACEBOOK_APP_ID') ? 'set' : 'empty',
                     'env_file_exists' => file_exists(base_path('.env')),
@@ -118,7 +134,7 @@ class FacebookIntegrationController extends Controller
                 ], 400);
             }
 
-            \Log::info('Facebook credentials check', [
+            Log::info('Facebook credentials check', [
                 'app_id_set' => !empty($appId),
                 'redirect_uri_set' => !empty($redirectUri),
                 'app_id' => $appId ? '***' . substr($appId, -4) : 'empty',
@@ -132,7 +148,7 @@ class FacebookIntegrationController extends Controller
 
             $url = $this->facebookService->getOAuthUrl($state);
 
-            \Log::info('Facebook OAuth URL generated successfully', [
+            Log::info('Facebook OAuth URL generated successfully', [
                 'riding_company_id' => $ridingCompanyId,
             ]);
 
@@ -141,7 +157,7 @@ class FacebookIntegrationController extends Controller
                 'url' => $url,
             ]);
         } catch (\Exception $e) {
-            \Log::error('Error getting Facebook OAuth URL', [
+            Log::error('Error getting Facebook OAuth URL', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'riding_company_id' => $ridingCompanyId,
@@ -210,12 +226,18 @@ class FacebookIntegrationController extends Controller
 
         // Save integration with User Delegated Access Token
         // هذا التوكن خاص بالمستخدم ويمكن استخدامه للوصول لصفحاته واللييدز
+        // Get existing integration to preserve config if updating
+        $existingIntegration = RidingCompanyIntegrationSetting::where('riding_company_id', $ridingCompanyId)
+            ->where('type', 'facebook')
+            ->first();
+        
         $integration = RidingCompanyIntegrationSetting::updateOrCreate(
             [
                 'riding_company_id' => $ridingCompanyId,
                 'type' => 'facebook',
             ],
             [
+                'config' => $existingIntegration?->config ?? [], // Always include config - preserve existing or use empty array
                 'facebook_access_token' => $accessToken, // User Delegated Access Token
                 'facebook_user_id' => $userInfo['success'] ? ($userInfo['data']['id'] ?? null) : null,
                 'facebook_user_name' => $userInfo['success'] ? ($userInfo['data']['name'] ?? null) : null,
@@ -224,7 +246,7 @@ class FacebookIntegrationController extends Controller
             ]
         );
 
-        \Log::info('Facebook User Delegated Access saved', [
+        Log::info('Facebook User Delegated Access saved', [
             'riding_company_id' => $ridingCompanyId,
             'facebook_user_id' => $userInfo['success'] ? ($userInfo['data']['id'] ?? null) : null,
             'token_expires_at' => $expiresIn ? now()->addSeconds($expiresIn)->toDateTimeString() : null,
@@ -375,6 +397,8 @@ class FacebookIntegrationController extends Controller
     {
         $request->validate([
             'field_mapping' => 'required|array',
+            'page_id' => 'sometimes|string',
+            'form_id' => 'sometimes|string',
         ]);
 
         $integration = RidingCompanyIntegrationSetting::where('riding_company_id', $ridingCompanyId)
@@ -385,10 +409,30 @@ class FacebookIntegrationController extends Controller
             return redirect()->back()->with('error', 'Facebook integration not found');
         }
 
-        $integration->update([
+        // Prepare update data
+        $updateData = [
             'facebook_field_mapping' => $request->field_mapping,
             'active' => true, // Activate integration when mapping is saved
-        ]);
+        ];
+
+        // If page_id and form_id are provided but not saved yet, save them too
+        if ($request->has('page_id') && $request->page_id && !$integration->facebook_page_id) {
+            $updateData['facebook_page_id'] = $request->page_id;
+        }
+
+        if ($request->has('form_id') && $request->form_id && !$integration->facebook_form_id) {
+            $updateData['facebook_form_id'] = $request->form_id;
+        }
+
+        // Check if configuration is complete (either already saved or provided in request)
+        $hasPageId = $integration->facebook_page_id || ($request->has('page_id') && $request->page_id);
+        $hasFormId = $integration->facebook_form_id || ($request->has('form_id') && $request->form_id);
+
+        if (!$hasPageId || !$hasFormId) {
+            return redirect()->back()->with('error', 'Please select both page and form before saving field mapping.');
+        }
+
+        $integration->update($updateData);
 
         return redirect()->back()->with('success', 'Field mapping saved successfully');
     }
@@ -398,141 +442,35 @@ class FacebookIntegrationController extends Controller
      */
     public function syncLeads(Request $request, int $ridingCompanyId): \Illuminate\Http\JsonResponse
     {
-        $integration = RidingCompanyIntegrationSetting::where('riding_company_id', $ridingCompanyId)
-            ->where('type', 'facebook')
-            ->where('active', true)
-            ->first();
+        $result = $this->syncService->syncLeadsForRidingCompany($ridingCompanyId);
 
-        if (!$integration || !$integration->facebook_access_token || !$integration->facebook_form_id) {
+        if (!$result['success']) {
+            // Provide more user-friendly error messages
+            $errorMessage = $result['error'] ?? 'Unknown error';
+            
+            if (str_contains($errorMessage, 'not found')) {
+                if (str_contains($errorMessage, 'integration')) {
+                    $errorMessage = 'Facebook integration not found. Please connect your Facebook account first.';
+                } elseif (str_contains($errorMessage, 'access token')) {
+                    $errorMessage = 'Facebook access token not found. Please reconnect your Facebook account.';
+                } elseif (str_contains($errorMessage, 'page')) {
+                    $errorMessage = 'Facebook page not selected. Please select a page in the Configure step.';
+                } elseif (str_contains($errorMessage, 'form')) {
+                    $errorMessage = 'Facebook form not selected. Please select a form in the Configure step.';
+                } elseif (str_contains($errorMessage, 'active')) {
+                    $errorMessage = 'Facebook integration is not active. Please save the field mapping to activate it.';
+                }
+            }
+            
             return response()->json([
                 'success' => false,
-                'error' => 'Facebook integration not configured',
+                'error' => $errorMessage,
             ], 400);
         }
 
-        // Get page access token
-        $pagesResult = $this->facebookService->getPages($integration->facebook_access_token);
-        
-        if (!$pagesResult['success']) {
-            return response()->json($pagesResult, 400);
-        }
-
-        $page = collect($pagesResult['pages'])->firstWhere('id', $integration->facebook_page_id);
-        
-        if (!$page || !isset($page['access_token'])) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Page access token not found',
-            ], 400);
-        }
-
-        // Get leads
-        $leadsResult = $this->facebookService->getLeads($integration->facebook_form_id, $page['access_token']);
-
-        if (!$leadsResult['success']) {
-            return response()->json($leadsResult, 400);
-        }
-
-        $leads = $leadsResult['leads'] ?? [];
-        $fieldMapping = $integration->facebook_field_mapping ?? [];
-        $ridingCompany = $integration->ridingCompany;
-        $createdCount = 0;
-        $updatedCount = 0;
-
-        foreach ($leads as $lead) {
-            $fieldData = [];
-            foreach ($lead['field_data'] ?? [] as $field) {
-                $fieldData[$field['name'] ?? ''] = $field['values'][0] ?? null;
-            }
-
-            // Map fields
-            $driverData = [];
-            foreach ($fieldMapping as $fbField => $driverField) {
-                if (isset($fieldData[$fbField]) && !empty($fieldData[$fbField])) {
-                    $driverData[$driverField] = $fieldData[$fbField];
-                }
-            }
-
-            if (empty($driverData)) {
-                continue;
-            }
-
-            // Check if driver exists by phone
-            $phone = $driverData['phone'] ?? $driverData['whatsapp_phone'] ?? null;
-            if ($phone) {
-                $phone = $this->driverService->reformatPhoneNumber($phone);
-                $existingDriver = \Modules\Drivers\app\Models\Driver::where('riding_company_id', $ridingCompanyId)
-                    ->where(function ($query) use ($phone) {
-                        $query->where('phone', $phone)
-                            ->orWhere('whatsapp_phone', $phone);
-                    })
-                    ->first();
-
-                if ($existingDriver) {
-                    $existingDriver->update($driverData);
-                    $updatedCount++;
-                    continue;
-                }
-            }
-
-            // Create new driver
-            $driverData['riding_company_id'] = $ridingCompanyId;
-            $driverData['company_id'] = $ridingCompany->company_id;
-            $driverData['lead_source_id'] = $this->getOrCreateLeadSource('Facebook', $ridingCompany->company_id);
-            $driverData['lead_status_id'] = $this->getOrCreateLeadStatus('New', $ridingCompany->company_id);
-
-            // Assign to default user if exists
-            if ($ridingCompany->default_driver_user_id) {
-                $driverData['assigned_to'] = $ridingCompany->default_driver_user_id;
-            }
-
-            \Modules\Drivers\app\Models\Driver::create($driverData);
-            $createdCount++;
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => "Synced {$createdCount} new leads and updated {$updatedCount} existing leads",
-            'created' => $createdCount,
-            'updated' => $updatedCount,
-        ]);
+        return response()->json($result);
     }
 
-    /**
-     * Get or create lead source
-     */
-    private function getOrCreateLeadSource(string $name, int $companyId): int
-    {
-        $leadSource = \Modules\Drivers\app\Models\LeadSource::firstOrCreate(
-            [
-                'name' => $name,
-                'company_id' => $companyId,
-            ],
-            [
-                'active' => true,
-            ]
-        );
-
-        return $leadSource->id;
-    }
-
-    /**
-     * Get or create lead status
-     */
-    private function getOrCreateLeadStatus(string $name, int $companyId): int
-    {
-        $leadStatus = \Modules\Drivers\app\Models\LeadStatus::firstOrCreate(
-            [
-                'name' => $name,
-                'company_id' => $companyId,
-            ],
-            [
-                'active' => true,
-            ]
-        );
-
-        return $leadStatus->id;
-    }
 
     /**
      * Handle Facebook Data Deletion Callback
@@ -570,7 +508,7 @@ class FacebookIntegrationController extends Controller
                 $userId = $data['user_id'];
                 
                 // Here you would delete user data associated with this Facebook user ID
-                \Log::info('Facebook data deletion request', [
+                Log::info('Facebook data deletion request', [
                     'facebook_user_id' => $userId,
                     'request_data' => $data,
                 ]);
@@ -593,7 +531,7 @@ class FacebookIntegrationController extends Controller
                 ], 200, [], JSON_UNESCAPED_SLASHES);
             }
         } catch (\Exception $e) {
-            \Log::error('Error processing Facebook data deletion callback', [
+            Log::error('Error processing Facebook data deletion callback', [
                 'error' => $e->getMessage(),
             ]);
         }
