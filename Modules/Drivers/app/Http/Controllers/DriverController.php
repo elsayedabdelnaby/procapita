@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Core\app\Models\Company;
@@ -31,33 +32,37 @@ class DriverController extends Controller
 
     public function index(): Response
     {
-        $user = Auth::user();
-        $companyId = $this->getCompanyId();
+        try {
+            $user = Auth::user();
+            $companyId = $this->getCompanyId();
 
-        // Get selected riding company from session (for admins)
-        $selectedRidingCompanyId = null;
-        if (($user->isSuperAdmin() || $user->is_company_admin) && !$user->riding_company_id) {
-            $selectedRidingCompanyId = session('selected_riding_company_id');
-        }
+            // Get selected riding company from session (for admins)
+            $selectedRidingCompanyId = null;
+            if (($user->isSuperAdmin() || $user->is_company_admin) && !$user->riding_company_id) {
+                $selectedRidingCompanyId = session('selected_riding_company_id');
+            }
 
-        $drivers = $this->driverService->getAllDrivers($companyId, $user, $selectedRidingCompanyId);
+            $drivers = $this->driverService->getAllDrivers($companyId, $user, $selectedRidingCompanyId);
 
-        // Prepare import available fields with types and options
-        $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get(['id', 'name']) : collect();
-        
-        // Filter riding companies based on user access
-        $ridingCompanies = $this->getRidingCompaniesForUser($user, $companyId);
-        
-        $campaigns = Campaign::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('name')->get(['id', 'name']);
-        $leadSources = LeadSource::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get(['id', 'name']);
-        $leadStatuses = LeadStatus::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->ordered()->get(['id', 'name']);
-        // Get users - for non-super admin, only show subordinate users
-        if ($user->isSuperAdmin()) {
-        $users = User::when($companyId, fn($q) => $q->where('company_id', $companyId))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
-        } else {
-            $subordinateUserIds = $user->getSubordinateUserIds();
-            $users = User::whereIn('id', $subordinateUserIds)->where('is_active', true)->orderBy('name')->get(['id', 'name']);
-        }
+            // Prepare import available fields with types and options
+            $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get(['id', 'name']) : collect();
+            
+            // Filter riding companies based on user access
+            $ridingCompanies = $this->getRidingCompaniesForUser($user, $companyId);
+            
+            $campaigns = Campaign::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('name')->get(['id', 'name']);
+            $leadSources = LeadSource::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get(['id', 'name']);
+            $leadStatuses = LeadStatus::when($companyId, fn($q) => $q->where('company_id', $companyId))->active()->ordered()->get(['id', 'name']);
+            // Get users - for non-super admin, only show subordinate users
+            if ($user->isSuperAdmin()) {
+                $users = User::when($companyId, fn($q) => $q->where('company_id', $companyId))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+            } else {
+                $subordinateUserIds = $user->getSubordinateUserIds() ?? [];
+                if (empty($subordinateUserIds)) {
+                    $subordinateUserIds = [$user->id];
+                }
+                $users = User::whereIn('id', $subordinateUserIds)->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+            }
 
         $importAvailableFields = [
             ['value' => 'full_name', 'label' => 'Full Name', 'type' => 'text'],
@@ -162,8 +167,11 @@ class DriverController extends Controller
                 ] : null,
                 'notes' => $driver->notes,
                 'cancel_reason' => $driver->cancel_reason,
-                'created_at' => $driver->created_at,
-                'updated_at' => $driver->updated_at,
+                'worked_with_us_before' => $driver->worked_with_us_before,
+                'vehicle_type_and_year' => $driver->vehicle_type_and_year,
+                'city' => $driver->city,
+                'created_at' => $driver->created_at ? $driver->created_at->format('Y-m-d H:i:s') : null,
+                'updated_at' => $driver->updated_at ? $driver->updated_at->format('Y-m-d H:i:s') : null,
                 'duplicate' => $driver->duplicate ?? 0,
             ]),
             'importAvailableFields' => $importAvailableFields,
@@ -176,6 +184,14 @@ class DriverController extends Controller
                 'users' => $users->map(fn($u) => ['id' => $u->id, 'name' => $u->name])->toArray(),
             ],
         ]);
+        } catch (\Exception $e) {
+            Log::error('Error loading drivers index', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            throw $e;
+        }
     }
 
     public function recycleBin(): Response
