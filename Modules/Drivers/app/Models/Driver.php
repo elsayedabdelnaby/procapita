@@ -60,7 +60,6 @@ class Driver extends Model
             'next_follow_up' => 'datetime',
             'last_follow_up' => 'datetime',
             'assigned_time' => 'datetime',
-            'last_assigned_time' => 'datetime',
         ];
     }
 
