@@ -40,6 +40,10 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
     
     const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies);
     const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
+    const [teamLeaders, setTeamLeaders] = useState<Array<{id: number; name: string; email: string}>>([]);
+    const [loadingTeamLeaders, setLoadingTeamLeaders] = useState(false);
+    const [accountManagers, setAccountManagers] = useState<Array<{id: number; name: string; email: string}>>([]);
+    const [loadingAccountManagers, setLoadingAccountManagers] = useState(false);
     const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
     const [expandedEntities, setExpandedEntities] = useState<Record<string, boolean>>({});
     const [showCompanyAdminConfirm, setShowCompanyAdminConfirm] = useState(false);
@@ -53,6 +57,8 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
         password_confirmation: '',
         company_id: selectedCompany ? String(selectedCompany.id) : (company?.id || ''),
         riding_company_id: defaultRidingCompanyId ? String(defaultRidingCompanyId) : '',
+        team_leader_id: '',
+        account_manager_id: '',
         roles: [] as number[],
         permissions: [] as number[],
         is_company_admin: false,
@@ -128,7 +134,52 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
             setData('is_company_admin', false);
         }
         setData('riding_company_id', value);
+        // Reset team_leader_id when riding company changes
+        setData('team_leader_id', '');
     };
+
+    // Load team leaders when riding_company_id changes
+    useEffect(() => {
+        const ridingCompanyId = data.riding_company_id ? Number(data.riding_company_id) : null;
+        
+        if (ridingCompanyId) {
+            setLoadingTeamLeaders(true);
+            axios
+                .get('/core/api/users/by-riding-company', {
+                    params: { riding_company_id: ridingCompanyId }
+                })
+                .then((response) => {
+                    setTeamLeaders(response.data.users || []);
+                })
+                .catch((error) => {
+                    console.error('Error fetching team leaders:', error);
+                    setTeamLeaders([]);
+                })
+                .finally(() => {
+                    setLoadingTeamLeaders(false);
+                });
+        } else {
+            setTeamLeaders([]);
+            setData('team_leader_id', '');
+        }
+    }, [data.riding_company_id]);
+
+    // Load account managers on component mount
+    useEffect(() => {
+        setLoadingAccountManagers(true);
+        axios
+            .get('/core/api/users/without-riding-company')
+            .then((response) => {
+                setAccountManagers(response.data.users || []);
+            })
+            .catch((error) => {
+                console.error('Error fetching account managers:', error);
+                setAccountManagers([]);
+            })
+            .finally(() => {
+                setLoadingAccountManagers(false);
+            });
+    }, []);
 
     // Get company name for confirmation dialog
     const getCompanyName = () => {
@@ -243,126 +294,192 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                         <div className="space-y-4">
                             <h2 className="text-lg font-semibold">User Information</h2>
 
-                            <FormField
-                                label="Full Name"
-                                name="name"
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                error={errors.name}
-                                required
-                            />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField
+                                    label="Full Name"
+                                    name="name"
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    error={errors.name}
+                                    required
+                                />
 
-                            <FormField
-                                label="Email"
-                                name="email"
-                                type="email"
-                                value={data.email}
-                                onChange={(e) => setData('email', e.target.value)}
-                                error={errors.email}
-                                required
-                            />
+                                <FormField
+                                    label="Email"
+                                    name="email"
+                                    type="email"
+                                    value={data.email}
+                                    onChange={(e) => setData('email', e.target.value)}
+                                    error={errors.email}
+                                    required
+                                />
 
-                            <FormField
-                                label="Mobile 1"
-                                name="mobile1"
-                                value={data.mobile1}
-                                onChange={(e) => setData('mobile1', e.target.value)}
-                                error={errors.mobile1}
-                                required
-                            />
+                                <FormField
+                                    label="Mobile 1"
+                                    name="mobile1"
+                                    value={data.mobile1}
+                                    onChange={(e) => setData('mobile1', e.target.value)}
+                                    error={errors.mobile1}
+                                    required
+                                />
 
-                            <FormField
-                                label="Mobile 2"
-                                name="mobile2"
-                                value={data.mobile2}
-                                onChange={(e) => setData('mobile2', e.target.value)}
-                                error={errors.mobile2}
-                            />
+                                <FormField
+                                    label="Mobile 2"
+                                    name="mobile2"
+                                    value={data.mobile2}
+                                    onChange={(e) => setData('mobile2', e.target.value)}
+                                    error={errors.mobile2}
+                                />
 
-                            <FormField
-                                label="Password"
-                                name="password"
-                                type="password"
-                                value={data.password}
-                                onChange={(e) => setData('password', e.target.value)}
-                                error={errors.password}
-                                required
-                            />
+                                <FormField
+                                    label="Password"
+                                    name="password"
+                                    type="password"
+                                    value={data.password}
+                                    onChange={(e) => setData('password', e.target.value)}
+                                    error={errors.password}
+                                    required
+                                />
 
-                            <FormField
-                                label="Confirm Password"
-                                name="password_confirmation"
-                                type="password"
-                                value={data.password_confirmation}
-                                onChange={(e) => setData('password_confirmation', e.target.value)}
-                                error={errors.password_confirmation}
-                                required
-                            />
+                                <FormField
+                                    label="Confirm Password"
+                                    name="password_confirmation"
+                                    type="password"
+                                    value={data.password_confirmation}
+                                    onChange={(e) => setData('password_confirmation', e.target.value)}
+                                    error={errors.password_confirmation}
+                                    required
+                                />
+
+                                {companies && companies.length > 0 && !selectedCompany && (
+                                    <div className="space-y-2">
+                                        <Label htmlFor="company_id">Company</Label>
+                                        <select
+                                            id="company_id"
+                                            name="company_id"
+                                            value={data.company_id}
+                                            onChange={(e) => setData('company_id', e.target.value)}
+                                            className="w-full rounded-md border px-3 py-2"
+                                            required
+                                        >
+                                            <option value="">Select a company</option>
+                                            {companies.map((comp) => (
+                                                <option key={comp.id} value={comp.id}>
+                                                    {comp.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {errors.company_id && (
+                                            <p className="text-sm text-red-500">{errors.company_id}</p>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="riding_company_id">Riding Company</Label>
+                                    <select
+                                        id="riding_company_id"
+                                        name="riding_company_id"
+                                        value={data.riding_company_id}
+                                        onChange={(e) => handleRidingCompanyChange(e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        disabled={loadingRidingCompanies || !data.company_id}
+                                    >
+                                        <option value="">
+                                            {loadingRidingCompanies
+                                                ? 'Loading...'
+                                                : !data.company_id
+                                                  ? 'Select company first'
+                                                  : 'Select a riding company (optional)'}
+                                        </option>
+                                        {ridingCompanies.map((ridingCompany) => (
+                                            <option key={ridingCompany.id} value={ridingCompany.id}>
+                                                {ridingCompany.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.riding_company_id && (
+                                        <p className="text-sm text-red-500">{errors.riding_company_id}</p>
+                                    )}
+                                    {!loadingRidingCompanies && data.company_id && ridingCompanies.length === 0 && (
+                                        <p className="text-xs text-neutral-500">
+                                            No riding companies available for this company
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="team_leader_id">Team Leader</Label>
+                                    <select
+                                        id="team_leader_id"
+                                        name="team_leader_id"
+                                        value={data.team_leader_id}
+                                        onChange={(e) => setData('team_leader_id', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        disabled={loadingTeamLeaders || !data.riding_company_id}
+                                    >
+                                        <option value="">
+                                            {loadingTeamLeaders
+                                                ? 'Loading...'
+                                                : !data.riding_company_id
+                                                  ? 'Select riding company first'
+                                                  : 'Select a team leader (optional)'}
+                                        </option>
+                                        {teamLeaders.map((teamLeader) => (
+                                            <option key={teamLeader.id} value={teamLeader.id}>
+                                                {teamLeader.name} ({teamLeader.email})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.team_leader_id && (
+                                        <p className="text-sm text-red-500">{errors.team_leader_id}</p>
+                                    )}
+                                    {!loadingTeamLeaders && data.riding_company_id && teamLeaders.length === 0 && (
+                                        <p className="text-xs text-neutral-500">
+                                            No team leaders available for this riding company
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="account_manager_id">Account Manager</Label>
+                                    <select
+                                        id="account_manager_id"
+                                        name="account_manager_id"
+                                        value={data.account_manager_id}
+                                        onChange={(e) => setData('account_manager_id', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        disabled={loadingAccountManagers}
+                                    >
+                                        <option value="">
+                                            {loadingAccountManagers
+                                                ? 'Loading...'
+                                                : 'Select an account manager (optional)'}
+                                        </option>
+                                        {accountManagers.map((accountManager) => (
+                                            <option key={accountManager.id} value={accountManager.id}>
+                                                {accountManager.name} ({accountManager.email})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.account_manager_id && (
+                                        <p className="text-sm text-red-500">{errors.account_manager_id}</p>
+                                    )}
+                                    {!loadingAccountManagers && accountManagers.length === 0 && (
+                                        <p className="text-xs text-neutral-500">
+                                            No account managers available (users without riding company)
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
 
                             {selectedCompany && (
                                 <input type="hidden" name="company_id" value={selectedCompany.id} />
                             )}
 
-                            {companies && companies.length > 0 && !selectedCompany && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="company_id">Company</Label>
-                                    <select
-                                        id="company_id"
-                                        name="company_id"
-                                        value={data.company_id}
-                                        onChange={(e) => setData('company_id', e.target.value)}
-                                        className="w-full rounded-md border px-3 py-2"
-                                        required
-                                    >
-                                        <option value="">Select a company</option>
-                                        {companies.map((comp) => (
-                                            <option key={comp.id} value={comp.id}>
-                                                {comp.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {errors.company_id && (
-                                        <p className="text-sm text-red-500">{errors.company_id}</p>
-                                    )}
-                                </div>
-                            )}
-
                             {company && !selectedCompany && (
                                 <input type="hidden" name="company_id" value={company.id} />
                             )}
-
-                            <div className="space-y-2">
-                                <Label htmlFor="riding_company_id">Riding Company</Label>
-                                <select
-                                    id="riding_company_id"
-                                    name="riding_company_id"
-                                    value={data.riding_company_id}
-                                    onChange={(e) => handleRidingCompanyChange(e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                    disabled={loadingRidingCompanies || !data.company_id}
-                                >
-                                    <option value="">
-                                        {loadingRidingCompanies
-                                            ? 'Loading...'
-                                            : !data.company_id
-                                              ? 'Select company first'
-                                              : 'Select a riding company (optional)'}
-                                    </option>
-                                    {ridingCompanies.map((ridingCompany) => (
-                                        <option key={ridingCompany.id} value={ridingCompany.id}>
-                                            {ridingCompany.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.riding_company_id && (
-                                    <p className="text-sm text-red-500">{errors.riding_company_id}</p>
-                                )}
-                                {!loadingRidingCompanies && data.company_id && ridingCompanies.length === 0 && (
-                                    <p className="text-xs text-neutral-500">
-                                        No riding companies available for this company
-                                    </p>
-                                )}
-                            </div>
                         </div>
 
                         <div className="space-y-4">

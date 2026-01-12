@@ -10,11 +10,11 @@ class DriverDocumentService
 {
     public function getAllDriverDocuments(?int $driverId = null, ?int $companyId = null): Collection
     {
-        $query = DriverDocument::with(['driver', 'documentTemplate', 'reviewer'])
+        $query = DriverDocument::with(['driver', 'ridingCompany', 'reviewer'])
             ->whereHas('driver', function ($q) use ($companyId) {
                 // Only show documents for non-deleted drivers
                 $q->whereNull('deleted_at');
-                
+
                 // Filter by company_id if provided
                 if ($companyId) {
                     $q->where('company_id', $companyId);
@@ -30,7 +30,7 @@ class DriverDocumentService
 
     public function getDriverDocumentById(int $id): ?DriverDocument
     {
-        return DriverDocument::with(['driver', 'documentTemplate', 'reviewer'])->find($id);
+        return DriverDocument::with(['driver', 'ridingCompany', 'reviewer'])->find($id);
     }
 
     public function createDriverDocument(array $data): DriverDocument
@@ -49,12 +49,14 @@ class DriverDocumentService
     public function deleteDriverDocument(int $id): bool
     {
         $driverDocument = DriverDocument::findOrFail($id);
+
         return $driverDocument->delete();
     }
 
     public function uploadFile(int $id, UploadedFile $file, int $driverId, int $companyId): string
     {
         $driverDocument = DriverDocument::findOrFail($id);
+
         return $driverDocument->uploadFile($file, $driverId, $companyId);
     }
 
@@ -77,20 +79,19 @@ class DriverDocumentService
     public function updateStatus(int $id, string $status, ?int $reviewerId = null, ?string $notes = null): DriverDocument
     {
         $driverDocument = DriverDocument::findOrFail($id);
-        
+
         $updateData = ['status' => $status];
-        
+
         if ($reviewerId) {
             $updateData['reviewer_id'] = $reviewerId;
         }
-        
+
         if ($notes !== null) {
             $updateData['notes'] = $notes;
         }
-        
+
         $driverDocument->update($updateData);
 
         return $driverDocument->fresh();
     }
 }
-

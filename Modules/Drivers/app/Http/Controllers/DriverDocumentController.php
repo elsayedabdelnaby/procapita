@@ -12,9 +12,10 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Drivers\app\Http\Requests\DriverDocumentStoreRequest;
 use Modules\Drivers\app\Http\Requests\DriverDocumentUpdateRequest;
-use Modules\Drivers\app\Services\DriverDocumentService;
+use Modules\Drivers\app\Models\DocumentName;
 use Modules\Drivers\app\Models\Driver;
-use Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement;
+use Modules\Drivers\app\Services\DriverDocumentService;
+use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
 class DriverDocumentController extends Controller
 {
@@ -25,15 +26,106 @@ class DriverDocumentController extends Controller
     public function index(Request $request): Response
     {
         $companyId = $this->getCompanyId();
-        #check if the driver_id is in the request
-        if ($request->has('driver_id') && $request->input('driver_id') !== '') {
-            $driverId = $request->input('driver_id');
-            $driverDocuments = $this->driverDocumentService->getAllDriverDocuments($driverId, $companyId);
-        } else {
-        $driverDocuments = $this->driverDocumentService->getAllDriverDocuments(null, $companyId);
+
+        // Check if document_names table exists
+        if (! \Illuminate\Support\Facades\Schema::hasTable('document_names')) {
+            // Fallback to old structure if table doesn't exist yet
+            return $this->indexLegacy($request);
         }
+
+        // Get all document names (unique)
+        $documentNames = DocumentName::orderBy('name')->get();
+
+        // Filter by company if not super admin
+        if ($companyId) {
+            // Get riding company IDs for this company
+            $ridingCompanyIds = RidingCompany::where('company_id', $companyId)->pluck('id')->toArray();
+
+            // Filter document names that have at least one riding company in this company
+            $documentNames = $documentNames->filter(function ($documentName) use ($ridingCompanyIds) {
+                $docRidingCompanyIds = $documentName->riding_company_ids ?? [];
+                if (empty($docRidingCompanyIds)) {
+                    return false;
+                }
+
+                // Convert to integers for comparison
+                $docRidingCompanyIds = array_map('intval', $docRidingCompanyIds);
+
+                // Check if any of the document's riding companies belong to this company
+                return ! empty(array_intersect($docRidingCompanyIds, $ridingCompanyIds));
+            });
+        }
+
+        // Map document names with their riding companies
+        $allDocuments = $documentNames->map(function ($documentName) {
+            // Convert riding_company_ids to integers if they are strings
+            $ridingCompanyIds = $documentName->riding_company_ids ?? [];
+            if (! empty($ridingCompanyIds)) {
+                $ridingCompanyIds = array_map('intval', $ridingCompanyIds);
+            }
+
+            $ridingCompanies = RidingCompany::whereIn('id', $ridingCompanyIds)->get();
+
+            return [
+                'id' => $documentName->id,
+                'name' => $documentName->name,
+                'riding_companies' => $ridingCompanies->map(function ($company) {
+                    return [
+                        'id' => $company->id,
+                        'name' => $company->name,
+                    ];
+                })->toArray(),
+                'type' => $documentName->type,
+                'required' => $documentName->required,
+                'active' => $documentName->active,
+                'created_at' => $documentName->created_at?->toDateTimeString(),
+            ];
+        })->values(); // Reset keys after filtering
+
         return Inertia::render('Drivers/DriverDocuments/Index', [
-            'driverDocuments' => $driverDocuments,
+            'driverDocuments' => $allDocuments,
+        ]);
+    }
+
+    /**
+     * Legacy index method for backward compatibility
+     */
+    private function indexLegacy(Request $request): Response
+    {
+        $companyId = $this->getCompanyId();
+
+        // Get unique documents grouped by name and riding_company_id
+        $uniqueDocuments = \Modules\Drivers\app\Models\DriverDocument::with(['ridingCompany'])
+            ->whereHas('driver', function ($q) use ($companyId) {
+                $q->whereNull('deleted_at');
+                if ($companyId) {
+                    $q->where('company_id', $companyId);
+                }
+            })
+            ->whereNotNull('name')
+            ->select('name', 'riding_company_id')
+            ->selectRaw('MIN(id) as id')
+            ->selectRaw('MIN(created_at) as created_at')
+            ->groupBy('name', 'riding_company_id')
+            ->orderBy('riding_company_id')
+            ->orderBy('name')
+            ->get();
+
+        // Map unique documents
+        $allDocuments = $uniqueDocuments->map(function ($doc) {
+            return [
+                'id' => $doc->id,
+                'name' => $doc->name,
+                'riding_companies' => $doc->ridingCompany ? [[
+                    'id' => $doc->ridingCompany->id,
+                    'name' => $doc->ridingCompany->name,
+                ]] : [],
+                'created_at' => $doc->created_at,
+            ];
+        });
+
+        return Inertia::render('Drivers/DriverDocuments/Index', [
+            'driverDocuments' => $allDocuments,
         ]);
     }
 
@@ -42,12 +134,10 @@ class DriverDocumentController extends Controller
         $user = Auth::user();
         $companyId = $this->getCompanyId();
 
-        $drivers = Driver::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('full_name')->get();
-        $documentTemplates = RidingCompanyDocumentRequirement::active()->orderBy('name')->get();
+        $ridingCompanies = RidingCompany::orderBy('name')->get();
 
         return Inertia::render('Drivers/DriverDocuments/Create', [
-            'drivers' => $drivers,
-            'documentTemplates' => $documentTemplates,
+            'ridingCompanies' => $ridingCompanies,
         ]);
     }
 
@@ -55,17 +145,78 @@ class DriverDocumentController extends Controller
     {
         try {
             $data = $request->validated();
+            $ridingCompanyIds = $data['riding_company_ids'] ?? [];
+            $documentName = $data['name'];
+            unset($data['riding_company_ids'], $data['name']);
+
             $data['status'] = $data['status'] ?? 'pending';
+            $data['type'] = $data['type'] ?? 'file';
+            $data['required'] = $data['required'] ?? false;
+            $data['active'] = $data['active'] ?? true;
 
-            // Get company_id from driver
-            $driver = \Modules\Drivers\app\Models\Driver::findOrFail($data['driver_id']);
-            $data['company_id'] = $driver->company_id;
+            // Check if document_names table exists
+            if (! Schema::hasTable('document_names')) {
+                return redirect()
+                    ->back()
+                    ->withInput()
+                    ->with('error', 'Please run migrations first: php artisan migrate');
+            }
 
-            $this->driverDocumentService->createDriverDocument($data);
+            // Create document name record (unique)
+            $documentNameRecord = DocumentName::create([
+                'name' => $documentName,
+                'riding_company_ids' => $ridingCompanyIds,
+                'type' => $data['type'],
+                'required' => $data['required'],
+                'notes' => $data['notes'] ?? null,
+                'status' => $data['status'],
+                'active' => $data['active'],
+            ]);
+
+            $totalDocumentsCreated = 0;
+
+            // Process each riding company
+            foreach ($ridingCompanyIds as $ridingCompanyId) {
+                // Get all drivers for the riding company
+                $drivers = \Modules\Drivers\app\Models\Driver::where('riding_company_id', $ridingCompanyId)
+                    ->whereNull('deleted_at')
+                    ->get();
+
+                if (! $drivers->isEmpty()) {
+                    // Create documents for all drivers in the riding company
+                    $documents = [];
+                    foreach ($drivers as $driver) {
+                        $documents[] = [
+                            'document_name_id' => $documentNameRecord->id,
+                            'name' => $documentName, // Keep for backward compatibility
+                            'driver_id' => $driver->id,
+                            'riding_company_id' => $ridingCompanyId,
+                            'status' => $data['status'],
+                            'notes' => $data['notes'] ?? null,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
+                    }
+
+                    if (! empty($documents)) {
+                        \Modules\Drivers\app\Models\DriverDocument::insert($documents);
+                        $totalDocumentsCreated += count($documents);
+                    }
+                }
+            }
+
+            // Build success message
+            $message = "Document '{$documentName}' created successfully";
+            if ($totalDocumentsCreated > 0) {
+                $message .= " with {$totalDocumentsCreated} driver document(s)";
+            } else {
+                $message .= '. No drivers found in selected riding companies yet.';
+            }
+            $message .= '.';
 
             return redirect()
                 ->route('drivers.driverdocuments.index')
-                ->with('success', 'Driver document created successfully.');
+                ->with('success', $message);
         } catch (\Exception $e) {
             return redirect()
                 ->back()
@@ -108,35 +259,119 @@ class DriverDocumentController extends Controller
         ]);
     }
 
-    public function edit(int $driverDocument): Response
+    public function edit(int $documentName): Response
     {
-        $driverDocumentModel = $this->driverDocumentService->getDriverDocumentById($driverDocument);
-
-        if (! $driverDocumentModel) {
-            abort(404, 'Driver document not found.');
+        // Check if document_names table exists
+        if (! Schema::hasTable('document_names')) {
+            return redirect()
+                ->route('drivers.driverdocuments.index')
+                ->with('error', 'Please run migrations first: php artisan migrate');
         }
 
-        $user = Auth::user();
-        $companyId = $this->getCompanyId();
+        $documentNameRecord = DocumentName::findOrFail($documentName);
 
-        $drivers = Driver::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('full_name')->get();
-        $documentTemplates = RidingCompanyDocumentRequirement::active()->orderBy('name')->get();
+        $ridingCompanies = RidingCompany::orderBy('name')->get();
 
         return Inertia::render('Drivers/DriverDocuments/Edit', [
-            'driverDocument' => $driverDocumentModel,
-            'drivers' => $drivers,
-            'documentTemplates' => $documentTemplates,
+            'documentName' => [
+                'id' => $documentNameRecord->id,
+                'name' => $documentNameRecord->name,
+                'riding_company_ids' => $documentNameRecord->riding_company_ids ?? [],
+                'type' => $documentNameRecord->type,
+                'required' => $documentNameRecord->required,
+                'notes' => $documentNameRecord->notes,
+                'status' => $documentNameRecord->status,
+                'active' => $documentNameRecord->active,
+            ],
+            'ridingCompanies' => $ridingCompanies,
         ]);
     }
 
-    public function update(DriverDocumentUpdateRequest $request, int $driverDocument): RedirectResponse
+    public function update(DriverDocumentUpdateRequest $request, int $documentName): RedirectResponse
     {
         try {
-            $this->driverDocumentService->updateDriverDocument($driverDocument, $request->validated());
+            // Check if document_names table exists
+            if (! Schema::hasTable('document_names')) {
+                return redirect()
+                    ->back()
+                    ->withInput()
+                    ->with('error', 'Please run migrations first: php artisan migrate');
+            }
+
+            $data = $request->validated();
+            $ridingCompanyIds = $data['riding_company_ids'] ?? [];
+
+            // Get the document name record
+            $documentNameRecord = DocumentName::findOrFail($documentName);
+
+            // Get old riding company IDs
+            $oldRidingCompanyIds = $documentNameRecord->riding_company_ids ?? [];
+
+            // Update document name
+            $documentNameRecord->update([
+                'name' => $data['name'],
+                'riding_company_ids' => $ridingCompanyIds,
+                'type' => $data['type'] ?? $documentNameRecord->type,
+                'required' => $data['required'] ?? $documentNameRecord->required,
+                'notes' => $data['notes'] ?? $documentNameRecord->notes,
+                'status' => $data['status'] ?? $documentNameRecord->status,
+                'active' => $data['active'] ?? $documentNameRecord->active,
+            ]);
+
+            // Update all related driver documents with new name
+            $documentNameRecord->driverDocuments()->update([
+                'name' => $data['name'],
+            ]);
+
+            // Create driver documents for newly added riding companies
+            $newRidingCompanyIds = array_diff($ridingCompanyIds, $oldRidingCompanyIds);
+            $totalCreated = 0;
+
+            foreach ($newRidingCompanyIds as $ridingCompanyId) {
+                // Get all drivers for this riding company
+                $drivers = \Modules\Drivers\app\Models\Driver::where('riding_company_id', $ridingCompanyId)
+                    ->whereNull('deleted_at')
+                    ->get();
+
+                if (! $drivers->isEmpty()) {
+                    $documents = [];
+                    foreach ($drivers as $driver) {
+                        // Check if document already exists
+                        $exists = \Modules\Drivers\app\Models\DriverDocument::where('document_name_id', $documentNameRecord->id)
+                            ->where('driver_id', $driver->id)
+                            ->where('riding_company_id', $ridingCompanyId)
+                            ->exists();
+
+                        if (! $exists) {
+                            $documents[] = [
+                                'document_name_id' => $documentNameRecord->id,
+                                'name' => $data['name'],
+                                'driver_id' => $driver->id,
+                                'riding_company_id' => $ridingCompanyId,
+                                'status' => $data['status'] ?? 'pending',
+                                'notes' => $data['notes'] ?? null,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ];
+                        }
+                    }
+
+                    if (! empty($documents)) {
+                        \Modules\Drivers\app\Models\DriverDocument::insert($documents);
+                        $totalCreated += count($documents);
+                    }
+                }
+            }
+
+            $message = "Document '{$data['name']}' updated successfully";
+            if ($totalCreated > 0) {
+                $message .= " with {$totalCreated} new driver document(s) created";
+            }
+            $message .= '.';
 
             return redirect()
                 ->route('drivers.driverdocuments.index')
-                ->with('success', 'Driver document updated successfully.');
+                ->with('success', $message);
         } catch (\Exception $e) {
             return redirect()
                 ->back()
@@ -145,14 +380,29 @@ class DriverDocumentController extends Controller
         }
     }
 
-    public function destroy(int $driverDocument): RedirectResponse
+    public function destroy(int $documentName): RedirectResponse
     {
         try {
-            $this->driverDocumentService->deleteDriverDocument($driverDocument);
+            // Check if document_names table exists
+            if (! Schema::hasTable('document_names')) {
+                return redirect()
+                    ->back()
+                    ->with('error', 'Please run migrations first: php artisan migrate');
+            }
+
+            // Delete document name (this will cascade delete all related driver documents)
+            $documentNameRecord = DocumentName::findOrFail($documentName);
+            $name = $documentNameRecord->name;
+
+            // Get count of related driver documents before deletion
+            $relatedDocumentsCount = $documentNameRecord->driverDocuments()->count();
+
+            // Delete the document name (cascade will delete driver documents)
+            $documentNameRecord->delete();
 
             return redirect()
                 ->route('drivers.driverdocuments.index')
-                ->with('success', 'Driver document deleted successfully.');
+                ->with('success', "Document '{$name}' and {$relatedDocumentsCount} related driver document(s) deleted successfully.");
         } catch (\Exception $e) {
             return redirect()
                 ->back()
@@ -163,36 +413,112 @@ class DriverDocumentController extends Controller
     public function destroyAll(Request $request): RedirectResponse
     {
         try {
+            // Check if document_names table exists
+            if (! Schema::hasTable('document_names')) {
+                return redirect()
+                    ->back()
+                    ->with('error', 'Please run migrations first: php artisan migrate');
+            }
+
             $companyId = $this->getCompanyId();
-            
-            // Get all driver documents (filtered by company if needed)
-            $query = \Modules\Drivers\app\Models\DriverDocument::query();
-            
+
+            // Get all document names (filtered by company if needed)
+            $query = DocumentName::query();
+
+            if ($companyId) {
+                // Get riding company IDs for this company
+                $ridingCompanyIds = RidingCompany::where('company_id', $companyId)->pluck('id')->toArray();
+
+                if (! empty($ridingCompanyIds)) {
+                    // Filter document names that have at least one riding company in this company
+                    $query->where(function ($q) use ($ridingCompanyIds) {
+                        foreach ($ridingCompanyIds as $ridingCompanyId) {
+                            $q->orWhereJsonContains('riding_company_ids', $ridingCompanyId);
+                        }
+                    });
+                } else {
+                    // No riding companies for this company
+                    return redirect()
+                        ->route('drivers.driverdocuments.index')
+                        ->with('success', 'No documents to delete.');
+                }
+            }
+
+            $documentNames = $query->get();
+            $count = $documentNames->count();
+
+            // Delete all document names (this will cascade delete all related driver documents)
+            foreach ($documentNames as $documentName) {
+                $documentName->delete();
+            }
+
+            return redirect()
+                ->route('drivers.driverdocuments.index')
+                ->with('success', "Successfully deleted {$count} document name(s) and all related driver documents.");
+        } catch (\Exception $e) {
+            \Log::error('Error deleting all driver documents: '.$e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()
+                ->back()
+                ->with('error', 'Failed to delete all driver documents: '.$e->getMessage());
+        }
+    }
+
+    public function deleteByNameAndCompany(Request $request): \Illuminate\Http\JsonResponse|RedirectResponse
+    {
+        $request->validate([
+            'name' => ['required', 'string'],
+            'riding_company_id' => ['required', 'exists:riding_companies,id'],
+        ]);
+
+        try {
+            $companyId = $this->getCompanyId();
+
+            // Get all documents with the same name and riding_company_id
+            $query = \Modules\Drivers\app\Models\DriverDocument::where('name', $request->name)
+                ->where('riding_company_id', $request->riding_company_id);
+
             if ($companyId) {
                 $query->whereHas('driver', function ($q) use ($companyId) {
                     $q->where('company_id', $companyId);
                 });
             }
-            
+
             $driverDocuments = $query->get();
             $count = $driverDocuments->count();
-            
+
             // Delete all documents (this will trigger the boot method to delete files)
             foreach ($driverDocuments as $document) {
                 $document->delete();
+            }
+
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Successfully deleted {$count} driver document(s).",
+                ]);
             }
 
             return redirect()
                 ->route('drivers.driverdocuments.index')
                 ->with('success', "Successfully deleted {$count} driver document(s).");
         } catch (\Exception $e) {
-            \Log::error('Error deleting all driver documents: ' . $e->getMessage(), [
+            \Log::error('Error deleting driver documents by name and company: '.$e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
             ]);
 
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
             return redirect()
                 ->back()
-                ->with('error', 'Failed to delete all driver documents: ' . $e->getMessage());
+                ->with('error', 'Failed to delete driver documents: '.$e->getMessage());
         }
     }
 
@@ -225,12 +551,12 @@ class DriverDocumentController extends Controller
                         'file_url' => $driverDocumentModel->getFileUrl(),
                     ],
                 ];
-                
+
                 // Only include original_filename if column exists
                 if (Schema::hasColumn('driver_documents', 'original_filename')) {
                     $responseData['document']['original_filename'] = $driverDocumentModel->original_filename;
                 }
-                
+
                 return response()->json($responseData);
             }
 
@@ -255,7 +581,7 @@ class DriverDocumentController extends Controller
     {
         try {
             $driverDocumentModel = $this->driverDocumentService->getDriverDocumentById($driverDocument);
-            
+
             if (! $driverDocumentModel) {
                 if (request()->expectsJson() || request()->wantsJson()) {
                     return response()->json([
@@ -268,12 +594,12 @@ class DriverDocumentController extends Controller
 
             // Clear file reference from database (even if file doesn't exist on disk)
             $hadFile = ! empty($driverDocumentModel->uploaded_path);
-            
+
             // Try to delete file from storage if it exists
             if ($hadFile && Storage::disk('public')->exists($driverDocumentModel->uploaded_path)) {
                 Storage::disk('public')->delete($driverDocumentModel->uploaded_path);
             }
-            
+
             // Always update the database to clear the file reference
             $updateData = [
                 'uploaded_path' => null,
@@ -281,12 +607,12 @@ class DriverDocumentController extends Controller
                 'reviewer_id' => null,
                 'notes' => null,
             ];
-            
+
             // Only include original_filename if column exists
             if (Schema::hasColumn('driver_documents', 'original_filename')) {
                 $updateData['original_filename'] = null;
             }
-            
+
             $driverDocumentModel->update($updateData);
 
             // Refresh to get updated data
@@ -303,7 +629,7 @@ class DriverDocumentController extends Controller
                 ->back()
                 ->with('success', 'File deleted successfully.');
         } catch (\Exception $e) {
-            \Log::error('Error deleting file: ' . $e->getMessage(), [
+            \Log::error('Error deleting file: '.$e->getMessage(), [
                 'driver_document_id' => $driverDocument,
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -342,7 +668,7 @@ class DriverDocumentController extends Controller
 
             // Use Storage::path for local filesystem
             $filePath = Storage::disk('public')->path($driverDocumentModel->uploaded_path);
-            
+
             if (! file_exists($filePath)) {
                 \Log::error('File not found on disk', [
                     'driver_document_id' => $driverDocument,
@@ -356,10 +682,10 @@ class DriverDocumentController extends Controller
 
             return response()->file($filePath, [
                 'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . ($driverDocumentModel->original_filename ?? basename($driverDocumentModel->uploaded_path)) . '"',
+                'Content-Disposition' => 'inline; filename="'.($driverDocumentModel->original_filename ?? basename($driverDocumentModel->uploaded_path)).'"',
             ]);
         } catch (\Exception $e) {
-            \Log::error('Error viewing file: ' . $e->getMessage(), [
+            \Log::error('Error viewing file: '.$e->getMessage(), [
                 'driver_document_id' => $driverDocument,
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -463,21 +789,21 @@ class DriverDocumentController extends Controller
         $companyId = $this->getCompanyId();
         $driverDocuments = $this->driverDocumentService->getAllDriverDocuments(null, $companyId);
 
-        $filename = 'driver_documents_export_' . date('Y-m-d_His') . '.csv';
-        
+        $filename = 'driver_documents_export_'.date('Y-m-d_His').'.csv';
+
         // Add UTF-8 BOM for Excel compatibility
         $content = "\xEF\xBB\xBF";
-        
+
         // Open output stream
         $output = fopen('php://temp', 'r+');
 
-        fputcsv($output, ['ID', 'Driver', 'Document Template', 'Status', 'Reviewer', 'Created At']);
+        fputcsv($output, ['ID', 'Driver', 'Riding Company', 'Status', 'Reviewer', 'Created At']);
 
         foreach ($driverDocuments as $doc) {
             fputcsv($output, [
                 $doc->id,
                 $doc->driver?->full_name ?? '',
-                $doc->documentTemplate?->name ?? '',
+                $doc->ridingCompany?->name ?? '',
                 $doc->status,
                 $doc->reviewer?->name ?? '',
                 $doc->created_at,
@@ -492,17 +818,16 @@ class DriverDocumentController extends Controller
             echo $content;
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
-        
+
         // Prevent Inertia from processing this response
         $response->headers->remove('X-Inertia');
         $response->headers->set('X-Inertia', 'false');
         $response->headers->set('Cache-Control', 'no-cache, must-revalidate');
         $response->headers->set('Pragma', 'no-cache');
         $response->headers->set('Expires', '0');
-        
+
         return $response;
     }
 }
-

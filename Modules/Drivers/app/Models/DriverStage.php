@@ -2,11 +2,10 @@
 
 namespace Modules\Drivers\app\Models;
 
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Modules\RidingCarCompanies\app\Models\RidingCompanyStageTemplate;
+use Modules\RidingCarCompanies\app\Models\RidingCompany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -16,7 +15,7 @@ class DriverStage extends Model
 
     protected $fillable = [
         'driver_id',
-        'stage_template_id',
+        'riding_company_id',
         'stage_order',
         'status',
         'completed_at',
@@ -50,9 +49,9 @@ class DriverStage extends Model
         return $this->belongsTo(Driver::class);
     }
 
-    public function stageTemplate(): BelongsTo
+    public function ridingCompany(): BelongsTo
     {
-        return $this->belongsTo(RidingCompanyStageTemplate::class, 'stage_template_id');
+        return $this->belongsTo(RidingCompany::class);
     }
 
     // Scopes
@@ -110,4 +109,3 @@ class DriverStage extends Model
         ]);
     }
 }
-

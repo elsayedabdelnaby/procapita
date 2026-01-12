@@ -2,6 +2,9 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { DataTable } from '@/components/core/data-table';
+import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
 
@@ -19,22 +22,59 @@ interface DocumentRequirement {
     required: boolean;
     instructions?: string;
     active: boolean;
+    default_status?: string;
+}
+
+interface Driver {
+    id: number;
+    full_name: string;
+    phone: string;
+    documents: {
+        [key: string]: {
+            status: string;
+            id: number | null;
+        };
+    };
+}
+
+interface AllDocumentRequirement {
+    id: number;
+    name: string;
+    type: string;
+    required: boolean;
+    active: boolean;
 }
 
 interface DocumentRequirementsEditProps {
     documentRequirement: DocumentRequirement;
+    drivers?: Driver[];
+    allDocumentRequirements?: AllDocumentRequirement[];
+    ridingCompanies?: RidingCompany[];
 }
 
-export default function DocumentRequirementsEdit({ documentRequirement }: DocumentRequirementsEditProps) {
+export default function DocumentRequirementsEdit({ 
+    documentRequirement, 
+    drivers = [], 
+    allDocumentRequirements = [],
+    ridingCompanies = []
+}: DocumentRequirementsEditProps) {
     const ridingCompany = documentRequirement.ridingCompany || { id: documentRequirement.riding_company_id, name: '' };
 
-    const { data, setData, put, processing, errors } = useForm({
+    const { data, setData, put, processing, errors, transform } = useForm({
         name: documentRequirement.name || '',
         type: documentRequirement.type || 'file',
         required: documentRequirement.required ?? false,
         instructions: documentRequirement.instructions || '',
         active: documentRequirement.active ?? true,
+        default_status: documentRequirement.default_status || 'pending',
+        riding_company_ids: documentRequirement.riding_company_id ? [documentRequirement.riding_company_id.toString()] : [],
     });
+
+    // Transform data before submitting - convert string IDs to integers
+    transform((data) => ({
+        ...data,
+        riding_company_ids: data.riding_company_ids.map((id: string | number) => parseInt(id.toString())),
+    }));
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -100,6 +140,31 @@ export default function DocumentRequirementsEdit({ documentRequirement }: Docume
                                 />
                             </div>
 
+                            {ridingCompanies.length > 0 && (
+                                <div className="md:col-span-2">
+                                    <Label htmlFor="riding_company_ids">
+                                        Riding Companies <span className="text-red-500">*</span>
+                                    </Label>
+                                    <MultiSelect
+                                        options={ridingCompanies.map((company) => ({
+                                            value: company.id.toString(),
+                                            label: company.name,
+                                        }))}
+                                        value={data.riding_company_ids}
+                                        onChange={(value) => setData('riding_company_ids', value)}
+                                        placeholder="Select riding companies..."
+                                        className="w-full"
+                                        searchable={true}
+                                    />
+                                    {errors.riding_company_ids && (
+                                        <p className="text-sm text-red-500 mt-1">{errors.riding_company_ids}</p>
+                                    )}
+                                    <p className="mt-1 text-xs text-neutral-500">
+                                        Select one or more riding companies for this requirement.
+                                    </p>
+                                </div>
+                            )}
+
                             <div>
                                 <Label htmlFor="type">
                                     Document Type <span className="text-red-500">*</span>
@@ -117,6 +182,30 @@ export default function DocumentRequirementsEdit({ documentRequirement }: Docume
                                     <option value="text">Text</option>
                                 </select>
                                 {errors.type && <p className="text-sm text-red-500">{errors.type}</p>}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="default_status">
+                                    Default Status <span className="text-red-500">*</span>
+                                </Label>
+                                <select
+                                    id="default_status"
+                                    name="default_status"
+                                    value={data.default_status}
+                                    onChange={(e) => setData('default_status', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    required
+                                >
+                                    <option value="pending">Pending</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                                {errors.default_status && (
+                                    <p className="text-sm text-red-500">{errors.default_status}</p>
+                                )}
+                                <p className="mt-1 text-xs text-neutral-500">
+                                    Default status for documents created from this requirement.
+                                </p>
                             </div>
 
                             <div className="md:col-span-2">
@@ -183,6 +272,50 @@ export default function DocumentRequirementsEdit({ documentRequirement }: Docume
                         </Button>
                     </div>
                 </form>
+
+                {/* Drivers Table with Document Requirements */}
+                {drivers.length > 0 && allDocumentRequirements.length > 0 && (
+                    <Card className="p-6 mt-6">
+                        <h2 className="mb-4 text-lg font-semibold">Drivers & Document Status</h2>
+                        <DataTable
+                            data={drivers}
+                            columns={[
+                                {
+                                    header: 'Driver Name',
+                                    accessor: (row) => row.full_name,
+                                },
+                                {
+                                    header: 'Phone',
+                                    accessor: (row) => row.phone,
+                                },
+                                ...allDocumentRequirements.map((req) => ({
+                                    header: req.name,
+                                    accessor: (row: Driver) => {
+                                        const doc = row.documents[req.name];
+                                        if (!doc || doc.status === 'not_required') {
+                                            return (
+                                                <span className="text-sm text-neutral-500 italic">
+                                                    Not Required
+                                                </span>
+                                            );
+                                        }
+                                        return (
+                                            <Badge 
+                                                variant={
+                                                    doc.status === 'approved' ? 'default' :
+                                                    doc.status === 'rejected' ? 'destructive' :
+                                                    'secondary'
+                                                }
+                                            >
+                                                {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
+                                            </Badge>
+                                        );
+                                    },
+                                })),
+                            ]}
+                        />
+                    </Card>
+                )}
             </div>
         </AppLayout>
     );

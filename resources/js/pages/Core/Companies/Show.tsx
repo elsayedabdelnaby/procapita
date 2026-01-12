@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Company, CoreUser, Role } from '@/types/core';
 import { Head, Link, router } from '@inertiajs/react';
@@ -55,6 +57,7 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
         open: false,
         user: null,
     });
+    const [reassignToUserId, setReassignToUserId] = useState<string>('');
     const [deleteRoleDialog, setDeleteRoleDialog] = useState<{ open: boolean; role: Role | null }>({
         open: false,
         role: null,
@@ -84,7 +87,28 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
 
     const confirmDeleteUser = () => {
         if (deleteUserDialog.user) {
-            router.delete(`/core/companies/${company.id}/users/${deleteUserDialog.user.id}`);
+            // Check if user has assigned drivers - if so, require reassignment
+            if (!reassignToUserId) {
+                // Try to delete without reassignment - backend will check and return error if needed
+                router.delete(`/core/companies/${company.id}/users/${deleteUserDialog.user.id}`, {
+                    onError: (errors) => {
+                        // Error will be shown by backend validation
+                    },
+                });
+                return;
+            }
+            
+            const url = `/core/companies/${company.id}/users/${deleteUserDialog.user.id}`;
+            router.delete(url, {
+                data: { reassign_to_user_id: reassignToUserId },
+                onSuccess: () => {
+                    setDeleteUserDialog({ open: false, user: null });
+                    setReassignToUserId('');
+                },
+                onError: () => {
+                    // Keep dialog open on error
+                },
+            });
         }
     };
 
@@ -674,13 +698,61 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
                             </div>
                         )}
 
-                        <DeleteDialog
-                            open={deleteUserDialog.open}
-                            onOpenChange={(open) => setDeleteUserDialog({ open, user: null })}
-                            onConfirm={confirmDeleteUser}
-                            title="Delete User"
-                            description={`Are you sure you want to delete "${deleteUserDialog.user?.name}"? This will revoke their access immediately.`}
-                        />
+                        <Dialog open={deleteUserDialog.open} onOpenChange={(open) => {
+                            setDeleteUserDialog({ open, user: null });
+                            setReassignToUserId('');
+                        }}>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Delete User</DialogTitle>
+                                    <DialogDescription>
+                                        Are you sure you want to delete "{deleteUserDialog.user?.name}"? This will revoke their access immediately.
+                                        {deleteUserDialog.user && (
+                                            <div className="mt-4">
+                                                <Label htmlFor="reassign_to_user" className="text-sm font-medium">
+                                                    Reassign Leads To <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Select
+                                                    value={reassignToUserId}
+                                                    onValueChange={setReassignToUserId}
+                                                    required
+                                                >
+                                                    <SelectTrigger className="mt-2">
+                                                        <SelectValue placeholder="Select user to reassign leads to..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {users
+                                                            .filter(u => u.id !== deleteUserDialog.user?.id)
+                                                            .map((user) => (
+                                                                <SelectItem key={user.id} value={String(user.id)}>
+                                                                    {user.name}
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <p className="text-xs text-neutral-500 mt-2">
+                                                    All drivers assigned to this user will be transferred to the selected user. The resigned user's name will be recorded in the "Resigned Leads" field of each transferred driver.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => {
+                                        setDeleteUserDialog({ open: false, user: null });
+                                        setReassignToUserId('');
+                                    }}>
+                                        Cancel
+                                    </Button>
+                                    <Button 
+                                        variant="destructive" 
+                                        onClick={confirmDeleteUser}
+                                    >
+                                        Delete User
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
                     </Card>
                 )}
 

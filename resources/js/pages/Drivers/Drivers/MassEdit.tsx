@@ -5,7 +5,6 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
 import axios from 'axios';
@@ -89,7 +88,6 @@ export default function DriversMassEdit({
         campaign_id: '',
         lead_source_id: '',
         assigned_to: '',
-        assigned_users: [] as number[],
         lead_status_id: '',
         lead_status_comment: '',
         next_follow_up: '',
@@ -102,11 +100,7 @@ export default function DriversMassEdit({
         const newClearFields = new Set(clearFields);
         if (checked) {
             newClearFields.add(fieldName);
-            if (fieldName === 'assigned_users') {
-                setData('assigned_users', []);
-            } else {
                 setData(fieldName as any, '');
-            }
         } else {
             newClearFields.delete(fieldName);
         }
@@ -540,7 +534,7 @@ export default function DriversMassEdit({
                                         onCheckedChange={(checked) => handleClearField('assigned_to', checked as boolean)}
                                     />
                                     <Label htmlFor="assigned_to" className="text-sm font-medium">
-                                        Assigned To (Single)
+                                        Assigned To
                                     </Label>
                                 </div>
                                 <select
@@ -559,37 +553,6 @@ export default function DriversMassEdit({
                                 </select>
                                 {errors.assigned_to && (
                                     <p className="text-sm text-red-500">{errors.assigned_to}</p>
-                                )}
-                            </div>
-
-                            <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <Checkbox
-                                        checked={clearFields.has('assigned_users')}
-                                        onCheckedChange={(checked) => handleClearField('assigned_users', checked as boolean)}
-                                    />
-                                    <Label htmlFor="assigned_users" className="text-sm font-medium">
-                                        Assigned Users (Multiple)
-                                    </Label>
-                                </div>
-                                <MultiSelect
-                                    options={users.map((user) => ({
-                                        value: user.id,
-                                        label: user.name,
-                                    }))}
-                                    value={data.assigned_users || []}
-                                    onChange={(value) => {
-                                        setData('assigned_users', value);
-                                        // Auto-set assigned_to to first user if not set
-                                        if (value && value.length > 0 && !data.assigned_to) {
-                                            setData('assigned_to', String(value[0]));
-                                        }
-                                    }}
-                                    placeholder="-- Keep existing --"
-                                    disabled={loadingUsers || clearFields.has('assigned_users')}
-                                />
-                                {errors.assigned_users && (
-                                    <p className="text-sm text-red-500">{errors.assigned_users}</p>
                                 )}
                             </div>
 

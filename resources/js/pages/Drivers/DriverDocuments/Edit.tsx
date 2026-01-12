@@ -2,49 +2,54 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
 
-interface Driver {
-    id: number;
-    full_name: string;
-}
-
-interface DocumentTemplate {
+interface RidingCompany {
     id: number;
     name: string;
-    type: string;
 }
 
-interface DriverDocument {
+interface DocumentName {
     id: number;
-    driver_id: number;
-    document_template_id: number;
-    status: string;
+    name: string;
+    riding_company_ids: number[];
+    type?: string;
+    required?: boolean;
     notes?: string;
+    status?: string;
+    active?: boolean;
 }
 
 interface DriverDocumentsEditProps {
-    driverDocument: DriverDocument;
-    drivers: Driver[];
-    documentTemplates: DocumentTemplate[];
+    documentName: DocumentName;
+    ridingCompanies: RidingCompany[];
 }
 
 export default function DriverDocumentsEdit({
-    driverDocument,
-    drivers,
-    documentTemplates,
+    documentName,
+    ridingCompanies,
 }: DriverDocumentsEditProps) {
-    const { data, setData, put, processing, errors } = useForm({
-        driver_id: driverDocument.driver_id.toString(),
-        document_template_id: driverDocument.document_template_id.toString(),
-        status: driverDocument.status || 'pending',
-        notes: driverDocument.notes || '',
+    const { data, setData, put, processing, errors, transform } = useForm({
+        name: documentName.name || '',
+        riding_company_ids: (documentName.riding_company_ids || []).map(id => id.toString()),
+        type: documentName.type || 'file',
+        required: documentName.required || false,
+        status: documentName.status || 'pending',
+        notes: documentName.notes || '',
+        active: documentName.active !== undefined ? documentName.active : true,
     });
+
+    // Transform data before submitting - convert string IDs to integers
+    transform((data) => ({
+        ...data,
+        riding_company_ids: data.riding_company_ids.map((id: string | number) => parseInt(id.toString())),
+    }));
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/drivers/driver-documents/${driverDocument.id}`);
+        put(`/drivers/driver-documents/${documentName.id}`);
     };
 
     return (
@@ -95,62 +100,81 @@ export default function DriverDocumentsEdit({
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Document Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <Label htmlFor="driver_id">
-                                    Driver <span className="text-red-500">*</span>
+                            <div className="md:col-span-2">
+                                <Label htmlFor="name">
+                                    Document Name <span className="text-red-500">*</span>
                                 </Label>
-                                <select
-                                    id="driver_id"
-                                    name="driver_id"
-                                    value={data.driver_id}
-                                    onChange={(e) => setData('driver_id', e.target.value)}
+                                <input
+                                    type="text"
+                                    id="name"
+                                    name="name"
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
                                     required
-                                >
-                                    <option value="">Select a driver</option>
-                                    {drivers.map((driver) => (
-                                        <option key={driver.id} value={driver.id}>
-                                            {driver.full_name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.driver_id && (
-                                    <p className="text-sm text-red-500">{errors.driver_id}</p>
+                                    placeholder="Enter document name"
+                                />
+                                {errors.name && (
+                                    <p className="text-sm text-red-500">{errors.name}</p>
                                 )}
+                                <p className="mt-1 text-xs text-neutral-500">
+                                    Document name must be unique across all documents.
+                                </p>
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <Label htmlFor="riding_company_ids">
+                                    Riding Companies <span className="text-red-500">*</span>
+                                </Label>
+                                <MultiSelect
+                                    options={ridingCompanies.map((company) => ({
+                                        value: company.id.toString(),
+                                        label: company.name,
+                                    }))}
+                                    value={data.riding_company_ids}
+                                    onChange={(value) => setData('riding_company_ids', value)}
+                                    placeholder="Select riding companies..."
+                                    className="w-full"
+                                    searchable={true}
+                                />
+                                {errors.riding_company_ids && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.riding_company_ids}</p>
+                                )}
+                                <p className="mt-1 text-xs text-neutral-500">
+                                    Select one or more riding companies. This document will be available for all drivers in the selected companies.
+                                </p>
                             </div>
 
                             <div>
-                                <Label htmlFor="document_template_id">
-                                    Document Template <span className="text-red-500">*</span>
+                                <Label htmlFor="type">
+                                    Document Type <span className="text-red-500">*</span>
                                 </Label>
                                 <select
-                                    id="document_template_id"
-                                    name="document_template_id"
-                                    value={data.document_template_id}
-                                    onChange={(e) => setData('document_template_id', e.target.value)}
+                                    id="type"
+                                    name="type"
+                                    value={data.type}
+                                    onChange={(e) => setData('type', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
                                     required
                                 >
-                                    <option value="">Select a document template</option>
-                                    {documentTemplates.map((template) => (
-                                        <option key={template.id} value={template.id}>
-                                            {template.name} ({template.type})
-                                        </option>
-                                    ))}
+                                    <option value="file">File (Image)</option>
+                                    <option value="pdf">PDF</option>
+                                    <option value="text">Text</option>
                                 </select>
-                                {errors.document_template_id && (
-                                    <p className="text-sm text-red-500">{errors.document_template_id}</p>
-                                )}
+                                {errors.type && <p className="text-sm text-red-500">{errors.type}</p>}
                             </div>
 
                             <div>
-                                <Label htmlFor="status">Status</Label>
+                                <Label htmlFor="status">
+                                    Default Status <span className="text-red-500">*</span>
+                                </Label>
                                 <select
                                     id="status"
                                     name="status"
                                     value={data.status}
                                     onChange={(e) => setData('status', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
+                                    required
                                 >
                                     <option value="pending">Pending</option>
                                     <option value="approved">Approved</option>
@@ -161,8 +185,42 @@ export default function DriverDocumentsEdit({
                                 )}
                             </div>
 
+                            <div>
+                                <Label htmlFor="required" className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="required"
+                                        name="required"
+                                        checked={data.required}
+                                        onChange={(e) => setData('required', e.target.checked)}
+                                        className="rounded border-gray-300"
+                                    />
+                                    <span>Required (Mandatory)</span>
+                                </Label>
+                                {errors.required && (
+                                    <p className="text-sm text-red-500">{errors.required}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="active" className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="active"
+                                        name="active"
+                                        checked={data.active}
+                                        onChange={(e) => setData('active', e.target.checked)}
+                                        className="rounded border-gray-300"
+                                    />
+                                    <span>Active</span>
+                                </Label>
+                                {errors.active && (
+                                    <p className="text-sm text-red-500">{errors.active}</p>
+                                )}
+                            </div>
+
                             <div className="md:col-span-2">
-                                <Label htmlFor="notes">Notes</Label>
+                                <Label htmlFor="notes">Notes / Instructions</Label>
                                 <textarea
                                     id="notes"
                                     name="notes"
@@ -170,6 +228,7 @@ export default function DriverDocumentsEdit({
                                     onChange={(e) => setData('notes', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
                                     rows={3}
+                                    placeholder="Additional notes or instructions about this document..."
                                 />
                                 {errors.notes && (
                                     <p className="text-sm text-red-500">{errors.notes}</p>
@@ -185,7 +244,7 @@ export default function DriverDocumentsEdit({
                             </Button>
                         </Link>
                         <Button type="submit" disabled={processing}>
-                            {processing ? 'Updating...' : 'Update Driver Document'}
+                            {processing ? 'Updating...' : 'Update Document'}
                         </Button>
                     </div>
                 </form>

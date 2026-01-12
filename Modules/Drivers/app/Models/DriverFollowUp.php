@@ -17,11 +17,15 @@ class DriverFollowUp extends Model
         'driver_id',
         'assigned_to',
         'user_name',
+        'sales_sign_2',
+        'team_leader',
+        'account_manager',
         'created_time',
         'riding_company',
         'lead_stage',
         'lead_status',
         'lead_status_comment',
+        'driver_stage',
         'notes',
         'driver_num',
     ];
@@ -41,7 +45,7 @@ class DriverFollowUp extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['assigned_to', 'user_name', 'riding_company', 'lead_stage', 'lead_status', 'lead_status_comment', 'notes'])
+            ->logOnly(['assigned_to', 'user_name', 'sales_sign_2', 'team_leader', 'account_manager', 'riding_company', 'lead_stage', 'lead_status', 'lead_status_comment', 'driver_stage', 'notes', 'driver_num'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -73,4 +77,3 @@ class DriverFollowUp extends Model
         return $query->orderBy('created_time', 'desc');
     }
 }
-

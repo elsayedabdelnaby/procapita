@@ -6,7 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Modules\Drivers\app\Models\Driver;
 use Modules\Drivers\app\Models\DriverDocument;
-use Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement;
+use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
 class DriverDocumentFactory extends Factory
 {
@@ -18,7 +18,7 @@ class DriverDocumentFactory extends Factory
 
         return [
             'driver_id' => Driver::factory(),
-            'document_template_id' => RidingCompanyDocumentRequirement::factory(),
+            'riding_company_id' => RidingCompany::factory(),
             'uploaded_path' => $this->faker->optional(0.7)->filePath(),
             'status' => $this->faker->randomElement($statuses),
             'reviewer_id' => $this->faker->optional(0.4)->randomElement([User::factory(), null]),
@@ -57,11 +57,10 @@ class DriverDocumentFactory extends Factory
         ]);
     }
 
-    public function forDocumentTemplate(int $documentTemplateId): static
+    public function forRidingCompany(int $ridingCompanyId): static
     {
         return $this->state(fn (array $attributes) => [
-            'document_template_id' => $documentTemplateId,
+            'riding_company_id' => $ridingCompanyId,
         ]);
     }
 }
-

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
-use Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement;
+use Modules\RidingCarCompanies\app\Models\RidingCompany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -18,8 +18,10 @@ class DriverDocument extends Model
     use HasFactory, LogsActivity;
 
     protected $fillable = [
+        'name',
+        'document_name_id',
         'driver_id',
-        'document_template_id',
+        'riding_company_id',
         'uploaded_path',
         'original_filename',
         'status',
@@ -41,14 +43,19 @@ class DriverDocument extends Model
     }
 
     // Relationships
+    public function documentName(): BelongsTo
+    {
+        return $this->belongsTo(DocumentName::class);
+    }
+
     public function driver(): BelongsTo
     {
         return $this->belongsTo(Driver::class);
     }
 
-    public function documentTemplate(): BelongsTo
+    public function ridingCompany(): BelongsTo
     {
-        return $this->belongsTo(RidingCompanyDocumentRequirement::class, 'document_template_id');
+        return $this->belongsTo(RidingCompany::class);
     }
 
     public function reviewer(): BelongsTo
@@ -114,15 +121,15 @@ class DriverDocument extends Model
             Storage::disk('public')->delete($this->uploaded_path);
         }
 
-        // Determine file type from document template
-        $documentType = $this->documentTemplate?->type ?? 'file';
+        // Determine file type - default to 'file' since we no longer have document template
+        $documentType = 'file';
         $extension = $file->getClientOriginalExtension();
         $originalFilename = $file->getClientOriginalName();
 
         // Store file with organized path: drivers/{company_id}/{driver_id}/{document_type}/{filename}
         $path = $file->storeAs(
             "drivers/{$companyId}/{$driverId}/{$documentType}",
-            $this->id . '_' . time() . '.' . $extension,
+            $this->id.'_'.time().'.'.$extension,
             'public'
         );
 
@@ -132,12 +139,12 @@ class DriverDocument extends Model
             'reviewer_id' => null,
             'notes' => null,
         ];
-        
+
         // Only include original_filename if column exists
         if (Schema::hasColumn('driver_documents', 'original_filename')) {
             $updateData['original_filename'] = $originalFilename;
         }
-        
+
         $this->update($updateData);
 
         return $path;
@@ -150,7 +157,7 @@ class DriverDocument extends Model
             if (Storage::disk('public')->exists($this->uploaded_path)) {
                 Storage::disk('public')->delete($this->uploaded_path);
             }
-            
+
             // Always update the database to clear the file reference
             $updateData = [
                 'uploaded_path' => null,
@@ -158,12 +165,12 @@ class DriverDocument extends Model
                 'reviewer_id' => null,
                 'notes' => null,
             ];
-            
+
             // Only include original_filename if column exists
             if (Schema::hasColumn('driver_documents', 'original_filename')) {
                 $updateData['original_filename'] = null;
             }
-            
+
             $this->update($updateData);
 
             return true;
@@ -198,4 +205,3 @@ class DriverDocument extends Model
         });
     }
 }
-

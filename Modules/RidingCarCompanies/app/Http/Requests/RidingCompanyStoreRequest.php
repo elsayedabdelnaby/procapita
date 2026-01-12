@@ -14,8 +14,28 @@ class RidingCompanyStoreRequest extends FormRequest
     public function rules(): array
     {
         $user = $this->user();
+        $companyId = $user->isSuperAdmin()
+            ? $this->input('company_id')
+            : $user->company_id;
+
         $rules = [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                function ($attribute, $value, $fail) use ($companyId) {
+                    if ($value && $companyId) {
+                        $existing = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('name', $value)
+                            ->where('company_id', $companyId)
+                            ->whereNull('deleted_at')
+                            ->exists();
+
+                        if ($existing) {
+                            $fail('A riding company with this name already exists for this main company.');
+                        }
+                    }
+                },
+            ],
             'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'country' => ['nullable', 'string', 'max:255'],
@@ -37,8 +57,8 @@ class RidingCompanyStoreRequest extends FormRequest
     {
         return [
             'name.required' => 'Company name is required.',
+            'name.max' => 'Company name must not exceed 255 characters.',
             'contact_email.email' => 'Please provide a valid email address.',
         ];
     }
 }
-

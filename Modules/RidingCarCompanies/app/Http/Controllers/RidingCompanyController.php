@@ -3,22 +3,22 @@
 namespace Modules\RidingCarCompanies\app\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Core\app\Models\Company;
+use Modules\Core\app\Models\Role;
+use Modules\Core\app\Services\RoleService;
+use Modules\Drivers\app\Models\LeadSource;
 use Modules\RidingCarCompanies\app\Http\Requests\RidingCompanyStoreRequest;
 use Modules\RidingCarCompanies\app\Http\Requests\RidingCompanyUpdateRequest;
 use Modules\RidingCarCompanies\app\Services\RidingCompanyService;
-use Modules\Core\app\Models\Role;
-use Modules\Core\app\Services\RoleService;
-use App\Models\User;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
-use Modules\Drivers\app\Models\LeadSource;
 
 class RidingCompanyController extends Controller
 {
@@ -33,7 +33,7 @@ class RidingCompanyController extends Controller
 
         // Filter riding companies based on user access
         if ($user->isSuperAdmin() || $user->is_company_admin) {
-        $ridingCompanies = $this->ridingCompanyService->getAllRidingCompanies($companyId);
+            $ridingCompanies = $this->ridingCompanyService->getAllRidingCompanies($companyId);
             $ridingCompanies->load('company');
         } elseif ($user->riding_company_id) {
             // Regular user sees only their riding company
@@ -49,7 +49,7 @@ class RidingCompanyController extends Controller
         }
 
         return Inertia::render('RidingCarCompanies/RidingCompanies/Index', [
-            'ridingCompanies' => $ridingCompanies->map(fn($company) => [
+            'ridingCompanies' => $ridingCompanies->map(fn ($company) => [
                 'id' => $company->id,
                 'uuid' => $company->uuid,
                 'company_id' => $company->company_id,
@@ -98,7 +98,7 @@ class RidingCompanyController extends Controller
             }
 
             $data['created_by'] = $currentUser->id;
-            
+
             // Only set active if it's explicitly true, otherwise let Model boot method set it to true by default
             if (isset($data['active']) && $data['active'] === true) {
                 // Keep it as true
@@ -129,10 +129,10 @@ class RidingCompanyController extends Controller
     protected function createRoleAndUserForRidingCompany($ridingCompany, $companyId): void
     {
         $roleService = app(RoleService::class);
-        
+
         // Find CEO role to use as parent
         $ceoRole = Role::where('name', 'CEO')->where('team_id', $companyId)->first();
-        
+
         // Create role with riding company name using RoleService
         $roleName = $ridingCompany->name;
         $role = $roleService->createRole([
@@ -150,7 +150,7 @@ class RidingCompanyController extends Controller
 
         $newUser = User::create([
             'name' => $userName,
-            'email' => Str::slug($userName) . '@' . Str::slug($ridingCompany->name) . '.local',
+            'email' => Str::slug($userName).'@'.Str::slug($ridingCompany->name).'.local',
             'mobile1' => $mobile1,
             'password' => Hash::make($password),
             'company_id' => $companyId,
@@ -180,13 +180,16 @@ class RidingCompanyController extends Controller
             abort(404, 'Riding company not found.');
         }
 
+        // Refresh to ensure we have the latest data, especially distribution_scenarios
+        $ridingCompany->refresh();
+
         $ridingCompany->load(['company', 'creator', 'defaultDriverUser', 'stageTemplates', 'documentRequirements', 'integrations', 'integrationSettings']);
 
         // Load users for this riding company (for Users tab)
         // Show only users that belong to this specific riding company
         $users = \App\Models\User::query()
             ->where('riding_company_id', $ridingCompany->id);
-        
+
         $users = $users
             ->with('roles', 'company', 'ridingCompany')
             ->get()
@@ -210,10 +213,33 @@ class RidingCompanyController extends Controller
                         'id' => $user->ridingCompany->id,
                         'name' => $user->ridingCompany->name,
                     ] : null,
-                    'roles' => $user->roles->map(fn($role) => [
+                    'roles' => $user->roles->map(fn ($role) => [
                         'id' => $role->id,
                         'name' => $role->name,
                     ])->toArray(),
+                ];
+            });
+
+        // Load users from the same company for availableUsers (for distribution scenarios)
+        // Show all users in the same company, but exclude users from other riding companies
+        // Include: users with no riding_company_id (company-level users), users from this riding company, and fresh-Leads for this riding company
+        $availableUsers = \App\Models\User::query()
+            ->where('company_id', $ridingCompany->company_id)
+            ->where('is_active', true)
+            ->where(function ($query) use ($ridingCompany) {
+                // Include users with no riding_company_id (company-level users)
+                $query->whereNull('riding_company_id')
+                    // Include users from this specific riding company
+                    ->orWhere('riding_company_id', $ridingCompany->id);
+            })
+            ->with('roles', 'company', 'ridingCompany')
+            ->orderBy('name')
+            ->get()
+            ->map(function ($user) {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
                 ];
             });
 
@@ -259,7 +285,7 @@ class RidingCompanyController extends Controller
                 'distribution_type' => $ridingCompany->distribution_type,
                 'max_drivers_per_day' => $ridingCompany->max_drivers_per_day ?? 50,
                 'distribution_users' => $this->extractUserIdsFromDistributionUsers($ridingCompany->distribution_users ?? []),
-                'distribution_scenarios' => $ridingCompany->distribution_scenarios ?? [],
+                'distribution_scenarios' => $ridingCompany->distribution_scenarios ? (is_array($ridingCompany->distribution_scenarios) ? $ridingCompany->distribution_scenarios : json_decode($ridingCompany->distribution_scenarios, true) ?? []) : [],
                 'last_distribution_date' => $ridingCompany->last_distribution_date,
                 'created_at' => $ridingCompany->created_at,
                 'updated_at' => $ridingCompany->updated_at,
@@ -272,7 +298,7 @@ class RidingCompanyController extends Controller
                     'name' => $ridingCompany->creator->name,
                     'email' => $ridingCompany->creator->email,
                 ] : null,
-                'stage_templates' => $ridingCompany->stageTemplates->map(fn($template) => [
+                'stage_templates' => $ridingCompany->stageTemplates->map(fn ($template) => [
                     'id' => $template->id,
                     'name' => $template->name,
                     'order' => $template->order,
@@ -283,42 +309,38 @@ class RidingCompanyController extends Controller
                     'allow_cumulative' => $template->allow_cumulative,
                     'active' => $template->active,
                 ])->toArray(),
-                'document_requirements' => $ridingCompany->documentRequirements->map(fn($req) => [
+                'document_requirements' => $ridingCompany->documentRequirements->map(fn ($req) => [
                     'id' => $req->id,
                     'name' => $req->name,
                     'type' => $req->type,
                     'required' => $req->required,
                     'active' => $req->active,
                 ])->toArray(),
-                'integrations' => $ridingCompany->integrations->map(fn($integration) => [
+                'integrations' => $ridingCompany->integrations->map(fn ($integration) => [
                     'id' => $integration->id,
                     'type' => $integration->type,
                     'active' => $integration->active,
                 ])->toArray(),
-                'integration_settings' => $ridingCompany->integrationSettings->map(fn($setting) => [
+                'integration_settings' => $ridingCompany->integrationSettings->map(fn ($setting) => [
                     'id' => $setting->id,
                     'type' => $setting->type,
                     'active' => $setting->active,
                 ])->toArray(),
             ],
             'users' => $users,
-            'availableUsers' => $users->map(fn($user) => [
-                'id' => $user['id'],
-                'name' => $user['name'],
-                'email' => $user['email'],
-            ])->toArray(),
+            'availableUsers' => $availableUsers->toArray(),
             'leadSources' => LeadSource::where('company_id', $ridingCompany->company_id)
                 ->active()
                 ->orderBy('name')
                 ->get(['id', 'name'])
-                ->map(fn($source) => [
+                ->map(fn ($source) => [
                     'id' => $source->id,
                     'name' => $source->name,
                 ])->toArray(),
             'roles' => Role::where('team_id', $ridingCompany->company_id)
                 ->orderBy('name')
                 ->get(['id', 'name'])
-                ->map(fn($role) => [
+                ->map(fn ($role) => [
                     'id' => $role->id,
                     'name' => $role->name,
                 ])->toArray(),
@@ -343,7 +365,7 @@ class RidingCompanyController extends Controller
 
         // Refresh to ensure we have the latest data
         $ridingCompany->refresh();
-        
+
         $ridingCompanyData = $ridingCompany->load('company')->toArray();
         // Ensure logo_url is included (accessor may not be in toArray())
         $ridingCompanyData['logo_url'] = $ridingCompany->logo_url;
@@ -354,7 +376,7 @@ class RidingCompanyController extends Controller
         ]);
     }
 
-    public function update(RidingCompanyUpdateRequest $request, int $id): RedirectResponse
+    public function update(RidingCompanyUpdateRequest $request, int $id): RedirectResponse|Response
     {
         try {
             $this->ridingCompanyService->updateRidingCompany($id, $request->validated());
@@ -369,11 +391,18 @@ class RidingCompanyController extends Controller
                         $successMessage = "User has been changed to {$user->name}";
                     }
                 } else {
-                    $successMessage = "Default user has been removed";
+                    $successMessage = 'Default user has been removed';
                 }
             }
 
-            // Redirect back to edit page with success message
+            // If this is an Inertia request (from show page), redirect back to show page
+            if ($request->header('X-Inertia')) {
+                return redirect()
+                    ->route('ridingcarcompanies.ridingcompanies.show', $id)
+                    ->with('success', $successMessage);
+            }
+
+            // Otherwise redirect to edit page (for traditional form submissions)
             return redirect()
                 ->route('ridingcarcompanies.ridingcompanies.edit', $id)
                 ->with('success', $successMessage);
@@ -403,7 +432,7 @@ class RidingCompanyController extends Controller
 
         return response()->file($filePath, [
             'Content-Type' => $mimeType,
-            'Content-Disposition' => 'inline; filename="' . basename($ridingCompany->logo_path) . '"',
+            'Content-Disposition' => 'inline; filename="'.basename($ridingCompany->logo_path).'"',
         ]);
     }
 
@@ -466,7 +495,7 @@ class RidingCompanyController extends Controller
         ]);
 
         $ridingCompanyId = $request->input('riding_company_id');
-        
+
         // Store in session (0 means "All Riding Companies")
         if ($ridingCompanyId == 0) {
             $request->session()->forget('selected_riding_company_id');
@@ -483,6 +512,7 @@ class RidingCompanyController extends Controller
     public function clearSelection(Request $request): RedirectResponse
     {
         $request->session()->forget('selected_riding_company_id');
+
         return redirect()->back();
     }
 
@@ -512,7 +542,7 @@ class RidingCompanyController extends Controller
     {
         try {
             $result = $this->ridingCompanyService->distributeDrivers($id);
-            
+
             if ($result['success']) {
                 return response()->json([
                     'success' => true,
@@ -532,12 +562,11 @@ class RidingCompanyController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to distribute drivers: ' . $e->getMessage(),
+                'message' => 'Failed to distribute drivers: '.$e->getMessage(),
             ], 500);
         }
     }
 }
-

@@ -15,12 +15,22 @@ interface RidingCompany {
 interface DocumentRequirement {
     id: number;
     riding_company_id: number;
+    riding_company?: {
+        id: number;
+        name: string;
+    };
+    riding_companies?: Array<{
+        id: number;
+        name: string;
+    }>;
     name: string;
     type: string;
     required: boolean;
     instructions?: string;
     active: boolean;
+    default_status?: string;
     created_at: string;
+    driver_count?: number;
 }
 
 interface DocumentRequirementsIndexProps {
@@ -60,7 +70,7 @@ export default function DocumentRequirementsIndex({
                     <div>
                         <h1 className="text-2xl font-bold">Document Requirements</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Manage document requirements for <strong>{ridingCompany.name}</strong>
+                            Manage document requirements for riding companies
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -83,13 +93,37 @@ export default function DocumentRequirementsIndex({
                                 {
                                     header: 'Name',
                                     accessor: (row) => (
-                                        <Link
-                                            href={`/ridingcarcompanies/document-requirements/${row.id}/edit`}
-                                            className="font-medium hover:underline"
-                                        >
-                                            {row.name}
-                                        </Link>
+                                        <div>
+                                            <Link
+                                                href={`/ridingcarcompanies/document-requirements/${row.id}/edit`}
+                                                className="font-medium hover:underline"
+                                            >
+                                                {row.name}
+                                            </Link>
+                                            {row.driver_count !== undefined && row.driver_count > 0 && (
+                                                <p className="text-xs text-neutral-500 mt-1">
+                                                    Used by {row.driver_count} driver(s)
+                                                </p>
+                                            )}
+                                        </div>
                                     ),
+                                },
+                                {
+                                    header: 'Riding Companies',
+                                    accessor: (row) => {
+                                        if (row.riding_companies && row.riding_companies.length > 0) {
+                                            return (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {row.riding_companies.map((company, index) => (
+                                                        <Badge key={company.id} variant="outline" className="text-xs">
+                                                            {company.name}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            );
+                                        }
+                                        return row.riding_company?.name || '-';
+                                    },
                                 },
                                 {
                                     header: 'Type',

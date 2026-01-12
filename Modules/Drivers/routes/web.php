@@ -4,10 +4,11 @@ use Illuminate\Support\Facades\Route;
 use Modules\Drivers\app\Http\Controllers\DriverController;
 use Modules\Drivers\app\Http\Controllers\DriverDocumentController;
 use Modules\Drivers\app\Http\Controllers\DriverFollowUpController;
+use Modules\Drivers\app\Http\Controllers\DriverListController;
 use Modules\Drivers\app\Http\Controllers\DriverStageController;
 use Modules\Drivers\app\Http\Controllers\LeadSourceController;
-use Modules\Drivers\app\Http\Controllers\LeadStatusController;
 use Modules\Drivers\app\Http\Controllers\LeadStageController;
+use Modules\Drivers\app\Http\Controllers\LeadStatusController;
 
 Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->group(function () {
     // Drivers Management
@@ -65,6 +66,16 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.drivers.assign'])->group(function () {
         Route::post('drivers/{driver}/assign', [DriverController::class, 'assign'])->name('drivers.assign');
+    });
+
+    // Driver Lists Management
+    Route::middleware(['permission:drivers.drivers.read'])->group(function () {
+        Route::get('drivers/lists', [DriverListController::class, 'index'])->name('drivers.lists.index');
+        Route::get('drivers/lists/create', [DriverListController::class, 'create'])->name('drivers.lists.create');
+        Route::post('drivers/lists', [DriverListController::class, 'store'])->name('drivers.lists.store');
+        Route::get('drivers/lists/{list}/edit', [DriverListController::class, 'edit'])->name('drivers.lists.edit');
+        Route::put('drivers/lists/{list}', [DriverListController::class, 'update'])->name('drivers.lists.update');
+        Route::delete('drivers/lists/{list}', [DriverListController::class, 'destroy'])->name('drivers.lists.destroy');
     });
 
     // Lead Sources Management
@@ -250,6 +261,7 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
     Route::middleware(['permission:drivers.driverdocuments.delete'])->group(function () {
         Route::delete('driver-documents/{driverDocument}', [DriverDocumentController::class, 'destroy'])->name('driverdocuments.destroy');
         Route::delete('driver-documents', [DriverDocumentController::class, 'destroyAll'])->name('driverdocuments.destroy-all');
+        Route::post('driver-documents/delete-by-name-and-company', [DriverDocumentController::class, 'deleteByNameAndCompany'])->name('driverdocuments.delete-by-name-and-company');
     });
 
     Route::middleware(['permission:drivers.driverdocuments.replace'])->group(function () {

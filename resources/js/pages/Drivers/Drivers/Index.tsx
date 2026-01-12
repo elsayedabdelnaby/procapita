@@ -11,15 +11,16 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router, usePage, useForm } from '@inertiajs/react';
-import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown, User, Mail, CheckCircle2, FileText, Activity, Settings2, GripVertical, ChevronLeft, ChevronRight, Upload, Edit, Users, UserPlus, Calendar, AlertCircle } from 'lucide-react';
+import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown, User, Mail, CheckCircle2, FileText, Activity, Settings2, GripVertical, ChevronLeft, ChevronRight, Upload, Edit, Users, UserPlus, Calendar, AlertCircle, Plus } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { type SharedData } from '@/types';
 import axios from 'axios';
 import { formatDate } from '@/utils/date-format';
+import { EGYPT_GOVERNORATES } from '@/constants/egypt-governorates';
 import { WhatsAppWindow } from '@/components/whatsapp/whatsapp-window';
 
 interface Company {
@@ -72,17 +73,26 @@ interface Driver {
     campaign?: Campaign;
     lead_source?: LeadSource;
     assigned_to?: User;
+    team_leader?: User;
+    account_manager?: User;
     assigned_users?: User[];
+    resigned_leads?: string;
     lead_status?: LeadStatus;
     lead_status_comment?: string;
     cancel_reason?: string;
     next_follow_up?: string;
     last_follow_up?: string;
-    assigned_time?: string;
     lead_stage?: LeadStage;
     created_at: string;
     updated_at: string;
     duplicate?: number;
+    documents?: Record<string, {
+        id: number;
+        name: string;
+        status: string;
+        uploaded_path?: string;
+        original_filename?: string;
+    }>;
 }
 
 interface FilterOption {
@@ -90,8 +100,28 @@ interface FilterOption {
     name: string;
 }
 
+interface DriverList {
+    id: number;
+    name: string;
+    is_default?: boolean;
+    is_shared?: boolean;
+    created_by?: number;
+    creator_name?: string;
+    all_conditions?: Array<{
+        field: string;
+        operator: string;
+        value: any;
+    }>;
+    any_conditions?: Array<{
+        field: string;
+        operator: string;
+        value: any;
+    }>;
+}
+
 interface DriversIndexProps {
     drivers: Driver[];
+    lists?: DriverList[];
     importAvailableFields?: Array<{ 
         value: string; 
         label: string; 
@@ -106,13 +136,21 @@ interface DriversIndexProps {
         leadStatuses: FilterOption[];
         users: FilterOption[];
     };
+    allDocumentNames?: string[];
+    documentsByRidingCompany?: Record<number, string[]>;
+    allDocumentRequirements?: Array<{
+        id: number;
+        name: string;
+        riding_company_id: number;
+        active: boolean;
+    }>;
 }
 
 // Define all available columns outside component to avoid hoisting issues
 const ALL_DRIVER_COLUMNS = [
     { id: 'actions', label: 'Actions', defaultVisible: true, defaultOrder: 0 },
     { id: 'driver_num', label: 'Driver Num', defaultVisible: false, defaultOrder: 0.5 },
-    { id: 'duplicate', label: 'Duplicate', defaultVisible: false, defaultOrder: 0.6 },
+    { id: 'duplicate', label: 'Duplicate Count', defaultVisible: false, defaultOrder: 0.6 },
     { id: 'name', label: 'Name', defaultVisible: true, defaultOrder: 1 },
     { id: 'phone', label: 'Phone', defaultVisible: true, defaultOrder: 2 },
     { id: 'whatsapp', label: 'WhatsApp', defaultVisible: true, defaultOrder: 3 },
@@ -123,18 +161,30 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 8 },
     { id: 'lead_status_comment', label: 'Feedback Comment', defaultVisible: false, defaultOrder: 8.5 },
     { id: 'next_follow_up', label: 'Next Follow-up', defaultVisible: false, defaultOrder: 8.6 },
+    { id: 'next_time', label: 'Next Time', defaultVisible: false, defaultOrder: 8.65 },
     { id: 'last_follow_up', label: 'Last Follow-up', defaultVisible: false, defaultOrder: 8.7 },
-    { id: 'assigned_time', label: 'Assigned Time', defaultVisible: false, defaultOrder: 8.8 },
+    { id: 'assigned_to', label: 'Assigned To', defaultVisible: true, defaultOrder: 8.75 },
+    { id: 'assigned_time', label: 'Assigned Time', defaultVisible: false, defaultOrder: 8.76 },
+    { id: 'team_leader', label: 'Team Leader', defaultVisible: true, defaultOrder: 8.8 },
+    { id: 'account_manager', label: 'Account Manager', defaultVisible: true, defaultOrder: 8.85 },
+    { id: 'resigned_leads', label: 'Resigned Leads', defaultVisible: true, defaultOrder: 8.9 },
     { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 9 },
     { id: 'current_stage', label: 'Current Stage', defaultVisible: false, defaultOrder: 9.5 },
-    { id: 'assigned_users', label: 'Assigned Users', defaultVisible: true, defaultOrder: 10 },
     { id: 'last_assigned_time', label: 'Last Assigned Time', defaultVisible: false, defaultOrder: 10.5 },
+    { id: 'last_assigned_date', label: 'Last Assigned Date', defaultVisible: false, defaultOrder: 10.55 },
     { id: 'last_assigned_by', label: 'Last Assigned By', defaultVisible: false, defaultOrder: 10.6 },
     { id: 'notes', label: 'Notes', defaultVisible: false, defaultOrder: 10.7 },
     { id: 'cancel_reason', label: 'Cancel Reasons', defaultVisible: false, defaultOrder: 10.8 },
-    { id: 'uuid', label: 'UUID', defaultVisible: false, defaultOrder: 11 },
-    { id: 'created_at', label: 'Created At', defaultVisible: true, defaultOrder: 12 },
-    { id: 'updated_at', label: 'Updated At', defaultVisible: true, defaultOrder: 13 },
+    { id: 'vehicle_type', label: 'Vehicle Type', defaultVisible: false, defaultOrder: 10.9 },
+    { id: 'vehicle_type_and_year', label: 'Vehicle Type and Year', defaultVisible: false, defaultOrder: 10.91 },
+    { id: 'has_worked_before', label: 'Has the driver worked before?', defaultVisible: false, defaultOrder: 11.0 },
+    { id: 'worked_with_us_before', label: 'Worked With Us Before', defaultVisible: false, defaultOrder: 11.01 },
+    { id: 'city', label: 'City', defaultVisible: false, defaultOrder: 11.1 },
+    { id: 'governorate', label: 'Governorate', defaultVisible: false, defaultOrder: 11.2 },
+    { id: 'feedback_count', label: 'Feedback Count', defaultVisible: false, defaultOrder: 11.3 },
+    { id: 'uuid', label: 'UUID', defaultVisible: false, defaultOrder: 12 },
+    { id: 'created_at', label: 'Created At', defaultVisible: true, defaultOrder: 13 },
+    { id: 'updated_at', label: 'Updated At', defaultVisible: true, defaultOrder: 14 },
 ];
 
 // Generate time options from 08:00 AM to 11:30 PM in 30-minute intervals
@@ -154,16 +204,58 @@ const generateTimeOptions = (): string[] => {
 
 const TIME_OPTIONS = generateTimeOptions();
 
-export default function DriversIndex({ drivers = [], importAvailableFields, filterOptions = {} }: DriversIndexProps) {
+export default function DriversIndex({ drivers = [], lists = [], importAvailableFields, filterOptions = {}, allDocumentNames = [], documentsByRidingCompany = {}, allDocumentRequirements = [] }: DriversIndexProps) {
     const page = usePage<SharedData>();
+    
+    // Removed debug logs to prevent console spam
     
     // Local state for optimistic updates
     const [localDrivers, setLocalDrivers] = useState<Driver[]>(drivers);
+    const [selectedListId, setSelectedListId] = useState<number | null>(null);
+    const [showMoreLists, setShowMoreLists] = useState<boolean>(false);
+    const moreListsRef = useRef<HTMLDivElement>(null);
     
     // Sync local drivers with props when they change
     useEffect(() => {
         setLocalDrivers(drivers);
     }, [drivers]);
+    
+    // Reload page when window gains focus to check for new/deleted document names
+    useEffect(() => {
+        const handleFocus = () => {
+            // Reload only document-related data to check for new/deleted document names
+            router.reload({ 
+                only: ['allDocumentNames', 'documentsByRidingCompany', 'allDocumentRequirements'], 
+                preserveState: true, 
+                preserveScroll: true 
+            });
+        };
+
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
+    }, []);
+    
+    // Close more lists when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (moreListsRef.current && !moreListsRef.current.contains(event.target as Node)) {
+                setShowMoreLists(false);
+            }
+        };
+        
+        if (showMoreLists) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showMoreLists]);
+    
+    // Clear selected drivers when list changes
+    useEffect(() => {
+        setSelectedDrivers(new Set());
+    }, [selectedListId]);
     
     // Ensure drivers is always an array
     const safeDrivers = Array.isArray(localDrivers) ? localDrivers : [];
@@ -181,6 +273,39 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     // Get selected riding company from sidebar (for admins)
     const sidebarSelectedRidingCompany = (page.props as any).selectedRidingCompany;
     const sidebarSelectedRidingCompanyId = sidebarSelectedRidingCompany?.id || null;
+    
+    // Get document columns to display based on selected riding company
+    // IMPORTANT: Only show columns for Driver Documents that exist in document_names table
+    // Do NOT include document requirements - only actual Driver Documents
+    const documentColumnsToShow = useMemo(() => {
+        // Use ONLY document names from document_names table (allDocumentNames)
+        // Do NOT merge with requirements - columns should only show actual Driver Documents
+        const allNames = [...(allDocumentNames || [])].sort();
+        
+        if (sidebarSelectedRidingCompanyId && documentsByRidingCompany[sidebarSelectedRidingCompanyId]) {
+            // Show only documents for selected riding company
+            const selectedCompanyDocs = documentsByRidingCompany[sidebarSelectedRidingCompanyId];
+            return [...new Set(selectedCompanyDocs)].sort();
+        }
+        // Show all documents if no riding company is selected
+        return allNames;
+    }, [sidebarSelectedRidingCompanyId, documentsByRidingCompany, allDocumentNames]);
+    
+    // Create dynamic document columns
+    const dynamicDocumentColumns = useMemo(() => {
+        return documentColumnsToShow.map((docName, index) => ({
+            id: `document_${docName.replace(/[^a-zA-Z0-9]/g, '_')}`,
+            label: docName,
+            defaultVisible: true,
+            defaultOrder: 15 + index * 0.1, // After updated_at
+            documentName: docName,
+        }));
+    }, [documentColumnsToShow]);
+    
+    // Merge static and dynamic columns
+    const allColumnsWithDocuments = useMemo(() => {
+        return [...ALL_DRIVER_COLUMNS, ...dynamicDocumentColumns];
+    }, [dynamicDocumentColumns]);
     
     // Get available riding companies for WhatsApp selector (for admins)
     const availableRidingCompanies = useMemo(() => {
@@ -219,10 +344,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     // Show only when user has a specific riding company OR admin selected a specific riding company from sidebar
     const showWhatsAppButton = !!userRidingCompanyId || !!sidebarSelectedRidingCompanyId;
     
-    // Debug: Log to help troubleshoot
-    if (!companyId) {
-        console.log('No company selected. Selected company:', selectedCompany);
-    }
+    // Removed debug log
     
     // Get driver phone numbers assigned to current user (both phone and whatsapp_phone)
     // Filter by selected riding company for WhatsApp
@@ -355,29 +477,30 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         return null;
     };
 
-    const savedColumns = loadColumnPreferences();
+    // Memoize savedColumns to prevent infinite loops
+    const savedColumns = useMemo(() => loadColumnPreferences(), []);
     
     // Merge saved columns with new columns to ensure all columns are present
-    const mergeColumns = (saved: Array<{ id: string; visible: boolean; order: number }> | null) => {
-        // Always start with ALL_DRIVER_COLUMNS to ensure all columns are present
-        const allColumns = ALL_DRIVER_COLUMNS.map(col => ({
+    const mergeColumns = useCallback((saved: Array<{ id: string; visible: boolean; order: number }> | null, allColumns: typeof allColumnsWithDocuments) => {
+        // Always start with all columns to ensure all columns are present
+        const defaultColumns = allColumns.map(col => ({
             id: col.id,
             visible: col.defaultVisible,
             order: col.defaultOrder,
         }));
         
         if (!saved || !Array.isArray(saved)) {
-            return allColumns;
+            return defaultColumns;
         }
         
         // Check if saved columns contain all required columns
         const savedColumnIds = new Set(saved.map(col => col.id));
-        const allColumnIds = new Set(ALL_DRIVER_COLUMNS.map(col => col.id));
+        const allColumnIds = new Set(allColumns.map(col => col.id));
         const hasAllColumns = Array.from(allColumnIds).every(id => savedColumnIds.has(id));
         
         // Merge saved settings with defaults
         const savedMap = new Map(saved.map(col => [col.id, col]));
-        return ALL_DRIVER_COLUMNS.map(colDef => {
+        return allColumns.map(colDef => {
             const savedCol = savedMap.get(colDef.id);
             if (savedCol) {
                 return {
@@ -392,13 +515,45 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                 order: colDef.defaultOrder,
             };
         });
-    };
+    }, []);
     
-    const initialColumns = mergeColumns(savedColumns);
-
+    const initialColumns = useMemo(() => {
+        return mergeColumns(savedColumns, allColumnsWithDocuments);
+    }, [savedColumns, allColumnsWithDocuments, mergeColumns]);
+    
     const [columns, setColumns] = useState<Array<{ id: string; visible: boolean; order: number }>>(
         initialColumns
     );
+    
+    // Track column IDs to detect changes
+    const allColumnIds = useMemo(() => {
+        return allColumnsWithDocuments.map(col => col.id).sort().join(',');
+    }, [allColumnsWithDocuments]);
+    
+    // Track document names to detect changes
+    const documentNamesKey = useMemo(() => {
+        return allDocumentNames.sort().join(',');
+    }, [allDocumentNames]);
+    
+    // Update columns when allColumnsWithDocuments changes
+    useEffect(() => {
+        if (allColumnsWithDocuments.length > 0) {
+            const updatedColumns = mergeColumns(savedColumns, allColumnsWithDocuments);
+            setColumns(prevColumns => {
+                // Only update if the column structure actually changed
+                const prevIds = new Set(prevColumns.map(c => c.id));
+                const newIds = new Set(updatedColumns.map(c => c.id));
+                const idsChanged = prevIds.size !== newIds.size || 
+                    Array.from(prevIds).some(id => !newIds.has(id)) ||
+                    Array.from(newIds).some(id => !prevIds.has(id));
+                
+                if (idsChanged) {
+                    return updatedColumns;
+                }
+                return prevColumns;
+            });
+        }
+    }, [allColumnIds, documentNamesKey, mergeColumns, savedColumns]);
     const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
 
     // Pagination states
@@ -446,10 +601,6 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         last_follow_up_to: '',
         last_follow_up_from_time: '',
         last_follow_up_to_time: '',
-        assigned_time_from: '',
-        assigned_time_to: '',
-        assigned_time_from_time: '',
-        assigned_time_to_time: '',
         created_at_from: '',
         created_at_to: '',
         created_at_from_time: '',
@@ -540,13 +691,524 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         };
     }, [safeDrivers]);
 
+    // Helper function to check if a condition is met
+    const checkCondition = useCallback((driver: Driver, condition: { field: string; operator: string; value: any }): boolean => {
+        const { field, operator, value } = condition;
+        if (!field || !operator) return true;
+        
+        let driverValue: any;
+        
+        // Get driver value based on field
+        switch (field) {
+            case 'full_name':
+                driverValue = driver.full_name;
+                break;
+            case 'phone':
+                driverValue = driver.phone;
+                break;
+            case 'email':
+                driverValue = driver.email;
+                break;
+            case 'company_id':
+                driverValue = driver.company_id;
+                break;
+            case 'riding_company_id':
+                driverValue = driver.riding_company?.id;
+                break;
+            case 'campaign_id':
+                driverValue = driver.campaign?.id;
+                break;
+            case 'lead_source_id':
+                driverValue = driver.lead_source?.id;
+                break;
+            case 'lead_status_id':
+                driverValue = driver.lead_status?.id;
+                break;
+            case 'lead_stage_id':
+                driverValue = driver.lead_stage?.id;
+                break;
+            case 'assigned_to':
+                driverValue = driver.assigned_to?.id;
+                break;
+            case 'next_follow_up':
+                driverValue = driver.next_follow_up;
+                break;
+            case 'last_follow_up':
+                driverValue = driver.last_follow_up;
+                break;
+            case 'created_at':
+                driverValue = driver.created_at;
+                break;
+            case 'updated_at':
+                driverValue = driver.updated_at;
+                break;
+            case 'city':
+                driverValue = (driver as any).city || (driver as any).governorate;
+                break;
+            case 'last_assigned_date':
+                driverValue = (driver as any).last_assigned_time;
+                break;
+            case 'vehicle_type':
+                driverValue = (driver as any).vehicle_type;
+                break;
+            case 'has_worked_before':
+                driverValue = (driver as any).has_worked_before;
+                break;
+            case 'feedback_count':
+                driverValue = (driver as any).feedback_count ?? 0;
+                break;
+            case 'next_time':
+                driverValue = (driver as any).next_time;
+                break;
+            case 'last_assigned_time':
+                driverValue = (driver as any).last_assigned_time;
+                break;
+            case 'last_assigned_by':
+                driverValue = (driver as any).last_assigned_by?.id;
+                break;
+            case 'lead_status_comment':
+                driverValue = (driver as any).lead_status_comment;
+                break;
+            case 'notes':
+                driverValue = (driver as any).notes;
+                break;
+            case 'cancel_reason':
+                driverValue = (driver as any).cancel_reason;
+                break;
+            case 'driver_num':
+                driverValue = driver.driver_num || driver.id;
+                break;
+            case 'duplicate':
+                driverValue = (driver as any).duplicate ?? 0;
+                break;
+            case 'uuid':
+                driverValue = driver.uuid;
+                break;
+            case 'current_stage_id':
+                driverValue = (driver as any).current_stage_id;
+                break;
+            default:
+                driverValue = (driver as any)[field];
+        }
+        
+        // Apply operator
+        switch (operator) {
+            case 'equals':
+                return String(driverValue) === String(value);
+            case 'not_equal_to':
+                return String(driverValue) !== String(value);
+            case 'starts_with':
+                return String(driverValue || '').toLowerCase().startsWith(String(value || '').toLowerCase());
+            case 'ends_with':
+                return String(driverValue || '').toLowerCase().endsWith(String(value || '').toLowerCase());
+            case 'contains':
+                return String(driverValue || '').toLowerCase().includes(String(value || '').toLowerCase());
+            case 'does_not_contain':
+                return !String(driverValue || '').toLowerCase().includes(String(value || '').toLowerCase());
+            case 'is_empty':
+                return !driverValue || String(driverValue).trim() === '';
+            case 'is_not_empty':
+                return driverValue && String(driverValue).trim() !== '';
+            case 'before':
+                if (!driverValue || !value) return false;
+                return new Date(driverValue) < new Date(value);
+            case 'after':
+                if (!driverValue || !value) return false;
+                return new Date(driverValue) > new Date(value);
+            case 'between':
+                if (!driverValue || !Array.isArray(value) || value.length !== 2) return false;
+                const driverDate = new Date(driverValue);
+                return driverDate >= new Date(value[0]) && driverDate <= new Date(value[1]);
+            case 'less_than':
+                return Number(driverValue || 0) < Number(value || 0);
+            case 'greater_than':
+                return Number(driverValue || 0) > Number(value || 0);
+            case 'less_or_equal':
+                return Number(driverValue || 0) <= Number(value || 0);
+            case 'greater_or_equal':
+                return Number(driverValue || 0) >= Number(value || 0);
+            default:
+                return true;
+        }
+    }, []);
+
     // Filter drivers based on active filters and active tab
     const filteredDrivers = useMemo(() => {
         if (!safeDrivers || safeDrivers.length === 0) {
             return [];
         }
         
-        // First apply tab filter
+        // If a list is selected, apply list filter directly (independent from tabs)
+        if (selectedListId) {
+            const selectedList = lists.find((l: DriverList) => l.id === selectedListId);
+            if (selectedList) {
+                const listFiltered = safeDrivers.filter((driver) => {
+                    // Apply all conditions (AND) - all must be met
+                    if (selectedList.all_conditions && selectedList.all_conditions.length > 0) {
+                        const allConditionsMet = selectedList.all_conditions.every((condition) => {
+                            return checkCondition(driver, condition);
+                        });
+                        if (!allConditionsMet) {
+                            return false;
+                        }
+                    }
+                    
+                    // Apply any conditions (OR) - at least one must be met
+                    if (selectedList.any_conditions && selectedList.any_conditions.length > 0) {
+                        const anyConditionMet = selectedList.any_conditions.some((condition) => {
+                            return checkCondition(driver, condition);
+                        });
+                        if (!anyConditionMet) {
+                            return false;
+                        }
+                    }
+                    
+                    return true;
+                });
+                
+                // Apply other filters to list-filtered drivers
+                return listFiltered.filter((driver) => {
+            // Full name filter
+            if (filters.full_name) {
+                if (filters.full_name === 'is_empty') {
+                    if (driver.full_name && driver.full_name.trim() !== '') {
+                        return false;
+                    }
+                } else if (!driver.full_name.toLowerCase().includes(String(filters.full_name).toLowerCase())) {
+                    return false;
+                }
+            }
+            // Phone filter (contains search)
+            if (filters.phone) {
+                if (filters.phone === 'is_empty') {
+                    if (driver.phone && driver.phone.trim() !== '') {
+                        return false;
+                    }
+                } else if (String(filters.phone).trim() !== '') {
+                    const phoneStr = driver.phone ? String(driver.phone).toLowerCase() : '';
+                    const filterPhone = String(filters.phone).toLowerCase().trim();
+                    if (!phoneStr.includes(filterPhone)) {
+                        return false;
+                    }
+                }
+            }
+            // WhatsApp filter (contains search)
+            if (filters.whatsapp_phone) {
+                if (filters.whatsapp_phone === 'is_empty') {
+                    if (driver.whatsapp_phone && driver.whatsapp_phone.trim() !== '') {
+                        return false;
+                    }
+                } else if (String(filters.whatsapp_phone).trim() !== '') {
+                    const whatsappStr = driver.whatsapp_phone ? String(driver.whatsapp_phone).toLowerCase() : '';
+                    const filterWhatsapp = String(filters.whatsapp_phone).toLowerCase().trim();
+                    if (!whatsappStr.includes(filterWhatsapp)) {
+                        return false;
+                    }
+                }
+            }
+            // Email filter
+            if (filters.email) {
+                if (filters.email === 'is_empty') {
+                    if (driver.email && driver.email.trim() !== '') {
+                        return false;
+                    }
+                } else if (!driver.email || !driver.email.toLowerCase().includes(String(filters.email).toLowerCase())) {
+                    return false;
+                }
+            }
+            // Riding Company filter (dropdown)
+            if (filters.riding_company_id) {
+                if (filters.riding_company_id === 'is_empty') {
+                    if (driver.riding_company?.id) {
+                        return false;
+                    }
+                } else if (driver.riding_company?.id !== filters.riding_company_id) {
+                    return false;
+                }
+            }
+            // Campaign filter
+            if (filters.campaign_id) {
+                if (filters.campaign_id === 'is_empty') {
+                    if (driver.campaign?.id) {
+                        return false;
+                    }
+                } else if (driver.campaign?.id !== filters.campaign_id) {
+                    return false;
+                }
+            }
+            // Lead Source filter
+            if (filters.lead_source_id) {
+                if (filters.lead_source_id === 'is_empty') {
+                    if (driver.lead_source?.id) {
+                        return false;
+                    }
+                } else if (driver.lead_source?.id !== filters.lead_source_id) {
+                    return false;
+                }
+            }
+            // Lead Status filter
+            if (filters.lead_status_id) {
+                if (filters.lead_status_id === 'is_empty') {
+                    if (driver.lead_status?.id) {
+                        return false;
+                    }
+                } else if (driver.lead_status?.id !== filters.lead_status_id) {
+                    return false;
+                }
+            }
+            // Lead Status Comment filter
+            if (filters.lead_status_comment) {
+                if (filters.lead_status_comment === 'is_empty') {
+                    if (driver.lead_status_comment && driver.lead_status_comment.trim() !== '') {
+                        return false;
+                    }
+                } else if (!driver.lead_status_comment || !driver.lead_status_comment.toLowerCase().includes(String(filters.lead_status_comment).toLowerCase())) {
+                    return false;
+                }
+            }
+            // Lead Stage filter
+            if (filters.lead_stage_id) {
+                if (filters.lead_stage_id === 'is_empty') {
+                    if (driver.lead_stage?.id) {
+                        return false;
+                    }
+                } else if (driver.lead_stage?.id !== filters.lead_stage_id) {
+                    return false;
+                }
+            }
+            // Assigned To filter
+            if (filters.assigned_to) {
+                if (filters.assigned_to === 'is_empty') {
+                    if (driver.assigned_to?.id) {
+                        return false;
+                    }
+                } else if (driver.assigned_to?.id !== filters.assigned_to) {
+                    return false;
+                }
+            }
+            // Last Assigned Time filter (date range: from - to with time)
+            if (filters.last_assigned_time_from || filters.last_assigned_time_to) {
+                const lastAssignedTime = (driver as any).last_assigned_time;
+                if (!lastAssignedTime) {
+                    return false; // Skip if no last_assigned_time
+                }
+                
+                // Parse the date/time string (format: dd-mm-yyyy hh:mm AM/PM)
+                // Convert to Date object for comparison
+                try {
+                    // Parse format: "22-01-2025 02:30 PM"
+                    const parts = lastAssignedTime.split(' ');
+                    if (parts.length >= 2) {
+                        const datePart = parts[0]; // "22-01-2025"
+                        const timePart = parts.slice(1).join(' '); // "02:30 PM"
+                        
+                        const [day, month, year] = datePart.split('-').map(Number);
+                        const timeMatch = timePart.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                        
+                        if (timeMatch) {
+                            let hours = parseInt(timeMatch[1]);
+                            const minutes = parseInt(timeMatch[2]);
+                            const ampm = timeMatch[3].toUpperCase();
+                            
+                            if (ampm === 'PM' && hours !== 12) hours += 12;
+                            if (ampm === 'AM' && hours === 12) hours = 0;
+                            
+                            const driverDate = new Date(year, month - 1, day, hours, minutes);
+                            
+                            // Check from date/time
+                            if (filters.last_assigned_time_from) {
+                                const fromDate = new Date(String(filters.last_assigned_time_from));
+                                if (filters.last_assigned_time_from_time) {
+                                    const [fromHours, fromMinutes] = String(filters.last_assigned_time_from_time).split(':').map(Number);
+                                    fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
+                                } else {
+                                    fromDate.setHours(0, 0, 0, 0);
+                                }
+                                if (driverDate < fromDate) {
+                                    return false;
+                                }
+                            }
+                            
+                            // Check to date/time
+                            if (filters.last_assigned_time_to) {
+                                const toDate = new Date(String(filters.last_assigned_time_to));
+                                if (filters.last_assigned_time_to_time) {
+                                    const [toHours, toMinutes] = String(filters.last_assigned_time_to_time).split(':').map(Number);
+                                    toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
+                                } else {
+                                    toDate.setHours(23, 59, 59, 999);
+                                }
+                                if (driverDate > toDate) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // If parsing fails, skip this filter
+                    console.error('Error parsing last_assigned_time:', e);
+                }
+            }
+            // Next Follow-up filter (date range: from - to with time)
+            if (filters.next_follow_up_from || filters.next_follow_up_to) {
+                const nextFollowUp = (driver as any).next_follow_up;
+                if (!nextFollowUp) {
+                    return false;
+                }
+                try {
+                    const driverDate = new Date(nextFollowUp);
+                    if (filters.next_follow_up_from) {
+                        const fromDate = new Date(String(filters.next_follow_up_from));
+                        if (filters.next_follow_up_from_time) {
+                            const [fromHours, fromMinutes] = String(filters.next_follow_up_from_time).split(':').map(Number);
+                            fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
+                        } else {
+                            fromDate.setHours(0, 0, 0, 0);
+                        }
+                        if (driverDate < fromDate) {
+                            return false;
+                        }
+                    }
+                    if (filters.next_follow_up_to) {
+                        const toDate = new Date(String(filters.next_follow_up_to));
+                        if (filters.next_follow_up_to_time) {
+                            const [toHours, toMinutes] = String(filters.next_follow_up_to_time).split(':').map(Number);
+                            toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
+                        } else {
+                            toDate.setHours(23, 59, 59, 999);
+                        }
+                        if (driverDate > toDate) {
+                            return false;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing next_follow_up:', e);
+                }
+            }
+            // Last Follow-up filter (date range: from - to with time)
+            if (filters.last_follow_up_from || filters.last_follow_up_to) {
+                const lastFollowUp = (driver as any).last_follow_up;
+                if (!lastFollowUp) {
+                    return false;
+                }
+                try {
+                    const driverDate = new Date(lastFollowUp);
+                    if (filters.last_follow_up_from) {
+                        const fromDate = new Date(String(filters.last_follow_up_from));
+                        if (filters.last_follow_up_from_time) {
+                            const [fromHours, fromMinutes] = String(filters.last_follow_up_from_time).split(':').map(Number);
+                            fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
+                        } else {
+                            fromDate.setHours(0, 0, 0, 0);
+                        }
+                        if (driverDate < fromDate) {
+                            return false;
+                        }
+                    }
+                    if (filters.last_follow_up_to) {
+                        const toDate = new Date(String(filters.last_follow_up_to));
+                        if (filters.last_follow_up_to_time) {
+                            const [toHours, toMinutes] = String(filters.last_follow_up_to_time).split(':').map(Number);
+                            toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
+                        } else {
+                            toDate.setHours(23, 59, 59, 999);
+                        }
+                        if (driverDate > toDate) {
+                            return false;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing last_follow_up:', e);
+                }
+            }
+            // Created At filter (date range: from - to with time)
+            if (filters.created_at_from || filters.created_at_to) {
+                const createdAt = driver.created_at;
+                if (!createdAt) {
+                    return false;
+                }
+                try {
+                    const driverDate = new Date(createdAt);
+                    if (filters.created_at_from) {
+                        const fromDate = new Date(String(filters.created_at_from));
+                        if (filters.created_at_from_time) {
+                            const [fromHours, fromMinutes] = String(filters.created_at_from_time).split(':').map(Number);
+                            fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
+                        } else {
+                            fromDate.setHours(0, 0, 0, 0);
+                        }
+                        if (driverDate < fromDate) {
+                            return false;
+                        }
+                    }
+                    if (filters.created_at_to) {
+                        const toDate = new Date(String(filters.created_at_to));
+                        if (filters.created_at_to_time) {
+                            const [toHours, toMinutes] = String(filters.created_at_to_time).split(':').map(Number);
+                            toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
+                        } else {
+                            toDate.setHours(23, 59, 59, 999);
+                        }
+                        if (driverDate > toDate) {
+                            return false;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing created_at:', e);
+                }
+            }
+            // Updated At filter (date range: from - to with time)
+            if (filters.updated_at_from || filters.updated_at_to) {
+                const updatedAt = driver.updated_at;
+                if (!updatedAt) {
+                    return false;
+                }
+                try {
+                    const driverDate = new Date(updatedAt);
+                    if (filters.updated_at_from) {
+                        const fromDate = new Date(String(filters.updated_at_from));
+                        if (filters.updated_at_from_time) {
+                            const [fromHours, fromMinutes] = String(filters.updated_at_from_time).split(':').map(Number);
+                            fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
+                        } else {
+                            fromDate.setHours(0, 0, 0, 0);
+                        }
+                        if (driverDate < fromDate) {
+                            return false;
+                        }
+                    }
+                    if (filters.updated_at_to) {
+                        const toDate = new Date(String(filters.updated_at_to));
+                        if (filters.updated_at_to_time) {
+                            const [toHours, toMinutes] = String(filters.updated_at_to_time).split(':').map(Number);
+                            toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
+                        } else {
+                            toDate.setHours(23, 59, 59, 999);
+                        }
+                        if (driverDate > toDate) {
+                            return false;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing updated_at:', e);
+                }
+            }
+            // Cancel Reason filter
+            if (filters.cancel_reason) {
+                if (filters.cancel_reason === 'is_empty') {
+                    if (driver.cancel_reason && driver.cancel_reason.trim() !== '') {
+                        return false;
+                    }
+                } else if (!driver.cancel_reason || !driver.cancel_reason.toLowerCase().includes(String(filters.cancel_reason).toLowerCase())) {
+                    return false;
+                }
+            }
+            return true;
+        });
+            }
+        }
+        
+        // If no list is selected, apply tab filter
         let tabFiltered = safeDrivers;
         const today = new Date().toISOString().split('T')[0];
         
@@ -825,42 +1487,6 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                     console.error('Error parsing last_follow_up:', e);
                 }
             }
-            // Assigned Time filter (date range: from - to with time)
-            if (filters.assigned_time_from || filters.assigned_time_to) {
-                const assignedTime = (driver as any).assigned_time;
-                if (!assignedTime) {
-                    return false;
-                }
-                try {
-                    const driverDate = new Date(assignedTime);
-                    if (filters.assigned_time_from) {
-                        const fromDate = new Date(String(filters.assigned_time_from));
-                        if (filters.assigned_time_from_time) {
-                            const [fromHours, fromMinutes] = String(filters.assigned_time_from_time).split(':').map(Number);
-                            fromDate.setHours(fromHours || 0, fromMinutes || 0, 0, 0);
-                        } else {
-                            fromDate.setHours(0, 0, 0, 0);
-                        }
-                        if (driverDate < fromDate) {
-                            return false;
-                        }
-                    }
-                    if (filters.assigned_time_to) {
-                        const toDate = new Date(String(filters.assigned_time_to));
-                        if (filters.assigned_time_to_time) {
-                            const [toHours, toMinutes] = String(filters.assigned_time_to_time).split(':').map(Number);
-                            toDate.setHours(toHours || 23, toMinutes || 59, 59, 999);
-                        } else {
-                            toDate.setHours(23, 59, 59, 999);
-                        }
-                        if (driverDate > toDate) {
-                            return false;
-                        }
-                    }
-                } catch (e) {
-                    console.error('Error parsing assigned_time:', e);
-                }
-            }
             // Created At filter (date range: from - to with time)
             if (filters.created_at_from || filters.created_at_to) {
                 const createdAt = driver.created_at;
@@ -945,42 +1571,54 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
             }
             return true;
         });
-    }, [safeDrivers, filters, activeTab]);
+    }, [safeDrivers, filters, activeTab, selectedListId, lists, checkCondition]);
 
-    // Ensure all columns from ALL_DRIVER_COLUMNS are present in columns state
+    // Ensure all columns from allColumnsWithDocuments are present in columns state
+    // Also remove columns that no longer exist (e.g., deleted document names)
+    // This effect runs automatically whenever document names change (added or deleted)
     useEffect(() => {
-        // Wait a bit to ensure columns state is initialized
-        const timer = setTimeout(() => {
-            if (columns.length === 0) return;
+        if (allColumnsWithDocuments.length === 0) return;
             
-            const allColumnIds = new Set(ALL_DRIVER_COLUMNS.map(col => col.id));
-            const currentColumnIds = new Set(columns.map(col => col.id));
-            
-            // Check if any columns are missing
-            const missingColumns = ALL_DRIVER_COLUMNS.filter(col => !currentColumnIds.has(col.id));
-            
-            if (missingColumns.length > 0) {
-                // Add missing columns with their default settings
-                setColumns(prev => {
-                    const existingIds = new Set(prev.map(col => col.id));
-                    const newColumns = [...prev];
-                    missingColumns.forEach(col => {
-                        if (!existingIds.has(col.id)) {
-                            newColumns.push({
-                                id: col.id,
-                                visible: col.defaultVisible,
-                                order: col.defaultOrder,
-                            });
-                        }
-                    });
-                    // Re-sort by order
-                    return newColumns.sort((a, b) => (a.order || 0) - (b.order || 0));
-                });
-            }
-        }, 100);
+        const allColumnIdsSet = new Set(allColumnsWithDocuments.map(col => col.id));
+        const currentColumnIds = new Set(columns.map(col => col.id));
         
-        return () => clearTimeout(timer);
-    }, []); // Run only once on mount
+        // Check if any columns are missing (new document names added)
+        const missingColumns = allColumnsWithDocuments.filter(col => !currentColumnIds.has(col.id));
+        
+        // Check if any columns should be removed (deleted document names or old requirements)
+        // Remove ALL document columns that are not in the current allColumnsWithDocuments
+        const columnsToRemove = columns.filter(col => {
+            // Keep static columns (not document columns)
+            if (!col.id.startsWith('document_')) {
+                return false;
+            }
+            // Remove document columns that no longer exist in document_names table
+            return !allColumnIdsSet.has(col.id);
+        });
+        
+        if (missingColumns.length > 0 || columnsToRemove.length > 0) {
+            setColumns(prev => {
+                // Remove deleted columns (including old requirements like document_02, document_03, document_ID)
+                const filtered = prev.filter(col => !columnsToRemove.some(rem => rem.id === col.id));
+                
+                // Add missing columns
+                const existingIds = new Set(filtered.map(col => col.id));
+                const newColumns = [...filtered];
+                missingColumns.forEach(col => {
+                    if (!existingIds.has(col.id)) {
+                        newColumns.push({
+                            id: col.id,
+                            visible: col.defaultVisible,
+                            order: col.defaultOrder,
+                        });
+                    }
+                });
+                
+                // Re-sort by order
+                return newColumns.sort((a, b) => (a.order || 0) - (b.order || 0));
+            });
+        }
+    }, [allColumnIds, documentNamesKey, allColumnsWithDocuments, columns]); // Watch for document names changes
 
     // Save column preferences to localStorage
     useEffect(() => {
@@ -1038,7 +1676,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     const sortedColumns = useMemo(() => {
         try {
             if (!columns || !Array.isArray(columns) || columns.length === 0) {
-                return ALL_DRIVER_COLUMNS.map(col => ({
+                return allColumnsWithDocuments.map(col => ({
                     id: col.id,
                     visible: col.defaultVisible,
                     order: col.defaultOrder,
@@ -1047,19 +1685,19 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
             return [...columns].sort((a, b) => (a.order || 0) - (b.order || 0));
         } catch (e) {
             console.error('Error in sortedColumns:', e);
-            return ALL_DRIVER_COLUMNS.map(col => ({
+            return allColumnsWithDocuments.map(col => ({
                 id: col.id,
                 visible: col.defaultVisible,
                 order: col.defaultOrder,
             }));
         }
-    }, [columns]);
+    }, [columns, allColumnsWithDocuments]);
 
     // Get visible columns
     const visibleColumns = useMemo(() => {
         try {
             if (!sortedColumns || !Array.isArray(sortedColumns) || sortedColumns.length === 0) {
-                return ALL_DRIVER_COLUMNS.filter(col => col.defaultVisible).map(col => ({
+                return allColumnsWithDocuments.filter(col => col.defaultVisible).map(col => ({
                     id: col.id,
                     visible: col.defaultVisible,
                     order: col.defaultOrder,
@@ -1144,6 +1782,18 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                         aValue = a.assigned_to?.name || '';
                         bValue = b.assigned_to?.name || '';
                         break;
+                    case 'team_leader':
+                        aValue = a.team_leader?.name || '';
+                        bValue = b.team_leader?.name || '';
+                        break;
+                    case 'account_manager':
+                        aValue = a.account_manager?.name || '';
+                        bValue = b.account_manager?.name || '';
+                        break;
+                    case 'resigned_leads':
+                        aValue = a.resigned_leads || '';
+                        bValue = b.resigned_leads || '';
+                        break;
                     case 'assigned_users':
                         aValue = a.assigned_users && a.assigned_users.length > 0 ? a.assigned_users.map((u: any) => u.name).join(', ') : '';
                         bValue = b.assigned_users && b.assigned_users.length > 0 ? b.assigned_users.map((u: any) => u.name).join(', ') : '';
@@ -1163,6 +1813,30 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                     case 'cancel_reason':
                         aValue = (a as any).cancel_reason || '';
                         bValue = (b as any).cancel_reason || '';
+                        break;
+                    case 'vehicle_type':
+                        aValue = (a as any).vehicle_type || '';
+                        bValue = (b as any).vehicle_type || '';
+                        break;
+                    case 'has_worked_before':
+                        aValue = (a as any).has_worked_before || '';
+                        bValue = (b as any).has_worked_before || '';
+                        break;
+                    case 'city':
+                        aValue = (a as any).city || (a as any).governorate || '';
+                        bValue = (b as any).city || (b as any).governorate || '';
+                        break;
+                    case 'last_assigned_date':
+                        aValue = (a as any).last_assigned_time || '';
+                        bValue = (b as any).last_assigned_time || '';
+                        break;
+                    case 'feedback_count':
+                        aValue = (a as any).feedback_count ?? 0;
+                        bValue = (b as any).feedback_count ?? 0;
+                        break;
+                    case 'next_time':
+                        aValue = (a as any).next_time || '';
+                        bValue = (b as any).next_time || '';
                         break;
                     case 'assigned_time':
                         aValue = (a as any).assigned_time || '';
@@ -1317,10 +1991,6 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
             last_follow_up_to: '',
             last_follow_up_from_time: '',
             last_follow_up_to_time: '',
-            assigned_time_from: '',
-            assigned_time_to: '',
-            assigned_time_from_time: '',
-            assigned_time_to_time: '',
             created_at_from: '',
             created_at_to: '',
             created_at_from_time: '',
@@ -1347,6 +2017,30 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
     const clearSort = () => {
         setSortField(null);
         setSortDirection('desc');
+    };
+    
+    // Handle document status update
+    const handleUpdateDocumentStatus = async (driverId: number, documentId: number, status: string) => {
+        try {
+            await axios.put(`/drivers/driver-documents/${documentId}`, {
+                status: status,
+            });
+            // Refresh the page to update the data
+            router.reload({ only: ['drivers'] });
+        } catch (error) {
+            console.error('Error updating document status:', error);
+        }
+    };
+    
+    // Handle document file deletion
+    const handleDeleteDocumentFile = async (driverId: number, documentId: number) => {
+        try {
+            await axios.delete(`/drivers/driver-documents/${documentId}/file`);
+            // Refresh the page to update the data
+            router.reload({ only: ['drivers'] });
+        } catch (error) {
+            console.error('Error deleting document file:', error);
+        }
     };
 
     const isFilterEmpty = (field: string): boolean => {
@@ -1680,6 +2374,10 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         return hasPermission('drivers.driverdocuments.set-rejected');
     };
 
+    const canDeleteFile = () => {
+        return hasPermission('drivers.driverdocuments.delete-file');
+    };
+
     const [uploadingDocId, setUploadingDocId] = useState<number | null>(null);
     const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
@@ -1770,6 +2468,33 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
         setViewingDocument({ id: docId, url, extension: extension || undefined });
     };
 
+    const handleDeleteFile = async (docId: number) => {
+        if (!confirm('Are you sure you want to delete this file? This will set the document status to empty.')) {
+            return;
+        }
+        try {
+            await axios.delete(`/drivers/driver-documents/${docId}/delete-file`);
+            // Reload driver details
+            if (viewingDriver) {
+                const response = await fetch(`/drivers/drivers/${viewingDriver.id}/details`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setDriverDetails(data.driver);
+                }
+            }
+        } catch (error) {
+            console.error('Error deleting file:', error);
+            alert('Failed to delete file. Please try again.');
+        }
+    };
+
     const getFileExtension = (filename?: string, path?: string): string | null => {
         const source = filename || path;
         if (!source) return null;
@@ -1854,7 +2579,9 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                 <button
                                     onClick={() => {
                                         setActiveTab('all');
+                                        setSelectedListId(null);
                                         setCurrentPage(1);
+                                        setSelectedDrivers(new Set());
                                     }}
                                     className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
                                         activeTab === 'all'
@@ -1880,7 +2607,9 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                 <button
                                     onClick={() => {
                                         setActiveTab('new');
+                                        setSelectedListId(null);
                                         setCurrentPage(1);
+                                        setSelectedDrivers(new Set());
                                     }}
                                     className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
                                         activeTab === 'new'
@@ -1906,7 +2635,9 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                 <button
                                     onClick={() => {
                                         setActiveTab('today');
+                                        setSelectedListId(null);
                                         setCurrentPage(1);
+                                        setSelectedDrivers(new Set());
                                     }}
                                     className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
                                         activeTab === 'today'
@@ -1932,7 +2663,9 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                 <button
                                     onClick={() => {
                                         setActiveTab('overdue');
+                                        setSelectedListId(null);
                                         setCurrentPage(1);
+                                        setSelectedDrivers(new Set());
                                     }}
                                     className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
                                         activeTab === 'overdue'
@@ -1954,6 +2687,107 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                         </span>
                                     )}
                                 </button>
+
+                                {/* More Button with Lists */}
+                                <div className="flex items-center gap-2">
+                                    <div className="relative" ref={moreListsRef}>
+                                        <button
+                                            onClick={() => {
+                                                setShowMoreLists(!showMoreLists);
+                                            }}
+                                            className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                                                selectedListId
+                                                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-md'
+                                                    : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
+                                            }`}
+                                        >
+                                            <span className={`font-medium ${selectedListId ? 'text-purple-700 dark:text-purple-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                                                More
+                                            </span>
+                                        </button>
+                                        {showMoreLists && lists && lists.length > 0 && (
+                                            <div className={`absolute top-full left-0 mt-1 z-50 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg min-w-[200px] ${lists.length > 10 ? 'max-h-[400px] overflow-y-auto' : ''}`}>
+                                                {lists.map((list: any, index: number) => (
+                                                    <div
+                                                    key={list.id}
+                                                        className={`flex items-center justify-between ${
+                                                            selectedListId === list.id
+                                                                ? 'bg-purple-50 dark:bg-purple-900/20'
+                                                                : ''
+                                                        } ${index === 0 ? 'rounded-t-lg' : ''} ${index === lists.length - 1 ? 'rounded-b-lg' : ''}`}
+                                                    >
+                                                        <button
+                                                            onClick={() => {
+                                                        setSelectedListId(list.id);
+                                                                setActiveTab('all');
+                                                                setShowMoreLists(false);
+                                                                setCurrentPage(1);
+                                                                setSelectedDrivers(new Set());
+                                                    }}
+                                                            className={`flex-1 text-left px-4 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors ${
+                                                                selectedListId === list.id
+                                                                    ? 'text-purple-700 dark:text-purple-300'
+                                                                    : 'text-neutral-700 dark:text-neutral-300'
+                                                            }`}
+                                                >
+                                                        {list.name}
+                                                        </button>
+                                                        {isSuperAdmin && (
+                                                            <div className="flex items-center gap-1 pr-2" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                router.get(`/drivers/drivers/lists/${list.id}/edit`);
+                                                            }}
+                                                            className="p-1 hover:bg-accent rounded"
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (confirm(`Are you sure you want to delete "${list.name}"?`)) {
+                                                                        router.delete(`/drivers/drivers/lists/${list.id}`);
+                                                                    }
+                                                                }}
+                                                                className="p-1 hover:bg-destructive/10 text-destructive rounded"
+                                                            >
+                                                                <X className="h-4 w-4" />
+                                                            </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {isSuperAdmin && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                window.location.href = '/drivers/drivers/lists/create';
+                                            }}
+                                            className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded transition-all"
+                                            title="Add new list"
+                                        >
+                                            <Plus className="h-4 w-4 text-neutral-700 dark:text-neutral-300" />
+                                        </button>
+                                    )}
+                                    {selectedListId && (() => {
+                                        const selectedList = lists.find((l: DriverList) => l.id === selectedListId);
+                                        const listDriversCount = filteredDrivers.length;
+                                        return selectedList ? (
+                                            <div className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-md">
+                                                <span className="font-medium text-purple-700 dark:text-purple-300">
+                                                    {selectedList.name}
+                                                </span>
+                                                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-600 text-white">
+                                                    {listDriversCount}
+                                                </span>
+                                            </div>
+                                        ) : null;
+                                    })()}
+                                </div>
                             </div>
                             {/* Mass Actions Bar */}
                             {selectedDrivers.size > 0 && (
@@ -2109,7 +2943,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                         }
                                     `}</style>
                                     <table className="w-full">
-                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm sticky top-0 z-20">
+                                    <thead className="bg-neutral-100 dark:bg-neutral-800 backdrop-blur-sm sticky top-0 z-20">
                                         <tr>
                                             <th className="px-4 py-3 text-left w-12">
                                                 <Checkbox
@@ -2143,6 +2977,8 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                col.id === 'lead_status' ? 'lead_status' :
                                                                col.id === 'lead_stage' ? 'lead_stage' :
                                                                col.id === 'assigned_to' ? 'assigned_to' :
+                                                               col.id === 'team_leader' ? 'team_leader' :
+                                                               col.id === 'account_manager' ? 'account_manager' :
                                                                col.id;
                                                 return (
                                                     <th 
@@ -2218,10 +3054,13 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                   col.id === 'lead_status_comment' ? 'lead_status_comment' :
                                                                   col.id === 'lead_stage' ? 'lead_stage_id' :
                                                                   col.id === 'assigned_to' ? 'assigned_to' :
+                                                                  col.id === 'team_leader' ? 'team_leader_id' :
+                                                                  col.id === 'account_manager' ? 'account_manager_id' :
                                                                   col.id === 'campaign' ? 'campaign_id' :
                                                                   col.id === 'last_assigned_time' ? 'last_assigned_time' :
+                                                                  col.id === 'last_assigned_date' ? 'last_assigned_time' :
                                                                   col.id;
-                                                if (col.id === 'last_assigned_time') {
+                                                if (col.id === 'last_assigned_time' || col.id === 'last_assigned_date') {
                                                     const hasFromDate = filters.last_assigned_time_from && String(filters.last_assigned_time_from).trim() !== '';
                                                     const hasFromTime = filters.last_assigned_time_from_time && String(filters.last_assigned_time_from_time).trim() !== '';
                                                     const hasToDate = filters.last_assigned_time_to && String(filters.last_assigned_time_to).trim() !== '';
@@ -2546,6 +3385,8 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                           col.id === 'lead_status' ? (filterOptions?.leadStatuses || []) :
                                                                           col.id === 'lead_stage' ? ((filterOptions as any)?.leadStages || []) :
                                                                           col.id === 'assigned_to' ? (filterOptions?.users || []) :
+                                                                          col.id === 'team_leader' ? (filterOptions?.users || []) :
+                                                                          col.id === 'account_manager' ? (filterOptions?.users || []) :
                                                                           col.id === 'riding_company' ? (filterOptions?.ridingCompanies || []) : []).map((option: any) => (
                                                                             <SelectItem key={option.id} value={String(option.id)}>
                                                                                 {option.name}
@@ -2602,7 +3443,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                             })}
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-neutral-900">
                                         {(!paginatedDrivers || paginatedDrivers.length === 0) ? (
                                             <tr>
                                                 <td
@@ -2619,11 +3460,11 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                     className={`
                                                         transition-colors duration-150 cursor-pointer
                                                         ${
-                                                            index === 0
-                                                                ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                            selectedDrivers.has(driver.id)
+                                                                ? 'bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 dark:hover:bg-blue-900'
                                                                 : index % 2 === 0
-                                                                  ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
-                                                                  : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                                  ? 'bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                                                                  : 'bg-neutral-50 dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800'
                                                         }
                                                     `}
                                                     onClick={(e) => {
@@ -2737,6 +3578,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                             );
                                                         }
                                                         // Render cell content based on column id
+                                                        const columnDef = allColumnsWithDocuments.find(c => c.id === col.id);
                                                         let cellContent: React.ReactNode = '';
                                                         switch (col.id) {
                                                             case 'driver_num':
@@ -2772,11 +3614,12 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                             {driver.phone}
                                                                         </span>
                                                                         {hoveredPhone === driver.phone && phoneMousePosition && (
-                                                                            <div className="fixed z-[9999] flex gap-2 bg-white dark:bg-neutral-800 p-3 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 pointer-events-auto"
+                                                                            <div className="absolute z-[9999] flex gap-2 bg-white dark:bg-neutral-800 p-3 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 pointer-events-auto"
                                                                                 style={{ 
-                                                                                    left: `${phoneMousePosition.x}px`,
-                                                                                    top: `${phoneMousePosition.y - 60}px`,
-                                                                                    transform: 'translate(-50%, 0)'
+                                                                                    left: '100%',
+                                                                                    top: '50%',
+                                                                                    marginLeft: '8px',
+                                                                                    transform: 'translateY(-50%)'
                                                                                 }}
                                                                                 onMouseEnter={() => {
                                                                                     if (hoverTimeoutRef.current) {
@@ -2838,11 +3681,12 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                             {driver.whatsapp_phone}
                                                                         </span>
                                                                         {hoveredPhone === driver.whatsapp_phone && whatsappMousePosition && (
-                                                                            <div className="fixed z-[9999] flex gap-2 bg-white dark:bg-neutral-800 p-3 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 pointer-events-auto"
+                                                                            <div className="absolute z-[9999] flex gap-2 bg-white dark:bg-neutral-800 p-3 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 pointer-events-auto"
                                                                                 style={{ 
-                                                                                    left: `${whatsappMousePosition.x}px`,
-                                                                                    top: `${whatsappMousePosition.y - 60}px`,
-                                                                                    transform: 'translate(-50%, 0)'
+                                                                                    left: '100%',
+                                                                                    top: '50%',
+                                                                                    marginLeft: '8px',
+                                                                                    transform: 'translateY(-50%)'
                                                                                 }}
                                                                                 onMouseEnter={() => {
                                                                                     if (hoverTimeoutRef.current) {
@@ -2987,6 +3831,15 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                     cellContent = '-';
                                                                 }
                                                                 break;
+                                                            case 'team_leader':
+                                                                cellContent = driver.team_leader?.name || '-';
+                                                                break;
+                                                            case 'account_manager':
+                                                                cellContent = driver.account_manager?.name || '-';
+                                                                break;
+                                                            case 'resigned_leads':
+                                                                cellContent = driver.resigned_leads || '-';
+                                                                break;
                                                             case 'assigned_users':
                                                                 cellContent = driver.assigned_users && driver.assigned_users.length > 0 ? (
                                                                     <div className="flex flex-wrap gap-1">
@@ -2999,7 +3852,14 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                 ) : '-';
                                                                 break;
                                                             case 'last_assigned_time':
-                                                                cellContent = (driver as any).last_assigned_time ? formatDate((driver as any).last_assigned_time) : '-';
+                                                                cellContent = (driver as any).last_assigned_time ? (
+                                                                    <span>{new Date((driver as any).last_assigned_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'last_assigned_date':
+                                                                cellContent = (driver as any).last_assigned_time ? (
+                                                                    <span>{formatDate((driver as any).last_assigned_time)}</span>
+                                                                ) : '-';
                                                                 break;
                                                             case 'last_assigned_by':
                                                                 cellContent = (driver as any).last_assigned_by?.name || '-';
@@ -3014,8 +3874,20 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                             case 'cancel_reason':
                                                                 cellContent = (driver as any).cancel_reason || '-';
                                                                 break;
-                                                            case 'assigned_time':
-                                                                cellContent = (driver as any).assigned_time ? formatDate((driver as any).assigned_time) : '-';
+                                                            case 'next_time':
+                                                                cellContent = (driver as any).next_time || '-';
+                                                                break;
+                                                            case 'vehicle_type':
+                                                                cellContent = (driver as any).vehicle_type || '-';
+                                                                break;
+                                                            case 'has_worked_before':
+                                                                cellContent = (driver as any).has_worked_before || '-';
+                                                                break;
+                                                            case 'city':
+                                                                cellContent = (driver as any).city || (driver as any).governorate || '-';
+                                                                break;
+                                                            case 'feedback_count':
+                                                                cellContent = (driver as any).feedback_count ?? 0;
                                                                 break;
                                                             case 'uuid':
                                                                 cellContent = driver.uuid || '-';
@@ -3027,7 +3899,101 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                 cellContent = driver.updated_at ? formatDate(driver.updated_at) : '-';
                                                                 break;
                                                             default:
-                                                                cellContent = '-';
+                                                                // Check if this is a document column
+                                                                if (col.id.startsWith('document_')) {
+                                                                    const docColumnDef = allColumnsWithDocuments.find(c => c.id === col.id) as any;
+                                                                    const docName = docColumnDef?.documentName;
+                                                                    if (docName) {
+                                                                        const driverDoc = driver.documents?.[docName];
+                                                                        const driverRidingCompanyId = driver.riding_company?.id;
+                                                                        
+                                                                        // Check if document is required for this driver's riding company
+                                                                        // First check documentsByRidingCompany (from driver documents)
+                                                                        let isRequired = driverRidingCompanyId && documentsByRidingCompany && documentsByRidingCompany[driverRidingCompanyId]?.includes(docName);
+                                                                        
+                                                                        // Also check allDocumentRequirements (active requirements)
+                                                                        if (!isRequired && driverRidingCompanyId && allDocumentRequirements) {
+                                                                            isRequired = allDocumentRequirements.some(req => 
+                                                                                req.name === docName && 
+                                                                                req.riding_company_id === driverRidingCompanyId &&
+                                                                                req.active === true
+                                                                            );
+                                                                        }
+                                                                        
+                                                                        if (!isRequired) {
+                                                                            cellContent = <span className="text-sm text-neutral-500 italic">Not Required</span>;
+                                                                        } else if (driverDoc) {
+                                                                            const status = driverDoc.status || 'pending';
+                                                                            cellContent = (
+                                                                                <DropdownMenu>
+                                                                                    <DropdownMenuTrigger asChild>
+                                                                                        <Button
+                                                                                            variant="outline"
+                                                                                            size="sm"
+                                                                                            className={`h-7 px-3 text-xs ${
+                                                                                                status === 'pending' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' :
+                                                                                                status === 'approved' ? 'bg-green-500 hover:bg-green-600 text-white' :
+                                                                                                status === 'rejected' ? 'bg-red-500 hover:bg-red-600 text-white' :
+                                                                                                'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                            }`}
+                                                                                        >
+                                                                                            {status.toUpperCase()}
+                                                                                        </Button>
+                                                                                    </DropdownMenuTrigger>
+                                                                                    <DropdownMenuContent align="end">
+                                                                                        <DropdownMenuItem
+                                                                                            onClick={() => {
+                                                                                                handleUpdateDocumentStatus(driver.id, driverDoc.id, 'pending');
+                                                                                            }}
+                                                                                        >
+                                                                                            PENDING
+                                                                                        </DropdownMenuItem>
+                                                                                        <DropdownMenuItem
+                                                                                            onClick={() => {
+                                                                                                handleUpdateDocumentStatus(driver.id, driverDoc.id, 'approved');
+                                                                                            }}
+                                                                                        >
+                                                                                            APPROVED
+                                                                                        </DropdownMenuItem>
+                                                                                        <DropdownMenuItem
+                                                                                            onClick={() => {
+                                                                                                handleUpdateDocumentStatus(driver.id, driverDoc.id, 'rejected');
+                                                                                            }}
+                                                                                        >
+                                                                                            REJECT
+                                                                                        </DropdownMenuItem>
+                                                                                        <DropdownMenuItem
+                                                                                            onClick={() => {
+                                                                                                handleDeleteDocumentFile(driver.id, driverDoc.id);
+                                                                                            }}
+                                                                                        >
+                                                                                            EMPTY
+                                                                                        </DropdownMenuItem>
+                                                                                    </DropdownMenuContent>
+                                                                                </DropdownMenu>
+                                                                            );
+                                                                        } else {
+                                                                            cellContent = (
+                                                                                <DropdownMenu>
+                                                                                    <DropdownMenuTrigger asChild>
+                                                                                        <Button
+                                                                                            variant="outline"
+                                                                                            size="sm"
+                                                                                            className="h-7 px-3 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                                                                            disabled
+                                                                                        >
+                                                                                            EMPTY
+                                                                                        </Button>
+                                                                                    </DropdownMenuTrigger>
+                                                                                </DropdownMenu>
+                                                                            );
+                                                                        }
+                                                                    } else {
+                                                                        cellContent = '-';
+                                                                    }
+                                                                } else {
+                                                                    cellContent = '-';
+                                                                }
                                                         }
                                                         return (
                                                             <td key={col.id} className="px-4 py-3 text-sm">
@@ -3117,7 +4083,7 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                 ))}
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody className="bg-white dark:bg-neutral-900">
                                             {/* Full Name */}
                                             <tr className="border-b hover:bg-muted/50">
                                                 <td className="px-4 py-3 text-sm font-medium">Name</td>
@@ -3309,29 +4275,6 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                 className="w-4 h-4"
                                                             />
                                                             <span>{driver.assigned_to?.name || '-'}</span>
-                                                        </div>
-                                                    </td>
-                                                ))}
-                                            </tr>
-                                            
-                                            {/* Assigned Users */}
-                                            <tr className="border-b hover:bg-muted/50">
-                                                <td className="px-4 py-3 text-sm font-medium">Assigned Users</td>
-                                                {mergeDrivers.map((driver) => (
-                                                    <td key={driver.id} className="px-4 py-3 text-sm">
-                                                        <div className="flex items-center gap-2">
-                                                            <input
-                                                                type="radio"
-                                                                name="assigned_users"
-                                                                value={driver.id}
-                                                                defaultChecked={mergeDrivers[0].id === driver.id}
-                                                                className="w-4 h-4"
-                                                            />
-                                                            <span>
-                                                                {driver.assigned_users && driver.assigned_users.length > 0
-                                                                    ? driver.assigned_users.map((u: any) => u.name).join(', ')
-                                                                    : '-'}
-                                                            </span>
                                                         </div>
                                                     </td>
                                                 ))}
@@ -3723,18 +4666,6 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                             <p className="font-medium">{driverDetails.assigned_to.name}</p>
                                                         </div>
                                                     )}
-                                                    {driverDetails.assigned_users && driverDetails.assigned_users.length > 0 && (
-                                                        <div>
-                                                            <p className="text-sm text-neutral-500">Assigned Users</p>
-                                                            <div className="flex flex-wrap gap-2 mt-1">
-                                                                {driverDetails.assigned_users.map((user: any) => (
-                                                                    <Badge key={user.id} variant="secondary">
-                                                                        {user.name}
-                                                                    </Badge>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
                                                     {driverDetails.current_stage && (
                                                         <div>
                                                             <p className="text-sm text-neutral-500">Current Stage</p>
@@ -3844,13 +4775,8 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
 
                                         {/* Documents */}
                                         <Card className="p-6">
-                                            <div className="mb-4 flex items-center justify-between">
+                                            <div className="mb-4">
                                                 <h2 className="text-lg font-semibold">Documents</h2>
-                                                <Link href={`/drivers/driver-documents?driver_id=${driverDetails.id}`}>
-                                                    <Button variant="outline" size="sm">
-                                                        View All Documents
-                                                    </Button>
-                                                </Link>
                                             </div>
                                             {driverDetails.documents && driverDetails.documents.length > 0 ? (
                                                 <div className="space-y-3">
@@ -3863,147 +4789,134 @@ export default function DriversIndex({ drivers = [], importAvailableFields, filt
                                                                 <FileText className="h-5 w-5 text-neutral-500" />
                                                                 <div className="flex-1">
                                                                     <p className="font-medium">
-                                                                        {doc.document_template?.name || 'Unknown Document'}
+                                                                        {doc.name || 'Unknown Document'}
                                                                     </p>
-                                                                    <p className="text-xs text-neutral-500">
-                                                                        Type: {doc.document_template?.type || 'N/A'}
-                                                                    </p>
+                                                                    {doc.original_filename && (
+                                                                        <p className="text-xs text-neutral-500">{doc.original_filename}</p>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-2 flex-wrap">
-                                                                {doc.uploaded_path ? (
-                                                                    <>
-                                                                        {/* Status buttons - only show if file is uploaded */}
-                                                                        {(canSetPending() || canSetApproved() || canSetRejected()) && (
-                                                                            <div className="flex items-center gap-1 border rounded-md p-1">
-                                                                                {canSetPending() && (
-                                                                                    <Button
-                                                                                        variant={doc.status === 'pending' ? 'default' : 'ghost'}
-                                                                                        size="sm"
-                                                                                        className={`h-7 px-3 text-xs ${
-                                                                                            doc.status === 'pending'
-                                                                                                ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                                                                        }`}
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            handleUpdateStatus(doc.id, 'pending');
-                                                                                        }}
-                                                                                    >
-                                                                                        PENDING
-                                                                                    </Button>
-                                                                                )}
-                                                                                {canSetApproved() && (
-                                                                                    <Button
-                                                                                        variant={doc.status === 'approved' ? 'default' : 'ghost'}
-                                                                                        size="sm"
-                                                                                        className={`h-7 px-3 text-xs ${
-                                                                                            doc.status === 'approved'
-                                                                                                ? 'bg-green-500 hover:bg-green-600 text-white'
-                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                                                                        }`}
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            handleUpdateStatus(doc.id, 'approved');
-                                                                                        }}
-                                                                                    >
-                                                                                        APPROVED
-                                                                                    </Button>
-                                                                                )}
-                                                                                {canSetRejected() && (
-                                                                                    <Button
-                                                                                        variant={doc.status === 'rejected' ? 'default' : 'ghost'}
-                                                                                        size="sm"
-                                                                                        className={`h-7 px-3 text-xs ${
-                                                                                            doc.status === 'rejected'
-                                                                                                ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                                                                        }`}
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            handleUpdateStatus(doc.id, 'rejected');
-                                                                                        }}
-                                                                                    >
-                                                                                        REJECT
-                                                                                    </Button>
-                                                                                )}
-                                                                            </div>
-                                                                        )}
-                                                                        {canViewDocument() && (
+                                                                {/* Status buttons - always show */}
+                                                                {(canSetPending() || canSetApproved() || canSetRejected()) && (
+                                                                    <div className="flex items-center gap-1 border rounded-md p-1">
+                                                                        {canSetPending() && (
                                                                             <Button
-                                                                                variant="outline"
+                                                                                variant={doc.status === 'pending' ? 'default' : 'ghost'}
                                                                                 size="sm"
+                                                                                className={`h-7 px-3 text-xs ${
+                                                                                    doc.status === 'pending'
+                                                                                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                }`}
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
-                                                                                    handleViewFile(doc.id);
+                                                                                    handleUpdateStatus(doc.id, 'pending');
                                                                                 }}
                                                                             >
-                                                                                <Eye className="h-4 w-4 mr-1" />
-                                                                                View
-                                                                                {getFileExtension(doc.original_filename, doc.uploaded_path) && (
-                                                                                    <span className="ml-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
-                                                                                        .{getFileExtension(doc.original_filename, doc.uploaded_path)}
-                                                                                    </span>
-                                                                                )}
+                                                                                PENDING
                                                                             </Button>
                                                                         )}
-                                                                        {canReplaceDocument() && (
-                                                                            <>
-                                                                                <input
-                                                                                    ref={(el) => (fileInputRefs.current[doc.id] = el)}
-                                                                                    type="file"
-                                                                                    accept="image/jpeg,image/jpg,image/png,application/pdf"
-                                                                                    className="hidden"
-                                                                                    onChange={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        handleFileSelect(doc.id, e);
-                                                                                    }}
-                                                                                />
-                                                                                <Button
-                                                                                    variant="outline"
-                                                                                    size="sm"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        fileInputRefs.current[doc.id]?.click();
-                                                                                    }}
-                                                                                    disabled={uploadingDocId === doc.id}
-                                                                                >
-                                                                                    <Edit className="h-4 w-4 mr-1" />
-                                                                                    {uploadingDocId === doc.id ? 'Uploading...' : 'Replace'}
-                                                                                </Button>
-                                                                            </>
+                                                                        {canSetApproved() && (
+                                                                            <Button
+                                                                                variant={doc.status === 'approved' ? 'default' : 'ghost'}
+                                                                                size="sm"
+                                                                                className={`h-7 px-3 text-xs ${
+                                                                                    doc.status === 'approved'
+                                                                                        ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                }`}
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleUpdateStatus(doc.id, 'approved');
+                                                                                }}
+                                                                            >
+                                                                                APPROVED
+                                                                            </Button>
                                                                         )}
-                                                                    </>
-                                                                ) : (
+                                                                        {canSetRejected() && (
+                                                                            <Button
+                                                                                variant={doc.status === 'rejected' ? 'default' : 'ghost'}
+                                                                                size="sm"
+                                                                                className={`h-7 px-3 text-xs ${
+                                                                                    doc.status === 'rejected'
+                                                                                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                }`}
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleUpdateStatus(doc.id, 'rejected');
+                                                                                }}
+                                                                            >
+                                                                                REJECT
+                                                                            </Button>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                                
+                                                                {/* EMPTY button - delete file */}
+                                                                {canDeleteFile() && doc.uploaded_path && (
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="h-7 px-3 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleDeleteFile(doc.id);
+                                                                        }}
+                                                                    >
+                                                                        EMPTY
+                                                                    </Button>
+                                                                )}
+
+                                                                {/* UPLOAD button - always show */}
+                                                                {canUploadDocument() && (
                                                                     <>
-                                                                        {getStatusBadge(doc.status)}
-                                                                        {canUploadDocument() && (
-                                                                            <>
-                                                                                <input
-                                                                                    ref={(el) => (fileInputRefs.current[doc.id] = el)}
-                                                                                    type="file"
-                                                                                    accept="image/jpeg,image/jpg,image/png,application/pdf"
-                                                                                    className="hidden"
-                                                                                    onChange={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        handleFileSelect(doc.id, e);
-                                                                                    }}
-                                                                                />
-                                                                                <Button
-                                                                                    variant="outline"
-                                                                                    size="sm"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        fileInputRefs.current[doc.id]?.click();
-                                                                                    }}
-                                                                                    disabled={uploadingDocId === doc.id}
-                                                                                >
-                                                                                    <Upload className="h-4 w-4 mr-1" />
-                                                                                    {uploadingDocId === doc.id ? 'Uploading...' : 'Upload'}
-                                                                                </Button>
-                                                                            </>
-                                                                        )}
+                                                                        <input
+                                                                            ref={(el) => (fileInputRefs.current[doc.id] = el)}
+                                                                            type="file"
+                                                                            accept="image/jpeg,image/jpg,image/png,application/pdf"
+                                                                            className="hidden"
+                                                                            onChange={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleFileSelect(doc.id, e);
+                                                                            }}
+                                                                        />
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            className="h-7 px-3 text-xs"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                fileInputRefs.current[doc.id]?.click();
+                                                                            }}
+                                                                            disabled={uploadingDocId === doc.id}
+                                                                        >
+                                                                            <Upload className="h-4 w-4 mr-1" />
+                                                                            {uploadingDocId === doc.id ? 'Uploading...' : 'UPLOAD'}
+                                                                        </Button>
                                                                     </>
+                                                                )}
+
+                                                                {/* View button - only show if file is uploaded */}
+                                                                {canViewDocument() && doc.uploaded_path && (
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="h-7 px-3 text-xs"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleViewFile(doc.id);
+                                                                        }}
+                                                                    >
+                                                                        <Eye className="h-4 w-4 mr-1" />
+                                                                        View
+                                                                        {getFileExtension(doc.original_filename, doc.uploaded_path) && (
+                                                                            <span className="ml-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                                                                .{getFileExtension(doc.original_filename, doc.uploaded_path)}
+                                                                            </span>
+                                                                        )}
+                                                                    </Button>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -4350,6 +5263,8 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
     const [leadStages, setLeadStages] = useState<FilterOption[]>([]);
     const [loadingLeadStages, setLoadingLeadStages] = useState(false);
     const [timeEditingState, setTimeEditingState] = useState<'hours' | 'minutes' | null>(null);
+    const [confirmDuplicate, setConfirmDuplicate] = useState(false);
+    const isAdmin = isSuperAdmin || isCompanyAdmin;
     
     // Early return if no driver
     if (!driver) {
@@ -4379,6 +5294,10 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         lead_stage_id: driver?.lead_stage?.id ? String(driver.lead_stage.id) : '',
         current_stage_id: '',
         notes: driver?.notes || '',
+        feedback_count: driver?.feedback_count || 0,
+        vehicle_type: driver?.vehicle_type || '',
+        has_worked_before: driver?.has_worked_before || '',
+        governorate: driver?.governorate || '',
     });
     
     // Check if cancel_reason is required based on lead_status
@@ -4503,6 +5422,11 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
             transformed.company_id = Number(data.company_id);
         }
         
+        // Add confirm_duplicate if admin
+        if (isAdmin) {
+            transformed.confirm_duplicate = confirmDuplicate;
+        }
+        
         return transformed;
     });
 
@@ -4575,9 +5499,8 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         });
     };
 
-    try {
-        return (
-            <Dialog key={`quick-edit-${driver.id}`} open={open} onOpenChange={onOpenChange}>
+    return (
+        <Dialog key={`quick-edit-${driver.id}`} open={open} onOpenChange={onOpenChange}>
                 <DialogContent className="!max-w-6xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Quick Edit Driver</DialogTitle>
@@ -4631,6 +5554,16 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                             {errors.email && (
                                 <p className="text-sm text-red-500 mt-1">{errors.email}</p>
                             )}
+                        </div>
+                        <div className="col-span-2 flex items-center space-x-2">
+                            <Checkbox
+                                id="confirm_duplicate_quick_edit"
+                                checked={confirmDuplicate}
+                                onCheckedChange={(checked) => setConfirmDuplicate(checked as boolean)}
+                            />
+                            <label htmlFor="confirm_duplicate_quick_edit" className="text-sm font-normal cursor-pointer">
+                                Confirm Duplicate
+                            </label>
                         </div>
                         {showRidingCompanyField && (
                             <div>
@@ -4792,17 +5725,19 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                                 // If selected date is before today, use today instead
                                                 if (selected < today) {
                                                     const todayStr = today.toISOString().split('T')[0];
-                                                    const existingTime = data.next_follow_up && data.next_follow_up.includes('T') 
-                                                        ? data.next_follow_up.split('T')[1] 
-                                                        : '00:00';
-                                                    setData('next_follow_up', `${todayStr}T${existingTime}`);
+                                                    // Use current time
+                                                    const now = new Date();
+                                                    const hours = String(now.getHours()).padStart(2, '0');
+                                                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                                                    setData('next_follow_up', `${todayStr}T${hours}:${minutes}`);
                                                     return;
                                                 }
                                                 
-                                                const existingTime = data.next_follow_up && data.next_follow_up.includes('T') 
-                                                    ? data.next_follow_up.split('T')[1] 
-                                                    : '00:00';
-                                                setData('next_follow_up', `${selectedDate}T${existingTime}`);
+                                                    // Use current time when selecting a new date
+                                                    const now = new Date();
+                                                    const hours = String(now.getHours()).padStart(2, '0');
+                                                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                                                    setData('next_follow_up', `${selectedDate}T${hours}:${minutes}`);
                                             } else {
                                                 setData('next_follow_up', '');
                                             }
@@ -4997,7 +5932,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                                         <SelectTrigger className="h-auto py-0 px-2 border-0 bg-transparent shadow-none hover:bg-blue-50 dark:hover:bg-blue-900/20">
                                                             <SelectValue>{ampm}</SelectValue>
                                                         </SelectTrigger>
-                                                        <SelectContent>
+                                                        <SelectContent side="top" sideOffset={4}>
                                                             <SelectItem value="AM">AM</SelectItem>
                                                             <SelectItem value="PM">PM</SelectItem>
                                                         </SelectContent>
@@ -5073,20 +6008,30 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                         </div>
                         <div className="col-span-2">
                             <label className="block text-sm font-medium mb-1">Assigned To</label>
-                            <MultiSelect
-                                options={filterOptions.users?.map((user) => ({
-                                    value: user.id,
-                                    label: user.name,
-                                })) || []}
-                                value={data.assigned_users}
-                                onChange={(value) => setData('assigned_users', value)}
-                                placeholder="Select users..."
-                            />
-                            {errors.assigned_users && (
-                                <p className="text-sm text-red-500 mt-1">{errors.assigned_users}</p>
-                            )}
-                            {errors['assigned_users.*'] && (
-                                <p className="text-sm text-red-500 mt-1">{errors['assigned_users.*']}</p>
+                            <Select
+                                value={data.assigned_to ? String(data.assigned_to) : undefined}
+                                onValueChange={(value) => {
+                                    if (value === 'none') {
+                                        setData('assigned_to', null);
+                                    } else {
+                                        setData('assigned_to', Number(value));
+                                    }
+                                }}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select user..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">-- None --</SelectItem>
+                                    {filterOptions.users?.map((user) => (
+                                        <SelectItem key={user.id} value={String(user.id)}>
+                                            {user.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {errors.assigned_to && (
+                                <p className="text-sm text-red-500 mt-1">{errors.assigned_to}</p>
                             )}
                         </div>
                         <div className="col-span-2">
@@ -5100,6 +6045,64 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                             />
                             {errors.notes && (
                                 <p className="text-sm text-red-500 mt-1">{errors.notes}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Vehicle Type</label>
+                            <Input
+                                value={data.vehicle_type}
+                                onChange={(e) => setData('vehicle_type', e.target.value)}
+                                className={errors.vehicle_type ? 'border-red-500' : ''}
+                                placeholder="Enter vehicle type..."
+                            />
+                            {errors.vehicle_type && (
+                                <p className="text-sm text-red-500 mt-1">{errors.vehicle_type}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Has the driver worked before?</label>
+                            <Input
+                                value={data.has_worked_before}
+                                onChange={(e) => setData('has_worked_before', e.target.value)}
+                                className={errors.has_worked_before ? 'border-red-500' : ''}
+                                placeholder="Enter information about previous work experience..."
+                            />
+                            {errors.has_worked_before && (
+                                <p className="text-sm text-red-500 mt-1">{errors.has_worked_before}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Governorate</label>
+                            <Select
+                                value={data.governorate || undefined}
+                                onValueChange={(value) => setData('governorate', value || '')}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select governorate..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {EGYPT_GOVERNORATES.map((gov) => (
+                                        <SelectItem key={gov} value={gov}>
+                                            {gov}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {errors.governorate && (
+                                <p className="text-sm text-red-500 mt-1">{errors.governorate}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Feedback Count</label>
+                            <Input
+                                type="number"
+                                value={String(data.feedback_count || 0)}
+                                disabled
+                                className="bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
+                            />
+                            <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically incremented when lead status is updated</p>
+                            {errors.feedback_count && (
+                                <p className="text-sm text-red-500 mt-1">{errors.feedback_count}</p>
                             )}
                         </div>
                     </div>
@@ -5119,22 +6122,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                 </form>
             </DialogContent>
         </Dialog>
-        );
-    } catch (error) {
-        console.error('Error rendering QuickEditDialog:', error);
-        return (
-            <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Error</DialogTitle>
-                        <DialogDescription>
-                            An error occurred while loading the dialog. Please try again.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <Button onClick={() => onOpenChange(false)}>Close</Button>
-                </DialogContent>
-            </Dialog>
-        );
-    }
+    );
 }
 

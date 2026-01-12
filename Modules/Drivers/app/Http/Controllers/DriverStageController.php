@@ -9,9 +9,9 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Drivers\app\Http\Requests\DriverStageStoreRequest;
 use Modules\Drivers\app\Http\Requests\DriverStageUpdateRequest;
-use Modules\Drivers\app\Services\DriverStageService;
 use Modules\Drivers\app\Models\Driver;
-use Modules\RidingCarCompanies\app\Models\RidingCompanyStageTemplate;
+use Modules\Drivers\app\Services\DriverStageService;
+use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
 class DriverStageController extends Controller
 {
@@ -34,12 +34,12 @@ class DriverStageController extends Controller
         $user = Auth::user();
         $companyId = $this->getCompanyId();
 
-        $drivers = Driver::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('full_name')->get();
-        $stageTemplates = RidingCompanyStageTemplate::active()->ordered()->get();
+        $drivers = Driver::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('full_name')->get();
+        $ridingCompanies = RidingCompany::orderBy('name')->get();
 
         return Inertia::render('Drivers/DriverStages/Create', [
             'drivers' => $drivers,
-            'stageTemplates' => $stageTemplates,
+            'ridingCompanies' => $ridingCompanies,
         ]);
     }
 
@@ -111,13 +111,13 @@ class DriverStageController extends Controller
         $user = Auth::user();
         $companyId = $this->getCompanyId();
 
-        $drivers = Driver::when($companyId, fn($q) => $q->where('company_id', $companyId))->orderBy('full_name')->get();
-        $stageTemplates = RidingCompanyStageTemplate::active()->ordered()->get();
+        $drivers = Driver::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('full_name')->get();
+        $ridingCompanies = RidingCompany::orderBy('name')->get();
 
         return Inertia::render('Drivers/DriverStages/Edit', [
             'driverStage' => $driverStageModel,
             'drivers' => $drivers,
-            'stageTemplates' => $stageTemplates,
+            'ridingCompanies' => $ridingCompanies,
         ]);
     }
 
@@ -191,21 +191,21 @@ class DriverStageController extends Controller
         $companyId = $this->getCompanyId();
         $driverStages = $this->driverStageService->getAllDriverStages(null, $companyId);
 
-        $filename = 'driver_stages_export_' . date('Y-m-d_His') . '.csv';
-        
+        $filename = 'driver_stages_export_'.date('Y-m-d_His').'.csv';
+
         // Add UTF-8 BOM for Excel compatibility
         $content = "\xEF\xBB\xBF";
-        
+
         // Open output stream
         $output = fopen('php://temp', 'r+');
 
-        fputcsv($output, ['ID', 'Driver', 'Stage Template', 'Order', 'Status', 'Completed At', 'Created At']);
+        fputcsv($output, ['ID', 'Driver', 'Riding Company', 'Order', 'Status', 'Completed At', 'Created At']);
 
         foreach ($driverStages as $stage) {
             fputcsv($output, [
                 $stage->id,
                 $stage->driver?->full_name ?? '',
-                $stage->stageTemplate?->name ?? '',
+                $stage->ridingCompany?->name ?? '',
                 $stage->stage_order,
                 $stage->status,
                 $stage->completed_at ?? '',
@@ -221,17 +221,16 @@ class DriverStageController extends Controller
             echo $content;
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
-        
+
         // Prevent Inertia from processing this response
         $response->headers->remove('X-Inertia');
         $response->headers->set('X-Inertia', 'false');
         $response->headers->set('Cache-Control', 'no-cache, must-revalidate');
         $response->headers->set('Pragma', 'no-cache');
         $response->headers->set('Expires', '0');
-        
+
         return $response;
     }
 }
-

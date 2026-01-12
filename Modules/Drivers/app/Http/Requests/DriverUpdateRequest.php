@@ -16,7 +16,7 @@ class DriverUpdateRequest extends FormRequest
         $user = $this->user();
         $driverId = $this->route('driver');
         $driver = $driverId ? \Modules\Drivers\app\Models\Driver::find($driverId) : null;
-        $companyId = $user->isSuperAdmin() 
+        $companyId = $user->isSuperAdmin()
             ? ($this->input('company_id') ?? $driver?->company_id)
             : $user->company_id;
 
@@ -79,6 +79,9 @@ class DriverUpdateRequest extends FormRequest
                 },
             ],
             'assigned_to' => ['nullable', 'integer', 'exists:users,id'], // Keep for backward compatibility
+            'clear_fields_on_reassign' => ['nullable', 'array'],
+            'clear_fields_on_reassign.*' => ['string', 'in:lead_status_comment,next_follow_up,last_follow_up,cancel_reason,lead_stage_id,lead_status_id,notes'],
+            'set_lead_status_to_new' => ['nullable', 'boolean'],
             'lead_status_id' => [
                 'nullable',
                 'exists:lead_statuses,id',
@@ -125,7 +128,7 @@ class DriverUpdateRequest extends FormRequest
                             'Probleme with link', 'Whats app Message', 'Follow Documents', 'Follow Up', 'Need Recall',
                             'Link Not Done', 'Missing Documents', 'Waiting Activation', 'Need To Visit GL', 'Active',
                             'Sign Up', 'Sign up Cities', 'DFT', 'Complete 50', 'Complete 100', 'Complete 120',
-                            'DFT Old', 'Fresh stage'
+                            'DFT Old', 'Fresh stage',
                         ];
                         if ($leadStatus && in_array($leadStatus->name, $requiredStatuses)) {
                             if (empty($value)) {
@@ -146,7 +149,7 @@ class DriverUpdateRequest extends FormRequest
                             'Probleme with link', 'Whats app Message', 'Follow Documents', 'Follow Up', 'Need Recall',
                             'Link Not Done', 'Missing Documents', 'Waiting Activation', 'Need To Visit GL', 'Active',
                             'Sign Up', 'Sign up Cities', 'DFT', 'Complete 50', 'Complete 100', 'Complete 120',
-                            'DFT Old', 'Fresh stage'
+                            'DFT Old', 'Fresh stage',
                         ];
                         if ($leadStatus && in_array($leadStatus->name, $requiredStatuses)) {
                             if (empty($value)) {
@@ -167,6 +170,10 @@ class DriverUpdateRequest extends FormRequest
             ],
             'next_time' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
+            'feedback_count' => ['nullable', 'integer', 'min:0'],
+            'vehicle_type' => ['nullable', 'string', 'max:255'],
+            'has_worked_before' => ['nullable', 'string', 'max:255'],
+            'governorate' => ['nullable', 'string', 'max:255'],
             'cancel_reason' => [
                 function ($attribute, $value, $fail) {
                     $leadStatusId = $this->input('lead_status_id');
@@ -201,4 +208,3 @@ class DriverUpdateRequest extends FormRequest
         ];
     }
 }
-

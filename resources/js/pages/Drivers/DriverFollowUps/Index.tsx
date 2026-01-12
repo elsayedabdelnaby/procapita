@@ -108,19 +108,34 @@ const ALL_FOLLOWUP_COLUMNS = [
 
 // Define all available columns from Drivers (with special naming)
 const ALL_DRIVER_COLUMNS = [
-    { id: 'driver_phone', label: 'Phone (Drivers)', defaultVisible: false, defaultOrder: 10 },
-    { id: 'driver_whatsapp', label: 'WhatsApp (Drivers)', defaultVisible: false, defaultOrder: 11 },
-    { id: 'driver_email', label: 'Email (Drivers)', defaultVisible: false, defaultOrder: 12 },
-    { id: 'driver_riding_company', label: 'Riding Company (Drivers)', defaultVisible: false, defaultOrder: 13 },
-    { id: 'driver_campaign', label: 'Campaign (Drivers)', defaultVisible: false, defaultOrder: 14 },
-    { id: 'driver_lead_source', label: 'Lead Source (Drivers)', defaultVisible: false, defaultOrder: 15 },
-    { id: 'driver_lead_status', label: 'Lead Status (Drivers)', defaultVisible: false, defaultOrder: 16 },
-    { id: 'driver_lead_stage', label: 'Lead Stage (Drivers)', defaultVisible: false, defaultOrder: 17 },
-    { id: 'driver_assigned_to', label: 'Assigned To (Drivers)', defaultVisible: false, defaultOrder: 18 },
-    { id: 'driver_assigned_users', label: 'Assigned Users (Drivers)', defaultVisible: false, defaultOrder: 19 },
-    { id: 'driver_uuid', label: 'UUID (Drivers)', defaultVisible: false, defaultOrder: 20 },
-    { id: 'driver_created_at', label: 'Created At (Drivers)', defaultVisible: false, defaultOrder: 21 },
-    { id: 'driver_updated_at', label: 'Updated At (Drivers)', defaultVisible: false, defaultOrder: 22 },
+    { id: 'driver_driver_num', label: 'Driver Num (Drivers)', defaultVisible: false, defaultOrder: 10 },
+    { id: 'driver_duplicate', label: 'Duplicate (Drivers)', defaultVisible: false, defaultOrder: 10.1 },
+    { id: 'driver_phone', label: 'Phone (Drivers)', defaultVisible: false, defaultOrder: 10.2 },
+    { id: 'driver_whatsapp', label: 'WhatsApp (Drivers)', defaultVisible: false, defaultOrder: 10.3 },
+    { id: 'driver_email', label: 'Email (Drivers)', defaultVisible: false, defaultOrder: 10.4 },
+    { id: 'driver_riding_company', label: 'Riding Company (Drivers)', defaultVisible: false, defaultOrder: 10.5 },
+    { id: 'driver_campaign', label: 'Campaign (Drivers)', defaultVisible: false, defaultOrder: 10.6 },
+    { id: 'driver_lead_source', label: 'Lead Source (Drivers)', defaultVisible: false, defaultOrder: 10.7 },
+    { id: 'driver_lead_status', label: 'Lead Status (Drivers)', defaultVisible: false, defaultOrder: 10.8 },
+    { id: 'driver_lead_status_comment', label: 'Feedback Comment (Drivers)', defaultVisible: false, defaultOrder: 10.9 },
+    { id: 'driver_next_follow_up', label: 'Next Follow-up (Drivers)', defaultVisible: false, defaultOrder: 11 },
+    { id: 'driver_next_time', label: 'Next Time (Drivers)', defaultVisible: false, defaultOrder: 11.1 },
+    { id: 'driver_last_follow_up', label: 'Last Follow-up (Drivers)', defaultVisible: false, defaultOrder: 11.2 },
+    { id: 'driver_assigned_to', label: 'Assigned To (Drivers)', defaultVisible: false, defaultOrder: 11.3 },
+    { id: 'driver_lead_stage', label: 'Lead Stage (Drivers)', defaultVisible: false, defaultOrder: 11.5 },
+    { id: 'driver_current_stage', label: 'Current Stage (Drivers)', defaultVisible: false, defaultOrder: 11.6 },
+    { id: 'driver_last_assigned_time', label: 'Last Assigned Time (Drivers)', defaultVisible: false, defaultOrder: 11.7 },
+    { id: 'driver_last_assigned_date', label: 'Last Assigned Date (Drivers)', defaultVisible: false, defaultOrder: 11.75 },
+    { id: 'driver_last_assigned_by', label: 'Last Assigned By (Drivers)', defaultVisible: false, defaultOrder: 11.8 },
+    { id: 'driver_notes', label: 'Notes (Drivers)', defaultVisible: false, defaultOrder: 11.9 },
+    { id: 'driver_cancel_reason', label: 'Cancel Reasons (Drivers)', defaultVisible: false, defaultOrder: 12 },
+    { id: 'driver_vehicle_type', label: 'Vehicle Type (Drivers)', defaultVisible: false, defaultOrder: 12.1 },
+    { id: 'driver_has_worked_before', label: 'Has the driver worked before? (Drivers)', defaultVisible: false, defaultOrder: 12.2 },
+    { id: 'driver_city', label: 'City (Drivers)', defaultVisible: false, defaultOrder: 12.3 },
+    { id: 'driver_feedback_count', label: 'Feedback Count (Drivers)', defaultVisible: false, defaultOrder: 12.5 },
+    { id: 'driver_uuid', label: 'UUID (Drivers)', defaultVisible: false, defaultOrder: 13 },
+    { id: 'driver_created_at', label: 'Created At (Drivers)', defaultVisible: false, defaultOrder: 14 },
+    { id: 'driver_updated_at', label: 'Updated At (Drivers)', defaultVisible: false, defaultOrder: 15 },
 ];
 
 // Combine all columns
@@ -1177,9 +1192,10 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                                                   col.id === 'notes' ? 'notes' :
                                                                   col.id === 'next_follow_up_drivers' ? 'driver_next_follow_up' :
                                                                   col.id === 'last_follow_up_drivers' ? 'driver_last_follow_up' :
+                                                                  col.id === 'driver_last_assigned_date' ? 'driver_last_assigned_time' :
                                                                   col.id.startsWith('driver_') ? col.id : col.id;
-                                                // Date inputs for next_follow_up_drivers and last_follow_up_drivers
-                                                if (col.id === 'next_follow_up_drivers' || col.id === 'last_follow_up_drivers') {
+                                                // Date inputs for next_follow_up_drivers, last_follow_up_drivers, and driver_last_assigned_date
+                                                if (col.id === 'next_follow_up_drivers' || col.id === 'last_follow_up_drivers' || col.id === 'driver_last_assigned_date') {
                                                     return (
                                                         <th key={col.id} className="px-4 py-2">
                                                             <div className="relative">
@@ -1462,6 +1478,41 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                                                 break;
                                                             case 'driver_assigned_to':
                                                                 cellContent = followUp.driver?.assigned_to?.name || '-';
+                                                                break;
+                                                            case 'driver_last_assigned_time':
+                                                                cellContent = followUp.driver?.last_assigned_time ? (
+                                                                    <span>{new Date(followUp.driver.last_assigned_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'driver_last_assigned_date':
+                                                                cellContent = followUp.driver?.last_assigned_time ? (
+                                                                    <span>{formatDate(followUp.driver.last_assigned_time)}</span>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'driver_last_assigned_by':
+                                                                cellContent = followUp.driver?.last_assigned_by?.name || '-';
+                                                                break;
+                                                            case 'driver_notes':
+                                                                cellContent = followUp.driver?.notes ? (
+                                                                    <div className="max-w-xs truncate" title={followUp.driver.notes}>
+                                                                        {followUp.driver.notes}
+                                                                    </div>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'driver_cancel_reason':
+                                                                cellContent = followUp.driver?.cancel_reason || '-';
+                                                                break;
+                                                            case 'driver_vehicle_type':
+                                                                cellContent = followUp.driver?.vehicle_type || '-';
+                                                                break;
+                                                            case 'driver_has_worked_before':
+                                                                cellContent = followUp.driver?.has_worked_before || '-';
+                                                                break;
+                                                            case 'driver_city':
+                                                                cellContent = followUp.driver?.city || followUp.driver?.governorate || '-';
+                                                                break;
+                                                            case 'driver_feedback_count':
+                                                                cellContent = followUp.driver?.feedback_count ?? 0;
                                                                 break;
                                                             case 'driver_assigned_users':
                                                                 cellContent = followUp.driver?.assigned_users && followUp.driver.assigned_users.length > 0 ? (

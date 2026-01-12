@@ -14,8 +14,8 @@ class DriverStoreRequest extends FormRequest
     public function rules(): array
     {
         $user = $this->user();
-        $companyId = $user->isSuperAdmin() 
-            ? $this->input('company_id') 
+        $companyId = $user->isSuperAdmin()
+            ? $this->input('company_id')
             : $user->company_id;
 
         $rules = [
@@ -59,12 +59,7 @@ class DriverStoreRequest extends FormRequest
                     }
                 },
             ],
-            'assigned_users' => [
-                'required',
-                'array',
-                'min:1',
-            ],
-            'assigned_users.*' => [
+            'assigned_to' => [
                 'required',
                 'integer',
                 'exists:users,id',
@@ -77,7 +72,6 @@ class DriverStoreRequest extends FormRequest
                     }
                 },
             ],
-            'assigned_to' => ['nullable', 'integer', 'exists:users,id'], // Keep for backward compatibility
             'lead_status_id' => [
                 'required',
                 'exists:lead_statuses,id',
@@ -124,7 +118,7 @@ class DriverStoreRequest extends FormRequest
                             'Probleme with link', 'Whats app Message', 'Follow Documents', 'Follow Up', 'Need Recall',
                             'Link Not Done', 'Missing Documents', 'Waiting Activation', 'Need To Visit GL', 'Active',
                             'Sign Up', 'Sign up Cities', 'DFT', 'Complete 50', 'Complete 100', 'Complete 120',
-                            'DFT Old', 'Fresh stage'
+                            'DFT Old', 'Fresh stage',
                         ];
                         if ($leadStatus && in_array($leadStatus->name, $requiredStatuses)) {
                             if (empty($value)) {
@@ -145,7 +139,7 @@ class DriverStoreRequest extends FormRequest
                             'Probleme with link', 'Whats app Message', 'Follow Documents', 'Follow Up', 'Need Recall',
                             'Link Not Done', 'Missing Documents', 'Waiting Activation', 'Need To Visit GL', 'Active',
                             'Sign Up', 'Sign up Cities', 'DFT', 'Complete 50', 'Complete 100', 'Complete 120',
-                            'DFT Old', 'Fresh stage'
+                            'DFT Old', 'Fresh stage',
                         ];
                         if ($leadStatus && in_array($leadStatus->name, $requiredStatuses)) {
                             if (empty($value)) {
@@ -166,6 +160,10 @@ class DriverStoreRequest extends FormRequest
             ],
             'next_time' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
+            'feedback_count' => ['nullable', 'integer', 'min:0'],
+            'vehicle_type' => ['nullable', 'string', 'max:255'],
+            'has_worked_before' => ['nullable', 'string', 'max:255'],
+            'governorate' => ['nullable', 'string', 'max:255'],
             'cancel_reason' => [
                 function ($attribute, $value, $fail) {
                     $leadStatusId = $this->input('lead_status_id');
@@ -199,11 +197,8 @@ class DriverStoreRequest extends FormRequest
             'email.email' => 'Please provide a valid email address.',
             'riding_company_id.required' => 'Riding company is required.',
             'lead_source_id.required' => 'Lead source is required.',
-            'assigned_users.required' => 'At least one user must be assigned.',
-            'assigned_users.min' => 'At least one user must be assigned.',
-            'assigned_users.*.required' => 'Each assigned user must be valid.',
+            'assigned_to.required' => 'Please select an agent.',
             'lead_status_id.required' => 'Lead status is required.',
         ];
     }
 }
-

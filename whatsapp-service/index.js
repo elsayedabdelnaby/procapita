@@ -570,7 +570,7 @@ app.post('/api/whatsapp/:companyId/chats', async (req, res) => {
 app.get('/api/whatsapp/:companyId/chats/:chatId/messages', async (req, res) => {
     const companyId = req.params.companyId;
     const chatId = req.params.chatId;
-    const limit = parseInt(req.query.limit) || 9999;
+    const limit = parseInt(req.query.limit) || 50; // Reduced default from 1000 to 50 for better performance
     
     const client = clients.get(`client_${companyId}`);
     
@@ -581,19 +581,22 @@ app.get('/api/whatsapp/:companyId/chats/:chatId/messages', async (req, res) => {
     try {
         const chat = await client.getChatById(chatId);
         
-        console.log(`Fetching messages for chat ${chatId}`);
+        console.log(`Fetching messages for chat ${chatId} with limit ${limit}`);
         
-        // Fetch messages - use large limit
-        const messages = await chat.fetchMessages({ limit: 1000 });
+        // Fetch messages with limit
+        const messages = await chat.fetchMessages({ limit: limit });
         
         console.log(`Fetched ${messages.length} messages`);
         
         const filteredMessages = messages;
         
-        const formattedMessages = await Promise.all(filteredMessages.map(async (msg) => {
+        // Load media for all messages - process sequentially to avoid overwhelming the server
+        const formattedMessages = [];
+        for (const msg of filteredMessages) {
             let mediaUrl = null;
             let mimetype = null;
             let filename = null;
+            
             if (msg.hasMedia) {
                 try {
                     const media = await msg.downloadMedia();
@@ -604,11 +607,15 @@ app.get('/api/whatsapp/:companyId/chats/:chatId/messages', async (req, res) => {
                     }
                 } catch (mediaError) {
                     console.error('Error downloading media for message:', msg.id._serialized, mediaError.message);
-                    // For sent messages, try to get media info even if download fails
+                    // Get media info even if download fails
                     if (msg._data && msg._data.mimetype) {
                         mimetype = msg._data.mimetype;
+                        filename = msg._data.filename || null;
                     }
                 }
+            } else if (msg._data) {
+                mimetype = msg._data.mimetype || null;
+                filename = msg._data.filename || null;
             }
             
             // Get body - for media messages, body might be caption or filename
@@ -617,20 +624,20 @@ app.get('/api/whatsapp/:companyId/chats/:chatId/messages', async (req, res) => {
                 body = msg._data.caption || msg._data.filename || '';
             }
             
-            return {
-            id: msg.id._serialized,
+            formattedMessages.push({
+                id: msg.id._serialized,
                 body: body,
-            from: msg.from,
-            to: msg.to,
-            timestamp: msg.timestamp,
-            type: msg.type,
-            isForwarded: msg.isForwarded,
-            hasMedia: msg.hasMedia,
+                from: msg.from,
+                to: msg.to,
+                timestamp: msg.timestamp,
+                type: msg.type,
+                isForwarded: msg.isForwarded,
+                hasMedia: msg.hasMedia,
                 mediaUrl: mediaUrl,
-                mimetype: mimetype || (msg._data ? msg._data.mimetype : null),
-                filename: filename || (msg._data ? msg._data.filename : null),
-            };
-        }));
+                mimetype: mimetype,
+                filename: filename,
+            });
+        }
         
         res.json({ messages: formattedMessages, total: messages.length });
     } catch (error) {
@@ -1028,7 +1035,7 @@ app.get('/api/whatsapp/riding-company/:ridingCompanyId/chats/:chatId/messages', 
     const ridingCompanyId = req.params.ridingCompanyId;
     const chatId = req.params.chatId;
     const clientKey = `riding_${ridingCompanyId}`;
-    const limit = parseInt(req.query.limit) || 9999;
+    const limit = parseInt(req.query.limit) || 50; // Reduced default from 1000 to 50 for better performance
     
     const client = clients.get(`client_${clientKey}`);
     
@@ -1039,19 +1046,22 @@ app.get('/api/whatsapp/riding-company/:ridingCompanyId/chats/:chatId/messages', 
     try {
         const chat = await client.getChatById(chatId);
         
-        console.log(`Fetching messages for riding company chat ${chatId}`);
+        console.log(`Fetching messages for riding company chat ${chatId} with limit ${limit}`);
         
-        // Fetch messages - use large limit
-        const messages = await chat.fetchMessages({ limit: 1000 });
+        // Fetch messages with limit
+        const messages = await chat.fetchMessages({ limit: limit });
         
         console.log(`Fetched ${messages.length} messages for riding company`);
         
         const filteredMessages = messages;
         
-        const formattedMessages = await Promise.all(filteredMessages.map(async (msg) => {
+        // Load media for all messages - process sequentially to avoid overwhelming the server
+        const formattedMessages = [];
+        for (const msg of filteredMessages) {
             let mediaUrl = null;
             let mimetype = null;
             let filename = null;
+            
             if (msg.hasMedia) {
                 try {
                     const media = await msg.downloadMedia();
@@ -1062,11 +1072,15 @@ app.get('/api/whatsapp/riding-company/:ridingCompanyId/chats/:chatId/messages', 
                     }
                 } catch (mediaError) {
                     console.error('Error downloading media for message:', msg.id._serialized, mediaError.message);
-                    // For sent messages, try to get media info even if download fails
+                    // Get media info even if download fails
                     if (msg._data && msg._data.mimetype) {
                         mimetype = msg._data.mimetype;
+                        filename = msg._data.filename || null;
                     }
                 }
+            } else if (msg._data) {
+                mimetype = msg._data.mimetype || null;
+                filename = msg._data.filename || null;
             }
             
             // Get body - for media messages, body might be caption or filename
@@ -1075,7 +1089,7 @@ app.get('/api/whatsapp/riding-company/:ridingCompanyId/chats/:chatId/messages', 
                 body = msg._data.caption || msg._data.filename || '';
             }
             
-            return {
+            formattedMessages.push({
                 id: msg.id._serialized,
                 body: body,
                 from: msg.from,
@@ -1085,10 +1099,10 @@ app.get('/api/whatsapp/riding-company/:ridingCompanyId/chats/:chatId/messages', 
                 isForwarded: msg.isForwarded,
                 hasMedia: msg.hasMedia,
                 mediaUrl: mediaUrl,
-                mimetype: mimetype || (msg._data ? msg._data.mimetype : null),
-                filename: filename || (msg._data ? msg._data.filename : null),
-            };
-        }));
+                mimetype: mimetype,
+                filename: filename,
+            });
+        }
         
         res.json({ messages: formattedMessages, total: messages.length });
     } catch (error) {

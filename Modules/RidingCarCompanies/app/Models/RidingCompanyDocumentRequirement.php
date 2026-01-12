@@ -21,6 +21,7 @@ class RidingCompanyDocumentRequirement extends Model
         'required',
         'instructions',
         'active',
+        'default_status',
     ];
 
     protected function casts(): array
@@ -131,19 +132,19 @@ class RidingCompanyDocumentRequirement extends Model
                 return;
             }
 
-            // Check which drivers already have this document requirement
-            $existingDocuments = \Modules\Drivers\app\Models\DriverDocument::where('document_template_id', $documentRequirement->id)
+            // Check which drivers already have a document for this riding company
+            $existingDocuments = \Modules\Drivers\app\Models\DriverDocument::where('riding_company_id', $documentRequirement->riding_company_id)
                 ->whereIn('driver_id', $drivers->pluck('id'))
                 ->pluck('driver_id')
                 ->toArray();
 
-            // Create driver documents only for drivers who don't have this document yet
+            // Create driver documents only for drivers who don't have a document for this riding company yet
             $documents = [];
             foreach ($drivers as $driver) {
                 if (! in_array($driver->id, $existingDocuments)) {
                     $documents[] = [
                         'driver_id' => $driver->id,
-                        'document_template_id' => $documentRequirement->id,
+                        'riding_company_id' => $documentRequirement->riding_company_id,
                         'status' => 'pending',
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -169,4 +170,3 @@ class RidingCompanyDocumentRequirement extends Model
         });
     }
 }
-

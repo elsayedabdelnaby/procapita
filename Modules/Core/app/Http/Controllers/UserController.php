@@ -26,13 +26,13 @@ class UserController extends Controller
     public function index(int $company, Request $request): Response
     {
         $companyModel = $this->companyService->getCompanyById($company);
-        
+
         if (! $companyModel) {
             abort(404, 'Company not found.');
         }
 
         $currentUser = $request->user();
-        
+
         // Check access: Super admin can see all, Company admin can see only their company
         if ($currentUser && ! $currentUser->isSuperAdmin() && $companyModel->id !== $currentUser->company_id) {
             abort(403, 'You do not have access to this company.');
@@ -52,27 +52,27 @@ class UserController extends Controller
     public function create(int $company, Request $request): Response
     {
         $companyModel = $this->companyService->getCompanyById($company);
-        
+
         if (! $companyModel) {
             abort(404, 'Company not found.');
         }
 
         $currentUser = $request->user();
-        
+
         // Check access: Super admin can see all, Company admin can see only their company
         if ($currentUser && ! $currentUser->isSuperAdmin() && $companyModel->id !== $currentUser->company_id) {
             abort(403, 'You do not have access to this company.');
         }
-        
+
         // Set team context for Spatie Permission to load roles correctly
         setPermissionsTeamId($company);
-        
+
         // Get roles that are below the current user in hierarchy
         $roles = $this->roleService->getSubordinateRolesForUser($currentUser, $company);
-        
+
         // Get permissions that the current user has
         $permissions = $this->permissionService->getGroupedPermissionsForUser($currentUser);
-        
+
         $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
             ->active()
             ->orderBy('name')
@@ -95,7 +95,7 @@ class UserController extends Controller
         try {
             $data = $request->validated();
             $data['company_id'] = $company;
-            
+
             $this->userService->createUser($data);
 
             return redirect()
@@ -157,32 +157,32 @@ class UserController extends Controller
 
         $companyModel = $this->companyService->getCompanyById($company);
         $currentUser = $request->user();
-        
+
         // Check access: Super admin can see all, Company admin can see only their company
         if ($currentUser && ! $currentUser->isSuperAdmin() && $companyModel->id !== $currentUser->company_id) {
             abort(403, 'You do not have access to this company.');
         }
-        
+
         // Set team context for Spatie Permission to load roles correctly
         setPermissionsTeamId($company);
-        
+
         // Get roles that are below the current user in hierarchy
         $roles = $this->roleService->getSubordinateRolesForUser($currentUser, $company);
-        
+
         // Get permissions that the current user has
         $permissions = $this->permissionService->getGroupedPermissionsForUser($currentUser);
-        
+
         $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
             ->active()
             ->orderBy('name')
             ->get();
-        
+
         // Reload the user's roles and permissions in the correct team context
         $userModel->load('roles', 'permissions');
-        
+
         // Get user's current role IDs
         $userRoles = $userModel->roles->pluck('id')->toArray();
-        
+
         // Get user's current permission IDs
         $userPermissionIds = $userModel->permissions->pluck('id')->toArray();
 
@@ -201,7 +201,7 @@ class UserController extends Controller
     {
         try {
             $userModel = $this->userService->getUserById($user);
-            
+
             if (! $userModel || $userModel->company_id !== $company) {
                 abort(404, 'User not found.');
             }
@@ -219,16 +219,34 @@ class UserController extends Controller
         }
     }
 
-    public function destroy(int $company, int $user): RedirectResponse
+    public function destroy(int $company, int $user, Request $request): RedirectResponse
     {
         try {
             $userModel = $this->userService->getUserById($user);
-            
+
             if (! $userModel || $userModel->company_id !== $company) {
                 abort(404, 'User not found.');
             }
 
-            $this->userService->deleteUser($user);
+            // Get reassign user ID from request
+            $reassignToUserId = $request->input('reassign_to_user_id');
+
+            if (! $reassignToUserId) {
+                // Check if user has any assigned drivers
+                $hasAssignedDrivers = \Modules\Drivers\app\Models\Driver::where('assigned_to', $user)
+                    ->orWhereHas('assignedUsers', function ($q) use ($user) {
+                        $q->where('users.id', $user);
+                    })
+                    ->exists();
+
+                if ($hasAssignedDrivers) {
+                    return redirect()
+                        ->back()
+                        ->with('error', 'This user has assigned drivers. Please select a user to reassign the data to before deleting.');
+                }
+            }
+
+            $this->userService->deleteUser($user, $reassignToUserId);
 
             return redirect()
                 ->route('core.companies.show', $company)
@@ -244,7 +262,7 @@ class UserController extends Controller
     {
         try {
             $userModel = $this->userService->getUserById($user);
-            
+
             if (! $userModel || $userModel->company_id !== $company) {
                 abort(404, 'User not found.');
             }
@@ -265,7 +283,7 @@ class UserController extends Controller
     {
         try {
             $userModel = $this->userService->getUserById($user);
-            
+
             if (! $userModel || $userModel->company_id !== $company) {
                 abort(404, 'User not found.');
             }
@@ -281,5 +299,43 @@ class UserController extends Controller
                 ->with('error', $e->getMessage());
         }
     }
-}
 
+    /**
+     * Get users by riding company ID (for Team Leader selection)
+     */
+    public function getUsersByRidingCompany(Request $request)
+    {
+        $ridingCompanyId = $request->input('riding_company_id');
+        $currentUserId = $request->user()?->id;
+
+        if (! $ridingCompanyId) {
+            return response()->json(['users' => []]);
+        }
+
+        $users = \App\Models\User::where('riding_company_id', $ridingCompanyId)
+            ->where('is_active', true)
+            ->where('id', '!=', $currentUserId) // Exclude current user
+            ->select('id', 'name', 'email')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json(['users' => $users]);
+    }
+
+    /**
+     * Get users without riding company (for Account Manager selection)
+     */
+    public function getUsersWithoutRidingCompany(Request $request)
+    {
+        $currentUserId = $request->user()?->id;
+
+        $users = \App\Models\User::whereNull('riding_company_id')
+            ->where('is_active', true)
+            ->where('id', '!=', $currentUserId) // Exclude current user
+            ->select('id', 'name', 'email')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json(['users' => $users]);
+    }
+}

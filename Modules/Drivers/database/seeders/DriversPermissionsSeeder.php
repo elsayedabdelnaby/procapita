@@ -19,26 +19,41 @@ class DriversPermissionsSeeder extends Seeder
             'driverfollowups' => ['create', 'read', 'update', 'delete'],
             // Field-level permissions for drivers
             'driverfields' => [
+                'view-id',
+                'view-driver_num',
+                'view-duplicate',
                 'view-full_name',
                 'view-phone',
                 'view-whatsapp_phone',
                 'view-email',
+                'view-company_id',
                 'view-riding_company',
+                'view-riding_company_id',
                 'view-campaign',
+                'view-campaign_id',
                 'view-lead_source',
-                'view-assigned_to',
-                'view-assigned_users',
-                'view-last_assigned_time',
-                'view-last_assigned_by',
+                'view-lead_source_id',
                 'view-lead_status',
+                'view-lead_status_id',
                 'view-lead_status_comment',
+                'view-lead_stage',
+                'view-lead_stage_id',
+                'view-current_stage',
+                'view-current_stage_id',
+                'view-assigned_to',
+                'view-last_assigned_time',
+                'view-last_assigned_date',
+                'view-last_assigned_by',
                 'view-next_follow_up',
                 'view-next_time',
                 'view-last_follow_up',
-                'view-lead_stage',
-                'view-current_stage',
                 'view-notes',
-                'view-driver_num',
+                'view-cancel_reason',
+                'view-vehicle_type',
+                'view-has_worked_before',
+                'view-city',
+                'view-feedback_count',
+                'view-uuid',
                 'view-created_at',
                 'view-updated_at',
             ],
@@ -59,18 +74,17 @@ class DriversPermissionsSeeder extends Seeder
                         'action' => $action,
                     ]
                 );
-                
+
                 $createdPermissions[] = $permission->name;
             }
         }
 
         $this->command->info('Drivers module permissions created:');
-        $this->command->info('Total: ' . count($createdPermissions) . ' permissions');
+        $this->command->info('Total: '.count($createdPermissions).' permissions');
         $this->command->newLine();
-        
+
         foreach ($entities as $entity => $actions) {
-            $this->command->info("  {$entity}: " . implode(', ', $actions));
+            $this->command->info("  {$entity}: ".implode(', ', $actions));
         }
     }
 }
-

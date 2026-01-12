@@ -9,11 +9,11 @@ class DriverStageService
 {
     public function getAllDriverStages(?int $driverId = null, ?int $companyId = null): Collection
     {
-        $query = DriverStage::with(['driver', 'stageTemplate'])
+        $query = DriverStage::with(['driver', 'ridingCompany'])
             ->whereHas('driver', function ($q) use ($companyId) {
                 // Only show stages for non-deleted drivers
                 $q->whereNull('deleted_at');
-                
+
                 // Filter by company_id if provided
                 if ($companyId) {
                     $q->where('company_id', $companyId);
@@ -29,7 +29,7 @@ class DriverStageService
 
     public function getDriverStageById(int $id): ?DriverStage
     {
-        return DriverStage::with(['driver', 'stageTemplate'])->find($id);
+        return DriverStage::with(['driver', 'ridingCompany'])->find($id);
     }
 
     public function createDriverStage(array $data): DriverStage
@@ -48,6 +48,7 @@ class DriverStageService
     public function deleteDriverStage(int $id): bool
     {
         $driverStage = DriverStage::findOrFail($id);
+
         return $driverStage->delete();
     }
 
@@ -70,4 +71,3 @@ class DriverStageService
         return $driverStage->fresh();
     }
 }
-

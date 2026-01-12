@@ -21,22 +21,22 @@ class RidingCompanyDocumentRequirementService
 
     public function createDocumentRequirement(array $data, bool $triggerEvents = true): RidingCompanyDocumentRequirement
     {
-        if (!$triggerEvents) {
+        if (! $triggerEvents) {
             // Create without triggering events by using withoutEvents
             return RidingCompanyDocumentRequirement::withoutEvents(function () use ($data) {
                 return RidingCompanyDocumentRequirement::create($data);
             });
         }
-        
+
         return RidingCompanyDocumentRequirement::create($data);
     }
 
     public function addDocumentRequirementToExistingDrivers(int $documentRequirementId): void
     {
         $documentRequirement = RidingCompanyDocumentRequirement::findOrFail($documentRequirementId);
-        
+
         // Only create documents if the requirement is active
-        if (!$documentRequirement->active) {
+        if (! $documentRequirement->active) {
             return;
         }
 
@@ -49,27 +49,30 @@ class RidingCompanyDocumentRequirementService
             return;
         }
 
-        // Check which drivers already have this document requirement
-        $existingDocuments = \Modules\Drivers\app\Models\DriverDocument::where('document_template_id', $documentRequirement->id)
+        // Check which drivers already have a document for this riding company
+        $existingDocuments = \Modules\Drivers\app\Models\DriverDocument::where('riding_company_id', $documentRequirement->riding_company_id)
             ->whereIn('driver_id', $drivers->pluck('id'))
             ->pluck('driver_id')
             ->toArray();
 
-        // Create driver documents only for drivers who don't have this document yet
+        // Create driver documents only for drivers who don't have a document for this riding company yet
         $documents = [];
+        $defaultStatus = $documentRequirement->default_status ?? 'pending';
         foreach ($drivers as $driver) {
-            if (!in_array($driver->id, $existingDocuments)) {
+            if (! in_array($driver->id, $existingDocuments)) {
                 $documents[] = [
+                    'name' => $documentRequirement->name,
                     'driver_id' => $driver->id,
-                    'document_template_id' => $documentRequirement->id,
-                    'status' => 'pending',
+                    'riding_company_id' => $documentRequirement->riding_company_id,
+                    'status' => $defaultStatus,
+                    'notes' => $documentRequirement->instructions,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];
             }
         }
 
-        if (!empty($documents)) {
+        if (! empty($documents)) {
             \Modules\Drivers\app\Models\DriverDocument::insert($documents);
         }
     }
@@ -85,6 +88,7 @@ class RidingCompanyDocumentRequirementService
     public function deleteDocumentRequirement(int $id): bool
     {
         $requirement = RidingCompanyDocumentRequirement::findOrFail($id);
+
         return $requirement->delete();
     }
 
@@ -96,4 +100,3 @@ class RidingCompanyDocumentRequirementService
         return $requirement->fresh();
     }
 }
-

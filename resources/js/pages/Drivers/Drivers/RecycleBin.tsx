@@ -113,7 +113,7 @@ interface DriversRecycleBinProps {
 const ALL_DRIVER_COLUMNS = [
     { id: 'actions', label: 'Actions', defaultVisible: true, defaultOrder: 0 },
     { id: 'driver_num', label: 'Driver Num', defaultVisible: false, defaultOrder: 0.5 },
-    { id: 'duplicate', label: 'Duplicate', defaultVisible: false, defaultOrder: 0.6 },
+    { id: 'duplicate', label: 'Duplicate Count', defaultVisible: false, defaultOrder: 0.6 },
     { id: 'name', label: 'Name', defaultVisible: true, defaultOrder: 1 },
     { id: 'phone', label: 'Phone', defaultVisible: true, defaultOrder: 2 },
     { id: 'whatsapp', label: 'WhatsApp', defaultVisible: true, defaultOrder: 3 },
@@ -4661,20 +4661,30 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                         </div>
                         <div className="col-span-2">
                             <label className="block text-sm font-medium mb-1">Assigned To</label>
-                            <MultiSelect
-                                options={filterOptions.users?.map((user) => ({
-                                    value: user.id,
-                                    label: user.name,
-                                })) || []}
-                                value={data.assigned_users}
-                                onChange={(value) => setData('assigned_users', value)}
-                                placeholder="Select users..."
-                            />
+                            <Select
+                                value={data.assigned_to ? String(data.assigned_to) : ''}
+                                onValueChange={(value) => {
+                                    setData('assigned_to', value ? Number(value) : null);
+                                    setData('assigned_users', value ? [Number(value)] : []);
+                                }}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select user..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="">-- None --</SelectItem>
+                                    {filterOptions.users?.map((user) => (
+                                        <SelectItem key={user.id} value={String(user.id)}>
+                                            {user.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {errors.assigned_to && (
+                                <p className="text-sm text-red-500 mt-1">{errors.assigned_to}</p>
+                            )}
                             {errors.assigned_users && (
                                 <p className="text-sm text-red-500 mt-1">{errors.assigned_users}</p>
-                            )}
-                            {errors['assigned_users.*'] && (
-                                <p className="text-sm text-red-500 mt-1">{errors['assigned_users.*']}</p>
                             )}
                         </div>
                         <div className="col-span-2">

@@ -15,7 +15,7 @@ class DriverStageUpdateRequest extends FormRequest
     {
         return [
             'driver_id' => ['required', 'exists:drivers,id'],
-            'stage_template_id' => ['required', 'exists:riding_company_stage_templates,id'],
+            'riding_company_id' => ['required', 'exists:riding_companies,id'],
             'stage_order' => ['required', 'integer', 'min:1'],
             'status' => ['nullable', 'string', 'in:pending,in_progress,completed,rejected'],
             'notes' => ['nullable', 'string'],
@@ -26,9 +26,8 @@ class DriverStageUpdateRequest extends FormRequest
     {
         return [
             'driver_id.required' => 'Driver is required.',
-            'stage_template_id.required' => 'Stage template is required.',
+            'riding_company_id.required' => 'Riding company is required.',
             'stage_order.required' => 'Stage order is required.',
         ];
     }
 }
-

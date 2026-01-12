@@ -81,12 +81,94 @@ class UserService
         return $user->fresh(['company', 'roles', 'permissions']);
     }
 
-    public function deleteUser(int $id): bool
+    public function deleteUser(int $id, ?int $reassignToUserId = null): bool
     {
         $user = User::findOrFail($id);
 
         if ($user->is_super_admin) {
             throw new \Exception('Cannot delete super admin user.');
+        }
+
+        // If reassign user is provided, transfer all data
+        if ($reassignToUserId) {
+            $reassignToUser = User::findOrFail($reassignToUserId);
+            $userName = $user->name;
+
+            // Transfer drivers assigned to this user
+            \Modules\Drivers\app\Models\Driver::where('assigned_to', $user->id)
+                ->update([
+                    'assigned_to' => $reassignToUserId,
+                    'resigned_leads' => $userName,
+                    'team_leader_id' => $reassignToUser->team_leader_id,
+                    'account_manager_id' => $reassignToUser->account_manager_id,
+                    'riding_company_id' => $reassignToUser->riding_company_id,
+                ]);
+
+            // Transfer follow-ups assigned to this user
+            $oldRidingCompanyId = $user->riding_company_id;
+            $newRidingCompanyId = $reassignToUser->riding_company_id;
+
+            // Get all follow-ups assigned to old user
+            $followUps = \Modules\Drivers\app\Models\DriverFollowUp::where('assigned_to', $user->id)->get();
+
+            // Determine who should receive the follow-ups
+            $reassignFollowUpsToUserId = null;
+            if ($oldRidingCompanyId && $newRidingCompanyId && $oldRidingCompanyId == $newRidingCompanyId) {
+                // Same riding company - assign to new user's team leader
+                $reassignFollowUpsToUserId = $reassignToUser->team_leader_id;
+            } else {
+                // Different riding company - assign to new user's account manager
+                $reassignFollowUpsToUserId = $reassignToUser->account_manager_id;
+            }
+
+            // Reassign follow-ups if we have a valid user
+            if ($reassignFollowUpsToUserId) {
+                $reassignFollowUpsToUser = User::find($reassignFollowUpsToUserId);
+                if ($reassignFollowUpsToUser) {
+                    \Modules\Drivers\app\Models\DriverFollowUp::where('assigned_to', $user->id)
+                        ->update([
+                            'assigned_to' => $reassignFollowUpsToUserId,
+                            'user_name' => $reassignFollowUpsToUser->name,
+                        ]);
+                }
+            }
+
+            // Transfer drivers where user is in assigned_users
+            $driversWithUser = \Modules\Drivers\app\Models\Driver::whereHas('assignedUsers', function ($q) use ($user) {
+                $q->where('users.id', $user->id);
+            })->get();
+
+            foreach ($driversWithUser as $driver) {
+                $assignedUserIds = $driver->assignedUsers->pluck('id')->toArray();
+                $newAssignedUserIds = array_filter($assignedUserIds, fn ($uid) => $uid != $user->id);
+
+                // If user was the only assigned user, add reassign user
+                if (empty($newAssignedUserIds)) {
+                    $newAssignedUserIds = [$reassignToUserId];
+                    $driver->update([
+                        'assigned_to' => $reassignToUserId,
+                        'resigned_leads' => $userName,
+                        'team_leader_id' => $reassignToUser->team_leader_id,
+                        'account_manager_id' => $reassignToUser->account_manager_id,
+                        'riding_company_id' => $reassignToUser->riding_company_id,
+                    ]);
+                } else {
+                    // Add reassign user if not already in list
+                    if (! in_array($reassignToUserId, $newAssignedUserIds)) {
+                        $newAssignedUserIds[] = $reassignToUserId;
+                    }
+                }
+
+                $driver->assignedUsers()->sync($newAssignedUserIds);
+
+                // Update assigned_to if it was the deleted user
+                if ($driver->assigned_to == $user->id) {
+                    $driver->update([
+                        'assigned_to' => $newAssignedUserIds[0],
+                        'resigned_leads' => $userName,
+                    ]);
+                }
+            }
         }
 
         return $user->delete();
@@ -172,4 +254,3 @@ class UserService
         ];
     }
 }
-

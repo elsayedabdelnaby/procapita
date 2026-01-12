@@ -41,6 +41,10 @@ Route::middleware(['auth', 'verified'])->prefix('core')->name('core.')->group(fu
         Route::post('users/{user}/deactivate', [UserController::class, 'deactivate'])->name('users.deactivate');
     });
 
+    // API routes for users
+    Route::get('api/users/by-riding-company', [UserController::class, 'getUsersByRidingCompany'])->name('api.users.by-riding-company');
+    Route::get('api/users/without-riding-company', [UserController::class, 'getUsersWithoutRidingCompany'])->name('api.users.without-riding-company');
+
     // Company-scoped Roles Management (Super Admin Only)
     Route::middleware(['super.admin'])->group(function () {
         Route::prefix('companies/{company}')->name('companies.')->group(function () {

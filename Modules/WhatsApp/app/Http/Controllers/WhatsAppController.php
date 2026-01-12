@@ -7,13 +7,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Process;
-use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Core\app\Models\Company;
+use Modules\Drivers\app\Services\DriverService;
 use Modules\RidingCarCompanies\app\Models\RidingCompany;
 use Modules\WhatsApp\app\Models\WhatsAppSession;
-use Modules\Drivers\app\Services\DriverService;
 
 class WhatsAppController extends Controller
 {
@@ -27,33 +25,35 @@ class WhatsAppController extends Controller
     protected function ensureWhatsAppServiceRunning(): bool
     {
         $nodeServiceUrl = env('WHATSAPP_SERVICE_URL', 'http://localhost:3001');
-        
+
         try {
             $response = Http::timeout(2)->get("{$nodeServiceUrl}/api/whatsapp/health");
+
             return $response->successful();
         } catch (\Exception $e) {
             // Service not running, try to start it
             $this->startWhatsAppService();
-            
+
             // Wait and check again
             sleep(3);
-            
+
             try {
                 $response = Http::timeout(2)->get("{$nodeServiceUrl}/api/whatsapp/health");
+
                 return $response->successful();
             } catch (\Exception $e) {
                 return false;
             }
         }
     }
-    
+
     /**
      * Start WhatsApp service in background
      */
     protected function startWhatsAppService(): void
     {
         $servicePath = base_path('whatsapp-service');
-        
+
         if (PHP_OS_FAMILY === 'Windows') {
             // Windows: start in background
             pclose(popen("start /B node \"{$servicePath}/index.js\"", 'r'));
@@ -61,26 +61,27 @@ class WhatsAppController extends Controller
             // Linux/Mac: start in background
             exec("cd {$servicePath} && node index.js > /dev/null 2>&1 &");
         }
-        
+
         Log::info('WhatsApp service started automatically');
     }
+
     /**
      * Get or create WhatsApp session for a company
      */
     public function getSession(Request $request, int $companyId)
     {
         $company = Company::findOrFail($companyId);
-        
+
         // Check if user has permission to access this company
         $user = Auth::user();
-        if (!$user->is_super_admin && $user->company_id !== $companyId) {
+        if (! $user->is_super_admin && $user->company_id !== $companyId) {
             abort(403, 'Unauthorized');
         }
 
         $session = WhatsAppSession::firstOrCreate(
             ['company_id' => $companyId],
             [
-                'session_id' => 'whatsapp_' . $companyId . '_' . time(),
+                'session_id' => 'whatsapp_'.$companyId.'_'.time(),
                 'status' => 'disconnected',
             ]
         );
@@ -98,22 +99,22 @@ class WhatsAppController extends Controller
     public function generateQRCode(Request $request, int $companyId)
     {
         $company = Company::findOrFail($companyId);
-        
+
         $user = Auth::user();
-        if (!$user->is_super_admin && $user->company_id !== $companyId) {
+        if (! $user->is_super_admin && $user->company_id !== $companyId) {
             abort(403, 'Unauthorized');
         }
 
         $session = WhatsAppSession::firstOrCreate(
             ['company_id' => $companyId],
             [
-                'session_id' => 'whatsapp_' . $companyId . '_' . time(),
+                'session_id' => 'whatsapp_'.$companyId.'_'.time(),
                 'status' => 'disconnected',
             ]
         );
 
         // Ensure WhatsApp service is running
-        if (!$this->ensureWhatsAppServiceRunning()) {
+        if (! $this->ensureWhatsAppServiceRunning()) {
             return response()->json([
                 'success' => false,
                 'error' => 'WhatsApp service could not be started. Please start it manually.',
@@ -122,19 +123,19 @@ class WhatsAppController extends Controller
 
         // Call Node.js service to initialize WhatsApp client
         $nodeServiceUrl = env('WHATSAPP_SERVICE_URL', 'http://localhost:3001');
-        
+
         try {
             $response = Http::timeout(15)->post("{$nodeServiceUrl}/api/whatsapp/{$companyId}/initialize");
-            
+
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 // Get QR code from response
                 $qrCode = $data['qr_code'] ?? null;
                 $status = $data['status'] ?? 'connecting';
-                
+
                 // If QR code is not in response, poll for it
-                if (!$qrCode && $status === 'qr_code') {
+                if (! $qrCode && $status === 'qr_code') {
                     // Wait a bit and try to get QR code
                     sleep(2);
                     $statusResponse = Http::timeout(5)->get("{$nodeServiceUrl}/api/whatsapp/{$companyId}/status");
@@ -144,7 +145,7 @@ class WhatsAppController extends Controller
                         $status = $statusData['status'] ?? $status;
                     }
                 }
-                
+
                 // Update session
                 $session->update([
                     'status' => $status,
@@ -159,11 +160,11 @@ class WhatsAppController extends Controller
                     'session' => $session->fresh(),
                 ]);
             } else {
-                throw new \Exception('Node.js service error: ' . $response->body());
+                throw new \Exception('Node.js service error: '.$response->body());
             }
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
-            Log::error('WhatsApp service connection failed: ' . $e->getMessage());
-            
+            Log::error('WhatsApp service connection failed: '.$e->getMessage());
+
             // Return helpful error message
             return response()->json([
                 'error' => 'WhatsApp service is not running',
@@ -171,8 +172,8 @@ class WhatsAppController extends Controller
                 'status' => 'service_unavailable',
             ], 503);
         } catch (\Exception $e) {
-            Log::error('WhatsApp QR generation failed: ' . $e->getMessage());
-            
+            Log::error('WhatsApp QR generation failed: '.$e->getMessage());
+
             // Return error message
             return response()->json([
                 'error' => 'Failed to generate QR code',
@@ -199,9 +200,9 @@ class WhatsAppController extends Controller
     public function getStatus(Request $request, int $companyId)
     {
         $company = Company::findOrFail($companyId);
-        
+
         $user = Auth::user();
-        if (!$user->is_super_admin && $user->company_id !== $companyId) {
+        if (! $user->is_super_admin && $user->company_id !== $companyId) {
             abort(403, 'Unauthorized');
         }
 
@@ -209,13 +210,13 @@ class WhatsAppController extends Controller
 
         // Try to get status from Node.js service
         $nodeServiceUrl = env('WHATSAPP_SERVICE_URL', 'http://localhost:3001');
-        
+
         try {
             $response = Http::timeout(5)->get("{$nodeServiceUrl}/api/whatsapp/{$companyId}/status");
-            
+
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 // Update session from Node.js service
                 if ($session) {
                     $session->update([
@@ -231,7 +232,7 @@ class WhatsAppController extends Controller
             Log::debug('WhatsApp service not available, using database status');
         }
 
-        if (!$session) {
+        if (! $session) {
             return response()->json([
                 'status' => 'disconnected',
                 'session' => null,
@@ -252,23 +253,23 @@ class WhatsAppController extends Controller
     public function disconnect(Request $request, int $companyId)
     {
         $company = Company::findOrFail($companyId);
-        
+
         $user = Auth::user();
-        if (!$user->is_super_admin && $user->company_id !== $companyId) {
+        if (! $user->is_super_admin && $user->company_id !== $companyId) {
             abort(403, 'Unauthorized');
         }
 
         // Disconnect from Node.js service
         $nodeServiceUrl = env('WHATSAPP_SERVICE_URL', 'http://localhost:3001');
-        
+
         try {
             Http::timeout(10)->post("{$nodeServiceUrl}/api/whatsapp/{$companyId}/disconnect");
         } catch (\Exception $e) {
-            Log::error('WhatsApp disconnect failed: ' . $e->getMessage());
+            Log::error('WhatsApp disconnect failed: '.$e->getMessage());
         }
 
         $session = WhatsAppSession::where('company_id', $companyId)->first();
-        
+
         if ($session) {
             $session->update([
                 'status' => 'disconnected',
@@ -287,10 +288,10 @@ class WhatsAppController extends Controller
     public function getRidingCompanySession(Request $request, int $ridingCompanyId)
     {
         $ridingCompany = RidingCompany::findOrFail($ridingCompanyId);
-        
+
         // Check if user has permission to access this riding company
         $user = Auth::user();
-        if (!$user->is_super_admin && $user->riding_company_id !== $ridingCompanyId) {
+        if (! $user->is_super_admin && $user->riding_company_id !== $ridingCompanyId) {
             abort(403, 'Unauthorized');
         }
 
@@ -298,7 +299,7 @@ class WhatsAppController extends Controller
             ['riding_company_id' => $ridingCompanyId],
             [
                 'company_id' => $ridingCompany->company_id,
-                'session_id' => 'whatsapp_riding_' . $ridingCompanyId . '_' . time(),
+                'session_id' => 'whatsapp_riding_'.$ridingCompanyId.'_'.time(),
                 'status' => 'disconnected',
             ]
         );
@@ -316,9 +317,9 @@ class WhatsAppController extends Controller
     public function generateRidingCompanyQRCode(Request $request, int $ridingCompanyId)
     {
         $ridingCompany = RidingCompany::findOrFail($ridingCompanyId);
-        
+
         $user = Auth::user();
-        if (!$user->is_super_admin && $user->riding_company_id !== $ridingCompanyId) {
+        if (! $user->is_super_admin && $user->riding_company_id !== $ridingCompanyId) {
             abort(403, 'Unauthorized');
         }
 
@@ -326,13 +327,13 @@ class WhatsAppController extends Controller
             ['riding_company_id' => $ridingCompanyId],
             [
                 'company_id' => $ridingCompany->company_id,
-                'session_id' => 'whatsapp_riding_' . $ridingCompanyId . '_' . time(),
+                'session_id' => 'whatsapp_riding_'.$ridingCompanyId.'_'.time(),
                 'status' => 'disconnected',
             ]
         );
 
         // Ensure WhatsApp service is running
-        if (!$this->ensureWhatsAppServiceRunning()) {
+        if (! $this->ensureWhatsAppServiceRunning()) {
             return response()->json([
                 'success' => false,
                 'error' => 'WhatsApp service could not be started. Please start it manually.',
@@ -341,19 +342,19 @@ class WhatsAppController extends Controller
 
         // Call Node.js service to initialize WhatsApp client
         $nodeServiceUrl = env('WHATSAPP_SERVICE_URL', 'http://localhost:3001');
-        
+
         try {
             $response = Http::timeout(15)->post("{$nodeServiceUrl}/api/whatsapp/riding-company/{$ridingCompanyId}/initialize");
-            
+
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 // Get QR code from response
                 $qrCode = $data['qr_code'] ?? null;
                 $status = $data['status'] ?? 'connecting';
-                
+
                 // If QR code is not in response, poll for it
-                if (!$qrCode && $status === 'qr_code') {
+                if (! $qrCode && $status === 'qr_code') {
                     // Wait a bit and try to get QR code
                     sleep(2);
                     $statusResponse = Http::timeout(5)->get("{$nodeServiceUrl}/api/whatsapp/riding-company/{$ridingCompanyId}/status");
@@ -363,7 +364,7 @@ class WhatsAppController extends Controller
                         $status = $statusData['status'] ?? $status;
                     }
                 }
-                
+
                 // Update session
                 $session->update([
                     'status' => $status,
@@ -378,11 +379,11 @@ class WhatsAppController extends Controller
                     'session' => $session->fresh(),
                 ]);
             } else {
-                throw new \Exception('Node.js service error: ' . $response->body());
+                throw new \Exception('Node.js service error: '.$response->body());
             }
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
-            Log::error('WhatsApp service connection failed: ' . $e->getMessage());
-            
+            Log::error('WhatsApp service connection failed: '.$e->getMessage());
+
             // Return helpful error message
             return response()->json([
                 'error' => 'WhatsApp service is not running',
@@ -390,8 +391,8 @@ class WhatsAppController extends Controller
                 'status' => 'service_unavailable',
             ], 503);
         } catch (\Exception $e) {
-            Log::error('WhatsApp QR generation failed: ' . $e->getMessage());
-            
+            Log::error('WhatsApp QR generation failed: '.$e->getMessage());
+
             // Return error message
             return response()->json([
                 'error' => 'Failed to generate QR code',
@@ -407,9 +408,9 @@ class WhatsAppController extends Controller
     public function getRidingCompanyStatus(Request $request, int $ridingCompanyId)
     {
         $ridingCompany = RidingCompany::findOrFail($ridingCompanyId);
-        
+
         $user = Auth::user();
-        if (!$user->is_super_admin && $user->riding_company_id !== $ridingCompanyId) {
+        if (! $user->is_super_admin && $user->riding_company_id !== $ridingCompanyId) {
             abort(403, 'Unauthorized');
         }
 
@@ -417,13 +418,13 @@ class WhatsAppController extends Controller
 
         // Try to get status from Node.js service
         $nodeServiceUrl = env('WHATSAPP_SERVICE_URL', 'http://localhost:3001');
-        
+
         try {
             $response = Http::timeout(5)->get("{$nodeServiceUrl}/api/whatsapp/riding-company/{$ridingCompanyId}/status");
-            
+
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 // Update session from Node.js service
                 if ($session) {
                     $session->update([
@@ -439,7 +440,7 @@ class WhatsAppController extends Controller
             Log::debug('WhatsApp service not available, using database status');
         }
 
-        if (!$session) {
+        if (! $session) {
             return response()->json([
                 'status' => 'disconnected',
                 'session' => null,
@@ -460,23 +461,23 @@ class WhatsAppController extends Controller
     public function disconnectRidingCompany(Request $request, int $ridingCompanyId)
     {
         $ridingCompany = RidingCompany::findOrFail($ridingCompanyId);
-        
+
         $user = Auth::user();
-        if (!$user->is_super_admin && $user->riding_company_id !== $ridingCompanyId) {
+        if (! $user->is_super_admin && $user->riding_company_id !== $ridingCompanyId) {
             abort(403, 'Unauthorized');
         }
 
         // Disconnect from Node.js service
         $nodeServiceUrl = env('WHATSAPP_SERVICE_URL', 'http://localhost:3001');
-        
+
         try {
             Http::timeout(10)->post("{$nodeServiceUrl}/api/whatsapp/riding-company/{$ridingCompanyId}/disconnect");
         } catch (\Exception $e) {
-            Log::error('WhatsApp disconnect failed: ' . $e->getMessage());
+            Log::error('WhatsApp disconnect failed: '.$e->getMessage());
         }
 
         $session = WhatsAppSession::where('riding_company_id', $ridingCompanyId)->first();
-        
+
         if ($session) {
             $session->update([
                 'status' => 'disconnected',
@@ -524,7 +525,7 @@ class WhatsAppController extends Controller
                 'from_number' => $fromNumber,
                 'contact_name' => $contactName,
                 'message_type' => $type,
-                'has_body' => !empty($body),
+                'has_body' => ! empty($body),
             ]);
 
             // Remove @c.us suffix if present
@@ -532,11 +533,12 @@ class WhatsAppController extends Controller
             $cleanToNumber = str_replace('@c.us', '', $toNumber);
 
             // Validate phone number is not empty
-            if (empty($cleanFromNumber) || !trim($cleanFromNumber)) {
+            if (empty($cleanFromNumber) || ! trim($cleanFromNumber)) {
                 \Log::warning('Empty phone number received, ignoring message', [
                     'from_number' => $fromNumber,
                     'riding_company_id' => $ridingCompanyId,
                 ]);
+
                 return response()->json([
                     'success' => false,
                     'error' => 'Invalid phone number: empty',
@@ -555,6 +557,7 @@ class WhatsAppController extends Controller
                     'digits_only' => $digitsOnly,
                     'riding_company_id' => $ridingCompanyId,
                 ]);
+
                 return response()->json([
                     'success' => false,
                     'error' => 'Invalid phone number: must contain at least 5 digits',
@@ -573,10 +576,11 @@ class WhatsAppController extends Controller
             // Get WhatsApp session
             $session = \Modules\WhatsApp\app\Models\WhatsAppSession::where('riding_company_id', $ridingCompanyId)->first();
 
-            if (!$session) {
+            if (! $session) {
                 \Log::error('WhatsApp session not found', [
                     'riding_company_id' => $ridingCompanyId,
                 ]);
+
                 return response()->json(['error' => 'WhatsApp session not found for this riding company'], 404);
             }
 
@@ -590,11 +594,11 @@ class WhatsAppController extends Controller
             // Check if driver exists with this phone number (using reformatted number)
             $driver = \Modules\Drivers\app\Models\Driver::where(function ($query) use ($formattedForComparison) {
                 $query->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [
-                    $formattedForComparison
+                    $formattedForComparison,
                 ])
-                ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [
-                    $formattedForComparison
-                ]);
+                    ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [
+                        $formattedForComparison,
+                    ]);
             })->first();
 
             \Log::info('Driver search result', [
@@ -605,7 +609,7 @@ class WhatsAppController extends Controller
             // If driver doesn't exist, create one automatically
             // This applies to ALL message types (text, image, video, audio, ptt, etc.), not just text messages
             // Even if body is empty, we still create the driver if the phone number is valid
-            if (!$driver) {
+            if (! $driver) {
                 \Log::info('Driver not found, creating new driver', [
                     'phone' => $cleanFromNumber,
                     'contact_name' => $contactName,
@@ -613,15 +617,15 @@ class WhatsAppController extends Controller
 
                 // Get default user for this riding company
                 $defaultUserId = $ridingCompany->default_driver_user_id;
-                
-                if (!$defaultUserId) {
+
+                if (! $defaultUserId) {
                     // Try to find fresh-Leads user for this riding company
                     $nameWithDots = str_replace(' ', '.', $ridingCompany->name);
                     $userName = "fresh-Leads-{$nameWithDots}";
                     $defaultUser = \App\Models\User::where('name', $userName)
                         ->where('riding_company_id', $ridingCompanyId)
                         ->first();
-                    
+
                     if ($defaultUser) {
                         $defaultUserId = $defaultUser->id;
                         \Log::info('Found fresh-Leads user', [
@@ -682,7 +686,7 @@ class WhatsAppController extends Controller
 
                 // Create driver
                 try {
-                    $driver = \Modules\Drivers\app\Models\Driver::create([
+                    $driverData = [
                         'full_name' => $contactName ?: 'NA',
                         'phone' => $cleanFromNumber,
                         'whatsapp_phone' => $cleanFromNumber,
@@ -691,7 +695,22 @@ class WhatsAppController extends Controller
                         'assigned_to' => $defaultUserId,
                         'lead_source_id' => $whatsappLeadSource->id,
                         'lead_status_id' => $newLeadStatus->id,
-                    ]);
+                    ];
+
+                    // Auto-fill team_leader_id, account_manager_id from assigned user
+                    if ($defaultUserId) {
+                        $assignedUser = \App\Models\User::find($defaultUserId);
+                        if ($assignedUser) {
+                            $driverData['team_leader_id'] = $assignedUser->team_leader_id;
+                            $driverData['account_manager_id'] = $assignedUser->account_manager_id;
+                            // Override riding_company_id with user's riding_company_id if exists
+                            if ($assignedUser->riding_company_id) {
+                                $driverData['riding_company_id'] = $assignedUser->riding_company_id;
+                            }
+                        }
+                    }
+
+                    $driver = \Modules\Drivers\app\Models\Driver::create($driverData);
 
                     \Log::info('Driver created successfully', [
                         'driver_id' => $driver->id,
@@ -713,14 +732,34 @@ class WhatsAppController extends Controller
                     // Try to distribute driver if distribution is enabled
                     try {
                         $ridingCompany = $ridingCompany->fresh();
-                        if ($ridingCompany->distribution_type === 'equal' && !empty($ridingCompany->distribution_users)) {
+
+                        // Check if distribution scenarios are configured (new system)
+                        $distributionScenarios = $ridingCompany->distribution_scenarios ?? [];
+                        $hasActiveScenarios = ! empty($distributionScenarios) && is_array($distributionScenarios) &&
+                            ! empty(array_filter($distributionScenarios, function ($scenario) {
+                                return ($scenario['active'] ?? true) === true;
+                            }));
+
+                        // Check legacy distribution system
+                        $hasLegacyDistribution = $ridingCompany->distribution_type === 'equal' && ! empty($ridingCompany->distribution_users);
+
+                        // Distribute if either new or legacy system is enabled
+                        if ($hasActiveScenarios || $hasLegacyDistribution) {
                             $distributionService = app(\Modules\RidingCarCompanies\app\Services\RidingCompanyService::class);
                             $distributionResult = $distributionService->distributeDrivers($ridingCompanyId);
-                            
+
                             if ($distributionResult['success'] && $distributionResult['distributed'] > 0) {
                                 \Log::info('Driver auto-distributed', [
                                     'driver_id' => $driver->id,
                                     'distributed_count' => $distributionResult['distributed'],
+                                    'scenarios_used' => $hasActiveScenarios ? 'yes' : 'no',
+                                ]);
+                            } else {
+                                \Log::info('Driver not distributed', [
+                                    'driver_id' => $driver->id,
+                                    'reason' => $distributionResult['message'] ?? 'Unknown',
+                                    'has_scenarios' => $hasActiveScenarios,
+                                    'has_legacy' => $hasLegacyDistribution,
                                 ]);
                             }
                         }
@@ -728,6 +767,7 @@ class WhatsAppController extends Controller
                         \Log::error('Error auto-distributing driver', [
                             'driver_id' => $driver->id,
                             'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
                         ]);
                         // Don't fail driver creation if distribution fails
                     }
@@ -773,6 +813,7 @@ class WhatsAppController extends Controller
                 'errors' => $e->errors(),
                 'request_data' => $request->all(),
             ]);
+
             return response()->json([
                 'error' => 'Validation failed',
                 'errors' => $e->errors(),
@@ -783,6 +824,7 @@ class WhatsAppController extends Controller
                 'trace' => $e->getTraceAsString(),
                 'request_data' => $request->all(),
             ]);
+
             return response()->json([
                 'error' => 'Internal server error',
                 'message' => $e->getMessage(),

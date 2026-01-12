@@ -4,11 +4,14 @@ import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { formatDate } from '@/utils/date-format';
+import { EGYPT_GOVERNORATES } from '@/constants/egypt-governorates';
 
 interface Company {
     id: number;
@@ -99,6 +102,13 @@ export default function DriversEdit({
     const [leadStages, setLeadStages] = useState<LeadStage[]>([]);
     const [loadingLeadStages, setLoadingLeadStages] = useState(false);
     const [timeEditingState, setTimeEditingState] = useState<'hours' | 'minutes' | null>(null);
+    const [showReassignDialog, setShowReassignDialog] = useState(false);
+    const [clearFieldsOnReassign, setClearFieldsOnReassign] = useState<Set<string>>(new Set());
+    const [setLeadStatusToNew, setSetLeadStatusToNew] = useState(false);
+    const [pendingSubmit, setPendingSubmit] = useState<(() => void) | null>(null);
+    const [confirmDuplicate, setConfirmDuplicate] = useState(false);
+    const originalAssignedTo = driver.assigned_to;
+    const isAdmin = isSuperAdmin || isCompanyAdmin;
 
     const { data, setData, put, processing, errors } = useForm({
         company_id: driver.company_id ? String(driver.company_id) : '',
@@ -119,6 +129,10 @@ export default function DriversEdit({
         current_stage_id: driver.current_stage_id ? String(driver.current_stage_id) : '',
         notes: driver.notes || '',
         cancel_reason: driver.cancel_reason || '',
+        feedback_count: driver.feedback_count || 0,
+        vehicle_type: driver.vehicle_type || '',
+        has_worked_before: driver.has_worked_before || '',
+        governorate: driver.governorate || '',
     });
 
 
@@ -231,11 +245,60 @@ export default function DriversEdit({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Check if assigned_to has changed
+        const newAssignedTo = data.assigned_to ? Number(data.assigned_to) : null;
+        if (newAssignedTo !== originalAssignedTo && (originalAssignedTo || newAssignedTo)) {
+            // Show dialog to select fields to clear
+            setShowReassignDialog(true);
+            setPendingSubmit(() => () => {
+                performSubmit();
+            });
+            return;
+        }
+        
+        performSubmit();
+    };
+    
+    const performSubmit = () => {
         put(`/drivers/drivers/${driver.id}`, {
+            transform: (data) => ({
+                ...data,
+                assigned_to: data.assigned_to ? Number(data.assigned_to) : null,
+                assigned_users: data.assigned_users || [],
+                clear_fields_on_reassign: Array.from(clearFieldsOnReassign),
+                set_lead_status_to_new: setLeadStatusToNew,
+                confirm_duplicate: isAdmin ? confirmDuplicate : true,
+            }),
             onSuccess: () => {
                 router.visit('/drivers/drivers');
             },
         });
+    };
+    
+    const handleReassignDialogConfirm = () => {
+        setShowReassignDialog(false);
+        if (pendingSubmit) {
+            pendingSubmit();
+            setPendingSubmit(null);
+        }
+    };
+    
+    const handleReassignDialogCancel = () => {
+        setShowReassignDialog(false);
+        setClearFieldsOnReassign(new Set());
+        setSetLeadStatusToNew(false);
+        setPendingSubmit(null);
+    };
+    
+    const toggleClearField = (fieldName: string, checked: boolean) => {
+        const newSet = new Set(clearFieldsOnReassign);
+        if (checked) {
+            newSet.add(fieldName);
+        } else {
+            newSet.delete(fieldName);
+        }
+        setClearFieldsOnReassign(newSet);
     };
 
     return (
@@ -346,34 +409,24 @@ export default function DriversEdit({
                                 onChange={(e) => setData('email', e.target.value)}
                                 error={errors.email}
                             />
+
+                            <div className="md:col-span-2 flex items-center space-x-2">
+                                <Checkbox
+                                    id="confirm_duplicate_edit"
+                                    checked={confirmDuplicate}
+                                    onCheckedChange={(checked) => setConfirmDuplicate(checked as boolean)}
+                                />
+                                <Label htmlFor="confirm_duplicate_edit" className="text-sm font-normal cursor-pointer">
+                                    Confirm Duplicate
+                                </Label>
+                            </div>
                         </div>
                     </Card>
 
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Additional Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {showRidingCompanyField && (
-                                <div>
-                                    <Label htmlFor="riding_company_id">Riding Company</Label>
-                                    <select
-                                        id="riding_company_id"
-                                        name="riding_company_id"
-                                        value={data.riding_company_id}
-                                        onChange={(e) => setData('riding_company_id', e.target.value)}
-                                        className="w-full rounded-md border px-3 py-2"
-                                    >
-                                        <option value="">Select a riding company</option>
-                                        {ridingCompanies.map((company) => (
-                                            <option key={company.id} value={String(company.id)}>
-                                                {company.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {errors.riding_company_id && (
-                                        <p className="text-sm text-red-500">{errors.riding_company_id}</p>
-                                    )}
-                                </div>
-                            )}
+                            {/* Riding Company field is hidden in edit mode */}
 
                             <div>
                                 <Label htmlFor="campaign_id">Campaign</Label>
@@ -525,17 +578,19 @@ export default function DriversEdit({
                                                     // If selected date is before today, use today instead
                                                     if (selected < today) {
                                                         const todayStr = today.toISOString().split('T')[0];
-                                                        const existingTime = data.next_follow_up && data.next_follow_up.includes('T') 
-                                                            ? data.next_follow_up.split('T')[1] 
-                                                            : '00:00';
-                                                        setData('next_follow_up', `${todayStr}T${existingTime}`);
+                                                        // Use current time
+                                                        const now = new Date();
+                                                        const hours = String(now.getHours()).padStart(2, '0');
+                                                        const minutes = String(now.getMinutes()).padStart(2, '0');
+                                                        setData('next_follow_up', `${todayStr}T${hours}:${minutes}`);
                                                         return;
                                                     }
                                                     
-                                                    const existingTime = data.next_follow_up && data.next_follow_up.includes('T') 
-                                                        ? data.next_follow_up.split('T')[1] 
-                                                        : '00:00';
-                                                    setData('next_follow_up', `${selectedDate}T${existingTime}`);
+                                                    // Use current time when selecting a new date
+                                                    const now = new Date();
+                                                    const hours = String(now.getHours()).padStart(2, '0');
+                                                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                                                    setData('next_follow_up', `${selectedDate}T${hours}:${minutes}`);
                                                 } else {
                                                     setData('next_follow_up', '');
                                                 }
@@ -730,7 +785,7 @@ export default function DriversEdit({
                                                             <SelectTrigger className="h-auto py-0 px-2 border-0 bg-transparent shadow-none hover:bg-blue-50 dark:hover:bg-blue-900/20">
                                                                 <SelectValue>{ampm}</SelectValue>
                                                             </SelectTrigger>
-                                                            <SelectContent>
+                                                            <SelectContent side="top" sideOffset={4}>
                                                                 <SelectItem value="AM">AM</SelectItem>
                                                                 <SelectItem value="PM">PM</SelectItem>
                                                             </SelectContent>
@@ -806,24 +861,33 @@ export default function DriversEdit({
                             </div>
 
                             <div>
-                                <Label htmlFor="assigned_users">
+                                <Label htmlFor="assigned_to">
                                     Assigned To <span className="text-red-500">*</span>
                                 </Label>
-                                <MultiSelect
-                                    options={users.map((user) => ({
-                                        value: user.id,
-                                        label: user.name,
-                                    }))}
-                                    value={data.assigned_users}
-                                    onChange={(value) => setData('assigned_users', value)}
-                                    placeholder="Select users..."
-                                    className="mt-1"
-                                />
-                                {errors.assigned_users && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.assigned_users}</p>
-                                )}
-                                {errors['assigned_users.*'] && (
-                                    <p className="text-sm text-red-500 mt-1">{errors['assigned_users.*']}</p>
+                                <Select
+                                    value={data.assigned_to ? String(data.assigned_to) : undefined}
+                                    onValueChange={(value) => {
+                                        if (value === 'none') {
+                                            setData('assigned_to', null);
+                                        } else {
+                                            setData('assigned_to', Number(value));
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger className="mt-1">
+                                        <SelectValue placeholder="Select user..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">-- None --</SelectItem>
+                                        {users.map((user) => (
+                                            <SelectItem key={user.id} value={String(user.id)}>
+                                                {user.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.assigned_to && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.assigned_to}</p>
                                 )}
                             </div>
 
@@ -841,6 +905,76 @@ export default function DriversEdit({
                                     <p className="text-sm text-red-500">{errors.notes}</p>
                                 )}
                             </div>
+
+                            <div>
+                                <Label htmlFor="vehicle_type">Vehicle Type</Label>
+                                <input
+                                    type="text"
+                                    id="vehicle_type"
+                                    name="vehicle_type"
+                                    value={data.vehicle_type}
+                                    onChange={(e) => setData('vehicle_type', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    placeholder="Enter vehicle type..."
+                                />
+                                {errors.vehicle_type && (
+                                    <p className="text-sm text-red-500">{errors.vehicle_type}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="has_worked_before">Has the driver worked before?</Label>
+                                <input
+                                    type="text"
+                                    id="has_worked_before"
+                                    name="has_worked_before"
+                                    value={data.has_worked_before}
+                                    onChange={(e) => setData('has_worked_before', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    placeholder="Enter information about previous work experience..."
+                                />
+                                {errors.has_worked_before && (
+                                    <p className="text-sm text-red-500">{errors.has_worked_before}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="governorate">Governorate</Label>
+                                <Select
+                                    value={data.governorate || undefined}
+                                    onValueChange={(value) => setData('governorate', value || '')}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select governorate..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {EGYPT_GOVERNORATES.map((gov) => (
+                                            <SelectItem key={gov} value={gov}>
+                                                {gov}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.governorate && (
+                                    <p className="text-sm text-red-500">{errors.governorate}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="feedback_count">Feedback Count</Label>
+                                <input
+                                    type="number"
+                                    id="feedback_count"
+                                    name="feedback_count"
+                                    value={data.feedback_count || 0}
+                                    disabled
+                                    className="w-full rounded-md border px-3 py-2 bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
+                                />
+                                <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically incremented when lead status is updated</p>
+                                {errors.feedback_count && (
+                                    <p className="text-sm text-red-500">{errors.feedback_count}</p>
+                                )}
+                            </div>
                         </div>
                     </Card>
 
@@ -855,6 +989,98 @@ export default function DriversEdit({
                         </Button>
                     </div>
                 </form>
+
+                {/* Reassign Dialog */}
+                <Dialog open={showReassignDialog} onOpenChange={setShowReassignDialog}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Select Fields to Clear on Reassign</DialogTitle>
+                            <DialogDescription>
+                                Please select the fields that should be cleared or reset to default values when transferring this lead to the new user.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-3 py-4">
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="clear_feedback_comment"
+                                    checked={clearFieldsOnReassign.has('lead_status_comment')}
+                                    onCheckedChange={(checked) => toggleClearField('lead_status_comment', checked as boolean)}
+                                />
+                                <Label htmlFor="clear_feedback_comment" className="text-sm font-normal cursor-pointer">
+                                    Feedback Comment
+                                </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="clear_next_follow_up"
+                                    checked={clearFieldsOnReassign.has('next_follow_up')}
+                                    onCheckedChange={(checked) => toggleClearField('next_follow_up', checked as boolean)}
+                                />
+                                <Label htmlFor="clear_next_follow_up" className="text-sm font-normal cursor-pointer">
+                                    Next Follow-up
+                                </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="clear_last_follow_up"
+                                    checked={clearFieldsOnReassign.has('last_follow_up')}
+                                    onCheckedChange={(checked) => toggleClearField('last_follow_up', checked as boolean)}
+                                />
+                                <Label htmlFor="clear_last_follow_up" className="text-sm font-normal cursor-pointer">
+                                    Last Follow-up
+                                </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="clear_cancel_reason"
+                                    checked={clearFieldsOnReassign.has('cancel_reason')}
+                                    onCheckedChange={(checked) => toggleClearField('cancel_reason', checked as boolean)}
+                                />
+                                <Label htmlFor="clear_cancel_reason" className="text-sm font-normal cursor-pointer">
+                                    Cancel Reason
+                                </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="clear_lead_stage"
+                                    checked={clearFieldsOnReassign.has('lead_stage_id')}
+                                    onCheckedChange={(checked) => toggleClearField('lead_stage_id', checked as boolean)}
+                                />
+                                <Label htmlFor="clear_lead_stage" className="text-sm font-normal cursor-pointer">
+                                    Lead Stage
+                                </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="set_lead_status_new"
+                                    checked={setLeadStatusToNew}
+                                    onCheckedChange={(checked) => setSetLeadStatusToNew(checked as boolean)}
+                                />
+                                <Label htmlFor="set_lead_status_new" className="text-sm font-normal cursor-pointer">
+                                    Lead Status (Set to New)
+                                </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="clear_notes"
+                                    checked={clearFieldsOnReassign.has('notes')}
+                                    onCheckedChange={(checked) => toggleClearField('notes', checked as boolean)}
+                                />
+                                <Label htmlFor="clear_notes" className="text-sm font-normal cursor-pointer">
+                                    Notes
+                                </Label>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={handleReassignDialogCancel}>
+                                Cancel
+                            </Button>
+                            <Button onClick={handleReassignDialogConfirm}>
+                                Continue
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

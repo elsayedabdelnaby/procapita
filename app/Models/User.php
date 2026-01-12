@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -33,6 +34,8 @@ class User extends Authenticatable
         'mobile2',
         'company_id',
         'riding_company_id',
+        'team_leader_id',
+        'account_manager_id',
         'is_super_admin',
         'is_company_admin',
         'is_active',
@@ -85,6 +88,26 @@ class User extends Authenticatable
         return $this->belongsTo(RidingCompany::class);
     }
 
+    public function teamLeader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'team_leader_id');
+    }
+
+    public function teamMembers(): HasMany
+    {
+        return $this->hasMany(User::class, 'team_leader_id');
+    }
+
+    public function accountManager(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'account_manager_id');
+    }
+
+    public function accountManagedUsers(): HasMany
+    {
+        return $this->hasMany(User::class, 'account_manager_id');
+    }
+
     public function isSuperAdmin(): bool
     {
         return $this->is_super_admin === true;
@@ -115,6 +138,7 @@ class User extends Authenticatable
             if ($moduleName === 'ridingcarcompanies') {
                 return true;
             }
+
             return $this->company?->hasModule($moduleName) ?? false;
         }
 
@@ -191,7 +215,7 @@ class User extends Authenticatable
         }
 
         $userRoleIds = $this->roles()->pluck('id')->toArray();
-        
+
         if (empty($userRoleIds)) {
             // If user has no roles, they can only see themselves
             return [$this->id];
@@ -213,12 +237,12 @@ class User extends Authenticatable
         $subordinateUserIds = User::whereHas('roles', function ($query) use ($allRoleIds) {
             $query->whereIn('roles.id', $allRoleIds);
         })
-        ->where('company_id', $this->company_id)
-        ->pluck('id')
-        ->toArray();
+            ->where('company_id', $this->company_id)
+            ->pluck('id')
+            ->toArray();
 
         // Always include current user
-        if (!in_array($this->id, $subordinateUserIds)) {
+        if (! in_array($this->id, $subordinateUserIds)) {
             $subordinateUserIds[] = $this->id;
         }
 
@@ -231,18 +255,18 @@ class User extends Authenticatable
     protected function getDescendantRoleIds(\Modules\Core\app\Models\Role $role): array
     {
         $roleIds = [];
-        
+
         // Get direct children
         $children = \Modules\Core\app\Models\Role::where('parent_id', $role->id)
             ->where('team_id', $role->team_id)
             ->get();
-        
+
         foreach ($children as $child) {
             $roleIds[] = $child->id;
             // Recursively get descendants
             $roleIds = array_merge($roleIds, $this->getDescendantRoleIds($child));
         }
-        
+
         return $roleIds;
     }
 
@@ -252,6 +276,7 @@ class User extends Authenticatable
     public function isSubordinate(int $userId): bool
     {
         $subordinateIds = $this->getSubordinateUserIds();
+
         return in_array($userId, $subordinateIds);
     }
 

@@ -13,7 +13,7 @@ class DriverService
 {
     public function getAllDrivers(?int $companyId = null, ?\App\Models\User $user = null, ?int $selectedRidingCompanyId = null): Collection
     {
-        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'assignedUsers', 'leadStatus', 'leadStage', 'currentStage', 'lastAssignedByUser']);
+        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'teamLeader', 'accountManager', 'assignedUsers', 'leadStatus', 'leadStage', 'currentStage', 'lastAssignedByUser']);
 
         if ($companyId) {
             $query->where('company_id', $companyId);
@@ -25,25 +25,25 @@ class DriverService
         }
 
         // Filter by assigned_to or assigned_users if user is not super admin
-        if ($user && !$user->isSuperAdmin()) {
+        if ($user && ! $user->isSuperAdmin()) {
             // Filter by riding company first (if user is not company admin and has a specific riding company)
-            if (!$user->is_company_admin && $user->riding_company_id) {
+            if (! $user->is_company_admin && $user->riding_company_id) {
                 $query->where('riding_company_id', $user->riding_company_id);
             }
-            
+
             $subordinateUserIds = $user->getSubordinateUserIds();
-            
+
             // Always include current user ID to ensure they see their own data
-            if (!in_array($user->id, $subordinateUserIds)) {
+            if (! in_array($user->id, $subordinateUserIds)) {
                 $subordinateUserIds[] = $user->id;
             }
-            
+
             // Filter by assigned_to OR assigned_users (multi-select)
             $query->where(function ($q) use ($subordinateUserIds) {
                 $q->whereIn('assigned_to', $subordinateUserIds)
-                  ->orWhereHas('assignedUsers', function ($q) use ($subordinateUserIds) {
-                      $q->whereIn('users.id', $subordinateUserIds);
-                  });
+                    ->orWhereHas('assignedUsers', function ($q) use ($subordinateUserIds) {
+                        $q->whereIn('users.id', $subordinateUserIds);
+                    });
             });
         }
 
@@ -58,13 +58,15 @@ class DriverService
             'campaign',
             'leadSource',
             'assignedTo',
+            'teamLeader',
+            'accountManager',
             'assignedUsers',
             'leadStatus',
             'leadStage',
             'currentStage',
             'lastAssignedByUser',
-            'stages.stageTemplate',
-            'documents.documentTemplate',
+            'stages.ridingCompany',
+            'documents.ridingCompany',
         ])->find($id);
     }
 
@@ -74,31 +76,31 @@ class DriverService
     public function calculateDuplicateCount(Driver $driver): int
     {
         $duplicateIds = [];
-        
+
         if ($driver->phone) {
             $formattedPhone = $this->reformatPhoneNumber($driver->phone);
             $phoneDuplicates = Driver::where('id', '!=', $driver->id)
                 ->where(function ($q) use ($formattedPhone) {
                     $q->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone])
-                      ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone]);
+                        ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone]);
                 })
                 ->pluck('id')
                 ->toArray();
             $duplicateIds = array_merge($duplicateIds, $phoneDuplicates);
         }
-        
+
         if ($driver->whatsapp_phone && $driver->whatsapp_phone !== $driver->phone) {
             $formattedWhatsapp = $this->reformatPhoneNumber($driver->whatsapp_phone);
             $whatsappDuplicates = Driver::where('id', '!=', $driver->id)
                 ->where(function ($q) use ($formattedWhatsapp) {
                     $q->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp])
-                      ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp]);
+                        ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp]);
                 })
                 ->pluck('id')
                 ->toArray();
             $duplicateIds = array_merge($duplicateIds, $whatsappDuplicates);
         }
-        
+
         return count(array_unique($duplicateIds));
     }
 
@@ -108,43 +110,45 @@ class DriverService
     public function getDuplicateDrivers(Driver $driver): Collection
     {
         $duplicateIds = [];
-        
+
         if ($driver->phone) {
             $formattedPhone = $this->reformatPhoneNumber($driver->phone);
             $phoneDuplicates = Driver::where('id', '!=', $driver->id)
                 ->where(function ($q) use ($formattedPhone) {
                     $q->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone])
-                      ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone]);
+                        ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone]);
                 })
                 ->pluck('id')
                 ->toArray();
             $duplicateIds = array_merge($duplicateIds, $phoneDuplicates);
         }
-        
+
         if ($driver->whatsapp_phone && $driver->whatsapp_phone !== $driver->phone) {
             $formattedWhatsapp = $this->reformatPhoneNumber($driver->whatsapp_phone);
             $whatsappDuplicates = Driver::where('id', '!=', $driver->id)
                 ->where(function ($q) use ($formattedWhatsapp) {
                     $q->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp])
-                      ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp]);
+                        ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp]);
                 })
                 ->pluck('id')
                 ->toArray();
             $duplicateIds = array_merge($duplicateIds, $whatsappDuplicates);
         }
-        
+
         $uniqueIds = array_unique($duplicateIds);
-        
+
         if (empty($uniqueIds)) {
-            return new Collection();
+            return new Collection;
         }
-        
+
         return Driver::with([
             'company',
             'ridingCompany',
             'campaign',
             'leadSource',
             'assignedTo',
+            'teamLeader',
+            'accountManager',
             'assignedUsers',
             'leadStatus',
             'leadStage',
@@ -174,7 +178,7 @@ class DriverService
         $driver = Driver::create($data);
 
         // Sync assigned users
-        if (!empty($assignedUsers)) {
+        if (! empty($assignedUsers)) {
             $driver->assignedUsers()->sync($assignedUsers);
         }
 
@@ -184,7 +188,7 @@ class DriverService
             $this->createDriverDocumentsFromRidingCompany($driver);
         }
 
-        return $driver->fresh(['stages.stageTemplate', 'documents.documentTemplate', 'assignedUsers']);
+        return $driver->fresh(['stages.ridingCompany', 'documents.ridingCompany', 'assignedUsers']);
     }
 
     /**
@@ -209,7 +213,7 @@ class DriverService
         foreach ($stageTemplates as $template) {
             $stages[] = [
                 'driver_id' => $driver->id,
-                'stage_template_id' => $template->id,
+                'riding_company_id' => $driver->riding_company_id,
                 'stage_order' => $template->order,
                 'status' => 'pending',
                 'created_at' => now(),
@@ -249,9 +253,11 @@ class DriverService
         $documents = [];
         foreach ($documentRequirements as $requirement) {
             $documents[] = [
+                'name' => $requirement->name,
                 'driver_id' => $driver->id,
-                'document_template_id' => $requirement->id,
-                'status' => 'pending',
+                'riding_company_id' => $driver->riding_company_id,
+                'status' => $requirement->default_status ?? 'pending',
+                'notes' => $requirement->instructions,
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
@@ -300,7 +306,7 @@ class DriverService
         // Validate lead_stage_id update if requires_all_documents_approved is true
         if (isset($data['lead_stage_id']) && $data['lead_stage_id'] !== null && $data['lead_stage_id'] !== $driver->lead_stage_id) {
             $newLeadStage = LeadStage::find($data['lead_stage_id']);
-            
+
             if ($newLeadStage && $newLeadStage->requires_all_documents_approved) {
                 // Check if all driver documents are approved
                 $totalDocuments = $driver->documents()->count();
@@ -319,9 +325,9 @@ class DriverService
         if ($assignedUsers !== null) {
             $driver->assignedUsers()->sync($assignedUsers);
             // Update assigned_to to first user if not explicitly set
-            if (!isset($data['assigned_to']) && !empty($assignedUsers)) {
+            if (! isset($data['assigned_to']) && ! empty($assignedUsers)) {
                 $driver->update(['assigned_to' => $assignedUsers[0]]);
-            } elseif (!isset($data['assigned_to']) && empty($assignedUsers)) {
+            } elseif (! isset($data['assigned_to']) && empty($assignedUsers)) {
                 // Clear assigned_to if assigned_users is empty
                 $driver->update(['assigned_to' => null]);
             }
@@ -333,13 +339,25 @@ class DriverService
     public function deleteDriver(int $id): bool
     {
         $driver = Driver::findOrFail($id);
+
         return $driver->delete();
     }
 
     public function assignDriver(int $id, int $userId): Driver
     {
         $driver = Driver::findOrFail($id);
-        $driver->update(['assigned_to' => $userId]);
+        $user = \App\Models\User::find($userId);
+
+        $updateData = ['assigned_to' => $userId];
+
+        if ($user) {
+            // Update team_leader_id, account_manager_id, and riding_company_id from assigned user
+            $updateData['team_leader_id'] = $user->team_leader_id;
+            $updateData['account_manager_id'] = $user->account_manager_id;
+            $updateData['riding_company_id'] = $user->riding_company_id;
+        }
+
+        $driver->update($updateData);
 
         return $driver->fresh();
     }
@@ -359,13 +377,13 @@ class DriverService
 
         // تطبيق قواعد التنسيق
         if (strpos($cleanedNumber, '0020') === 0 && strlen($cleanedNumber) === 14) {
-            $cleanedNumber = '0' . substr($cleanedNumber, 4);
+            $cleanedNumber = '0'.substr($cleanedNumber, 4);
         } elseif (strpos($cleanedNumber, '+20') === 0 && strlen($cleanedNumber) === 13) {
-            $cleanedNumber = '0' . substr($cleanedNumber, 3);
+            $cleanedNumber = '0'.substr($cleanedNumber, 3);
         } elseif (strpos($cleanedNumber, '20') === 0 && strlen($cleanedNumber) === 12) {
-            $cleanedNumber = '0' . substr($cleanedNumber, 2);
+            $cleanedNumber = '0'.substr($cleanedNumber, 2);
         } elseif (preg_match('/^(10|11|12|15)/', $cleanedNumber) && strlen($cleanedNumber) === 10) {
-            $cleanedNumber = '0' . $cleanedNumber;
+            $cleanedNumber = '0'.$cleanedNumber;
         }
 
         // حذف علامة + من البداية إذا كانت موجودة
@@ -376,4 +394,3 @@ class DriverService
         return $cleanedNumber;
     }
 }
-

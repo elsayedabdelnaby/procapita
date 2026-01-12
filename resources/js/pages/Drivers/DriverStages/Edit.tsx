@@ -10,16 +10,15 @@ interface Driver {
     full_name: string;
 }
 
-interface StageTemplate {
+interface RidingCompany {
     id: number;
     name: string;
-    order: number;
 }
 
 interface DriverStage {
     id: number;
     driver_id: number;
-    stage_template_id: number;
+    riding_company_id: number;
     stage_order: number;
     status: string;
     notes?: string;
@@ -28,17 +27,17 @@ interface DriverStage {
 interface DriverStagesEditProps {
     driverStage: DriverStage;
     drivers: Driver[];
-    stageTemplates: StageTemplate[];
+    ridingCompanies: RidingCompany[];
 }
 
 export default function DriverStagesEdit({
     driverStage,
     drivers,
-    stageTemplates,
+    ridingCompanies,
 }: DriverStagesEditProps) {
     const { data, setData, put, processing, errors } = useForm({
         driver_id: driverStage.driver_id.toString(),
-        stage_template_id: driverStage.stage_template_id.toString(),
+        riding_company_id: driverStage.riding_company_id?.toString() || '',
         stage_order: driverStage.stage_order.toString(),
         status: driverStage.status || 'pending',
         notes: driverStage.notes || '',
@@ -122,26 +121,26 @@ export default function DriverStagesEdit({
                             </div>
 
                             <div>
-                                <Label htmlFor="stage_template_id">
-                                    Stage Template <span className="text-red-500">*</span>
+                                <Label htmlFor="riding_company_id">
+                                    Riding Company <span className="text-red-500">*</span>
                                 </Label>
                                 <select
-                                    id="stage_template_id"
-                                    name="stage_template_id"
-                                    value={data.stage_template_id}
-                                    onChange={(e) => setData('stage_template_id', e.target.value)}
+                                    id="riding_company_id"
+                                    name="riding_company_id"
+                                    value={data.riding_company_id}
+                                    onChange={(e) => setData('riding_company_id', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
                                     required
                                 >
-                                    <option value="">Select a stage template</option>
-                                    {stageTemplates.map((template) => (
-                                        <option key={template.id} value={template.id}>
-                                            {template.name} (Order: {template.order})
+                                    <option value="">Select a riding company</option>
+                                    {ridingCompanies.map((company) => (
+                                        <option key={company.id} value={company.id}>
+                                            {company.name}
                                         </option>
                                     ))}
                                 </select>
-                                {errors.stage_template_id && (
-                                    <p className="text-sm text-red-500">{errors.stage_template_id}</p>
+                                {errors.riding_company_id && (
+                                    <p className="text-sm text-red-500">{errors.riding_company_id}</p>
                                 )}
                             </div>
 

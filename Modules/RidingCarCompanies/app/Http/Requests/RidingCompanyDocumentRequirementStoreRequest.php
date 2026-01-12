@@ -20,6 +20,9 @@ class RidingCompanyDocumentRequirementStoreRequest extends FormRequest
             'instructions' => ['nullable', 'string'],
             'active' => ['nullable', 'boolean'],
             'add_to_existing_drivers' => ['nullable', 'boolean'],
+            'riding_company_ids' => ['nullable', 'array', 'min:1'],
+            'riding_company_ids.*' => ['required', 'integer', 'exists:riding_companies,id'],
+            'default_status' => ['nullable', 'string', 'in:pending,approved,rejected'],
         ];
     }
 
@@ -32,4 +35,3 @@ class RidingCompanyDocumentRequirementStoreRequest extends FormRequest
         ];
     }
 }
-

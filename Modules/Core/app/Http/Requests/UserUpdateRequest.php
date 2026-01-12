@@ -40,6 +40,41 @@ class UserUpdateRequest extends FormRequest
                     }
                 },
             ],
+            'team_leader_id' => [
+                'nullable',
+                'integer',
+                'exists:users,id',
+                function ($attribute, $value, $fail) use ($userId) {
+                    if ($value) {
+                        // Prevent user from selecting themselves as team leader
+                        if ($value == $userId) {
+                            $fail('A user cannot be their own team leader.');
+                        }
+                        $teamLeader = \App\Models\User::find($value);
+                        $ridingCompanyId = $this->input('riding_company_id');
+                        if ($teamLeader && $ridingCompanyId && $teamLeader->riding_company_id != $ridingCompanyId) {
+                            $fail('The selected team leader must belong to the same riding company.');
+                        }
+                    }
+                },
+            ],
+            'account_manager_id' => [
+                'nullable',
+                'integer',
+                'exists:users,id',
+                function ($attribute, $value, $fail) use ($userId) {
+                    if ($value) {
+                        // Prevent user from selecting themselves as account manager
+                        if ($value == $userId) {
+                            $fail('A user cannot be their own account manager.');
+                        }
+                        $accountManager = \App\Models\User::find($value);
+                        if ($accountManager && $accountManager->riding_company_id) {
+                            $fail('The selected account manager must not have a riding company assigned.');
+                        }
+                    }
+                },
+            ],
             'is_company_admin' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
             'roles' => ['nullable', 'array'],
@@ -72,4 +107,3 @@ class UserUpdateRequest extends FormRequest
         ];
     }
 }
-

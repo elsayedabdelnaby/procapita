@@ -2,8 +2,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, usePage, router } from '@inertiajs/react';
 import { useFieldPermissions } from '@/hooks/use-field-permissions';
 import { 
     ArrowLeft, 
@@ -21,12 +23,14 @@ import {
     MessageCircle,
     Eye,
     MapPin,
-    Car
+    Car,
+    Upload
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { formatDate } from '@/utils/date-format';
 import { WhatsAppWindow } from '@/components/whatsapp/whatsapp-window';
+import axios from 'axios';
 
 interface RidingCompany {
     id: number;
@@ -66,11 +70,7 @@ interface Stage {
 
 interface Document {
     id: number;
-    document_template?: {
-        id: number;
-        name: string;
-        type: string;
-    };
+    name?: string;
     status: string;
     uploaded_path?: string;
     original_filename?: string;
@@ -265,6 +265,9 @@ export default function DriversShow({
     const [filteredPreviousId, setFilteredPreviousId] = useState<number | null>(null);
     const [phoneWhatsAppOpen, setPhoneWhatsAppOpen] = useState(false);
     const [whatsappPhoneWhatsAppOpen, setWhatsappPhoneWhatsAppOpen] = useState(false);
+    const [selectedDuplicates, setSelectedDuplicates] = useState<Set<number>>(new Set());
+    const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+    const [mergeDrivers, setMergeDrivers] = useState<DuplicateDriver[]>([]);
     
     // Get riding company ID from props or driver
     const page = usePage();
@@ -281,6 +284,134 @@ export default function DriversShow({
     
     // Field-level permissions
     const { canViewDriverField } = useFieldPermissions();
+
+    // Permission checking function
+    const hasPermission = (permission: string): boolean => {
+        const user = currentUser;
+        if (user?.is_super_admin || user?.is_company_admin) {
+            return true;
+        }
+        const permissions = (user as any)?.permissions || [];
+        return permissions.some((p: any) => p.name === permission);
+    };
+
+    // Document permissions
+    const canUploadDocument = () => {
+        return hasPermission('drivers.driverdocuments.upload');
+    };
+
+    const canViewDocument = () => {
+        return hasPermission('drivers.driverdocuments.view');
+    };
+
+    const canReplaceDocument = () => {
+        return hasPermission('drivers.driverdocuments.replace');
+    };
+
+    const canSetPending = () => {
+        return hasPermission('drivers.driverdocuments.set-pending');
+    };
+
+    const canSetApproved = () => {
+        return hasPermission('drivers.driverdocuments.set-approved');
+    };
+
+    const canSetRejected = () => {
+        return hasPermission('drivers.driverdocuments.set-rejected');
+    };
+
+    // Document upload states
+    const [uploadingDocId, setUploadingDocId] = useState<number | null>(null);
+    const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+    // Document handlers
+    const handleFileSelect = (docId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('Please select a valid file (JPG, PNG, or PDF)');
+            return;
+        }
+
+        // Validate file size (10MB)
+        if (file.size > 10 * 1024 * 1024) {
+            alert('File size must be less than 10MB');
+            return;
+        }
+
+        setUploadingDocId(docId);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        axios
+            .post(`/drivers/driver-documents/${docId}/upload`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            })
+            .then(() => {
+                // Reload the page to get updated documents
+                router.reload({ only: ['driver'] });
+            })
+            .catch((error) => {
+                console.error('Error uploading file:', error);
+                alert('Failed to upload file. Please try again.');
+            })
+            .finally(() => {
+                setUploadingDocId(null);
+                if (fileInputRefs.current[docId]) {
+                    fileInputRefs.current[docId]!.value = '';
+                }
+            });
+    };
+
+    const handleUpdateStatus = async (docId: number, status: string) => {
+        try {
+            await axios.post(`/drivers/driver-documents/${docId}/update-status`, { status });
+            // Reload the page to get updated documents
+            router.reload({ only: ['driver'] });
+        } catch (error) {
+            console.error('Error updating document status:', error);
+            alert('Failed to update document status. Please try again.');
+        }
+    };
+
+    const handleViewFile = (docId: number) => {
+        const url = `/drivers/driver-documents/${docId}/view`;
+        window.open(url, '_blank');
+    };
+
+    const handleDeleteFile = async (docId: number) => {
+        if (!confirm('Are you sure you want to delete this file? This will set the document status to empty.')) {
+            return;
+        }
+        try {
+            await axios.delete(`/drivers/driver-documents/${docId}/delete-file`);
+            // Reload the page to get updated documents
+            router.reload({ only: ['driver'] });
+        } catch (error) {
+            console.error('Error deleting file:', error);
+            alert('Failed to delete file. Please try again.');
+        }
+    };
+
+    const canDeleteFile = () => {
+        return hasPermission('drivers.driverdocuments.delete-file');
+    };
+
+    const getFileExtension = (filename?: string, path?: string): string | null => {
+        const source = filename || path;
+        if (!source) return null;
+        
+        const parts = source.split('.');
+        if (parts.length > 1) {
+            return parts[parts.length - 1].toUpperCase();
+        }
+        return null;
+    };
 
     // Load filtered IDs from localStorage and find next/previous
     useEffect(() => {
@@ -613,18 +744,6 @@ export default function DriversShow({
                                             )}
                                         </div>
                                     )}
-                                    {canViewDriverField('assigned_users') && driver.assigned_users && driver.assigned_users.length > 0 && (
-                                        <div>
-                                            <p className="text-sm text-neutral-500">Assigned Users</p>
-                                            <div className="flex flex-wrap gap-2 mt-1">
-                                                {driver.assigned_users.map((user) => (
-                                                    <Badge key={user.id} variant="secondary">
-                                                        {user.name}
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
                                     {canViewDriverField('last_assigned_time') && (
                                         <div>
                                             <p className="text-sm text-neutral-500">Last Assigned Time</p>
@@ -818,29 +937,170 @@ export default function DriversShow({
                         )}
 
                         {/* Documents */}
-                        {driver.documents && driver.documents.length > 0 && (
-                            <Card className="p-6">
-                                <h2 className="mb-4 text-lg font-semibold">Documents</h2>
+                        <Card className="p-6">
+                            <div className="mb-4">
+                                <h2 className="text-lg font-semibold">Documents</h2>
+                            </div>
+                            {driver.documents && driver.documents.length > 0 ? (
                                 <div className="space-y-3">
                                     {driver.documents.map((doc) => (
-                                        <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <FileText className="h-4 w-4 text-neutral-500" />
-                                                <div>
+                                        <div key={doc.id} className="flex items-center justify-between rounded-lg border p-4">
+                                            <div className="flex items-center gap-3 flex-1">
+                                                <FileText className="h-5 w-5 text-neutral-500" />
+                                                <div className="flex-1">
                                                     <p className="font-medium">
-                                                        {doc.document_template?.name || 'Unknown Document'}
+                                                        {(doc as any).name || 'Unknown Document'}
                                                     </p>
                                                     {doc.original_filename && (
-                                                        <p className="text-sm text-neutral-500">{doc.original_filename}</p>
+                                                        <p className="text-xs text-neutral-500">{doc.original_filename}</p>
                                                     )}
                                                 </div>
                                             </div>
-                                            {getStatusBadge(doc.status)}
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                {/* Status buttons - always show */}
+                                                {(canSetPending() || canSetApproved() || canSetRejected()) && (
+                                                    <div className="flex items-center gap-1 border rounded-md p-1">
+                                                        {canSetPending() && (
+                                                            <Button
+                                                                variant={doc.status === 'pending' ? 'default' : 'ghost'}
+                                                                size="sm"
+                                                                className={`h-7 px-3 text-xs ${
+                                                                    doc.status === 'pending'
+                                                                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                }`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateStatus(doc.id, 'pending');
+                                                                }}
+                                                            >
+                                                                PENDING
+                                                            </Button>
+                                                        )}
+                                                        {canSetApproved() && (
+                                                            <Button
+                                                                variant={doc.status === 'approved' ? 'default' : 'ghost'}
+                                                                size="sm"
+                                                                className={`h-7 px-3 text-xs ${
+                                                                    doc.status === 'approved'
+                                                                        ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                }`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateStatus(doc.id, 'approved');
+                                                                }}
+                                                            >
+                                                                APPROVED
+                                                            </Button>
+                                                        )}
+                                                        {canSetRejected() && (
+                                                            <Button
+                                                                variant={doc.status === 'rejected' ? 'default' : 'ghost'}
+                                                                size="sm"
+                                                                className={`h-7 px-3 text-xs ${
+                                                                    doc.status === 'rejected'
+                                                                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                }`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateStatus(doc.id, 'rejected');
+                                                                }}
+                                                            >
+                                                                REJECT
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                
+                                                {/* EMPTY button - show if file is NOT uploaded (disabled) */}
+                                                {!doc.uploaded_path && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-7 px-3 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                                        disabled
+                                                    >
+                                                        EMPTY
+                                                    </Button>
+                                                )}
+
+                                                {/* EMPTY button - delete file (only show if file is uploaded) */}
+                                                {canDeleteFile() && doc.uploaded_path && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-7 px-3 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteFile(doc.id);
+                                                        }}
+                                                    >
+                                                        EMPTY
+                                                    </Button>
+                                                )}
+
+                                                {/* UPLOAD button - only show if file is NOT uploaded */}
+                                                {canUploadDocument() && !doc.uploaded_path && (
+                                                    <>
+                                                        <input
+                                                            ref={(el) => (fileInputRefs.current[doc.id] = el)}
+                                                            type="file"
+                                                            accept="image/jpeg,image/jpg,image/png,application/pdf"
+                                                            className="hidden"
+                                                            onChange={(e) => {
+                                                                e.stopPropagation();
+                                                                handleFileSelect(doc.id, e);
+                                                            }}
+                                                        />
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-7 px-3 text-xs"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                fileInputRefs.current[doc.id]?.click();
+                                                            }}
+                                                            disabled={uploadingDocId === doc.id}
+                                                        >
+                                                            <Upload className="h-4 w-4 mr-1" />
+                                                            {uploadingDocId === doc.id ? 'Uploading...' : 'UPLOAD'}
+                                                        </Button>
+                                                    </>
+                                                )}
+
+                                                {/* View button - only show if file is uploaded */}
+                                                {canViewDocument() && doc.uploaded_path && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-7 px-3 text-xs"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleViewFile(doc.id);
+                                                        }}
+                                                    >
+                                                        <Eye className="h-4 w-4 mr-1" />
+                                                        View
+                                                        {getFileExtension(doc.original_filename, doc.uploaded_path) && (
+                                                            <span className="ml-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                                                .{getFileExtension(doc.original_filename, doc.uploaded_path)}
+                                                            </span>
+                                                        )}
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
-                            </Card>
-                        )}
+                            ) : (
+                                <div className="py-8 text-center text-neutral-500">
+                                    <FileText className="mx-auto h-12 w-12 text-neutral-400 mb-2" />
+                                    <p>No documents available</p>
+                                </div>
+                            )}
+                        </Card>
 
                         {/* Notes */}
                         {canViewDriverField('notes') && driver.notes && (
@@ -1016,15 +1276,42 @@ export default function DriversShow({
 
                 {activeTab === 'duplicates' && (
                     <Card className="p-6">
-                        <h2 className="mb-4 text-lg font-semibold">Duplicate Drivers ({driver.duplicate})</h2>
-                        <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
-                            Drivers with the same phone number or WhatsApp number as this driver.
-                        </p>
+                        <div className="mb-4 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-lg font-semibold">Duplicate Drivers ({driver.duplicate})</h2>
+                                <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+                                    Drivers with the same phone number or WhatsApp number as this driver.
+                                </p>
+                            </div>
+                            {selectedDuplicates.size > 0 && (
+                                <Button
+                                    onClick={() => {
+                                        const selected = duplicate_drivers.filter(d => selectedDuplicates.has(d.id));
+                                        setMergeDrivers([driver, ...selected]);
+                                        setMergeDialogOpen(true);
+                                    }}
+                                >
+                                    Merge ({selectedDuplicates.size + 1})
+                                </Button>
+                            )}
+                        </div>
                         {duplicate_drivers.length > 0 ? (
                             <div className="overflow-x-auto">
                                 <table className="w-full">
                                     <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
                                         <tr>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300 w-12">
+                                                <Checkbox
+                                                    checked={selectedDuplicates.size === duplicate_drivers.length && duplicate_drivers.length > 0}
+                                                    onCheckedChange={(checked) => {
+                                                        if (checked) {
+                                                            setSelectedDuplicates(new Set(duplicate_drivers.map(d => d.id)));
+                                                        } else {
+                                                            setSelectedDuplicates(new Set());
+                                                        }
+                                                    }}
+                                                />
+                                            </th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Full Name</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">WhatsApp</th>
@@ -1052,8 +1339,27 @@ export default function DriversShow({
                                                               : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
                                                     }
                                                 `} 
-                                                onClick={() => window.location.href = `/drivers/drivers/${dup.id}`}
+                                                onClick={(e) => {
+                                                    if ((e.target as HTMLElement).closest('input[type="checkbox"]') || (e.target as HTMLElement).closest('button')) {
+                                                        return;
+                                                    }
+                                                    window.location.href = `/drivers/drivers/${dup.id}`;
+                                                }}
                                             >
+                                                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                                    <Checkbox
+                                                        checked={selectedDuplicates.has(dup.id)}
+                                                        onCheckedChange={(checked) => {
+                                                            const newSelected = new Set(selectedDuplicates);
+                                                            if (checked) {
+                                                                newSelected.add(dup.id);
+                                                            } else {
+                                                                newSelected.delete(dup.id);
+                                                            }
+                                                            setSelectedDuplicates(newSelected);
+                                                        }}
+                                                    />
+                                                </td>
                                                 <td className="px-4 py-3 text-sm">{dup.full_name || '-'}</td>
                                                 <td className="px-4 py-3 text-sm">{dup.phone || '-'}</td>
                                                 <td className="px-4 py-3 text-sm">{dup.whatsapp_phone || '-'}</td>
@@ -1070,7 +1376,7 @@ export default function DriversShow({
                                                 </td>
                                                 <td className="px-4 py-3 text-sm">{dup.lead_stage?.name || '-'}</td>
                                                 <td className="px-4 py-3 text-sm">
-                                                    {dup.assigned_to?.name || (dup.assigned_users && dup.assigned_users.length > 0 ? dup.assigned_users.map(u => u.name).join(', ') : '-')}
+                                                    {dup.assigned_to?.name || '-'}
                                                 </td>
                                                 <td className="px-4 py-3 text-sm">
                                                     <Link href={`/drivers/drivers/${dup.id}`} onClick={(e) => e.stopPropagation()}>
@@ -1089,6 +1395,423 @@ export default function DriversShow({
                         )}
                     </Card>
                 )}
+
+                {/* Merge Drivers Dialog */}
+                <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
+                    <DialogContent className="!max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
+                        <DialogHeader>
+                            <DialogTitle>Merge Records In &gt; Drivers</DialogTitle>
+                            <DialogDescription>
+                                The primary record will be retained after the merge. You can select the column to retain the values. The other record(s) will be deleted but the related information will be merged.
+                            </DialogDescription>
+                        </DialogHeader>
+                        
+                        {mergeDrivers.length > 0 && (
+                            <div className="flex-1 overflow-y-auto">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full border-collapse">
+                                        <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm sticky top-0 z-10">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300 border-b">Fields</th>
+                                                {mergeDrivers.map((driver, index) => (
+                                                    <th key={driver.id} className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300 border-b">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="primary_record"
+                                                                value={driver.id}
+                                                                defaultChecked={index === 0}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <Link href={`/drivers/drivers/${driver.id}`} className="text-blue-600 hover:underline" target="_blank">
+                                                                Record #{driver.id}
+                                                            </Link>
+                                                        </div>
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white dark:bg-neutral-900">
+                                            {/* Full Name */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Name</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="full_name"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.full_name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Phone */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Phone</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="phone"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.phone || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* WhatsApp Phone */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">WhatsApp</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="whatsapp_phone"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.whatsapp_phone || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Email */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Email</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="email"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.email || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Riding Company */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Riding Company</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="riding_company_id"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.riding_company?.name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Campaign */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Campaign</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="campaign_id"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.campaign?.name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Lead Source */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Lead Source</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="lead_source_id"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.lead_source?.name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Lead Status */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Lead Status</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="lead_status_id"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            {driver.lead_status ? (
+                                                                <Badge style={{ backgroundColor: driver.lead_status.color || '#6b7280' }}>
+                                                                    {driver.lead_status.name}
+                                                                </Badge>
+                                                            ) : (
+                                                                <span>-</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Lead Stage */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Lead Stage</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="lead_stage_id"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.lead_stage?.name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Assigned To */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Assigned To</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="assigned_to"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.assigned_to?.name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Lead Status Comment */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Sales Comment</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="lead_status_comment"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span className="max-w-xs truncate" title={driver.lead_status_comment || ''}>
+                                                                {driver.lead_status_comment || '-'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Next Follow Up */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Next Follow Up</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="next_follow_up"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.next_follow_up ? formatDate(driver.next_follow_up) : '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Last Follow Up */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Last Follow Up</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="last_follow_up"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.last_follow_up ? formatDate(driver.last_follow_up) : '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Notes */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Notes</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="notes"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span className="max-w-xs truncate" title={driver.notes || ''}>
+                                                                {driver.notes || '-'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+
+                                            {/* Created At */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Created At</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="created_at"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.created_at ? formatDate(driver.created_at) : '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <div className="mt-6 flex justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setMergeDialogOpen(false)}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        onClick={async () => {
+                                            // Get selected values
+                                            const primaryRecordInput = document.querySelector('input[name="primary_record"]:checked') as HTMLInputElement;
+                                            const primaryRecordId = primaryRecordInput ? parseInt(primaryRecordInput.value) : mergeDrivers[0].id;
+                                            
+                                            const fieldMappings: { [key: string]: string } = {};
+                                            const fieldNames = [
+                                                'full_name', 'phone', 'whatsapp_phone', 'email', 'riding_company_id', 
+                                                'campaign_id', 'lead_source_id', 'lead_status_id', 'lead_stage_id',
+                                                'assigned_to', 'lead_status_comment', 
+                                                'next_follow_up', 'last_follow_up', 'notes', 'created_at'
+                                            ];
+                                            
+                                            fieldNames.forEach(fieldName => {
+                                                const selectedInput = document.querySelector(`input[name="${fieldName}"]:checked`) as HTMLInputElement;
+                                                if (selectedInput) {
+                                                    const selectedDriverId = parseInt(selectedInput.value);
+                                                    const selectedDriver = mergeDrivers.find(d => d.id === selectedDriverId);
+                                                    if (selectedDriver) {
+                                                        if (fieldName === 'riding_company_id') {
+                                                            fieldMappings[fieldName] = selectedDriver.riding_company?.id?.toString() || '';
+                                                        } else if (fieldName === 'campaign_id') {
+                                                            fieldMappings[fieldName] = selectedDriver.campaign?.id?.toString() || '';
+                                                        } else if (fieldName === 'lead_source_id') {
+                                                            fieldMappings[fieldName] = selectedDriver.lead_source?.id?.toString() || '';
+                                                        } else if (fieldName === 'lead_status_id') {
+                                                            fieldMappings[fieldName] = selectedDriver.lead_status?.id?.toString() || '';
+                                                        } else if (fieldName === 'lead_stage_id') {
+                                                            fieldMappings[fieldName] = selectedDriver.lead_stage?.id?.toString() || '';
+                                                        } else if (fieldName === 'assigned_to') {
+                                                            fieldMappings[fieldName] = selectedDriver.assigned_to?.id?.toString() || '';
+                                                        } else if (fieldName === 'created_at') {
+                                                            fieldMappings[fieldName] = selectedDriver.created_at || '';
+                                                        } else {
+                                                            fieldMappings[fieldName] = (selectedDriver as any)[fieldName] || '';
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                            
+                                            const driverIds = mergeDrivers.map(d => d.id);
+                                            
+                                            try {
+                                                await router.post('/drivers/drivers/merge', {
+                                                    primary_driver_id: primaryRecordId,
+                                                    driver_ids: driverIds,
+                                                    field_mappings: fieldMappings,
+                                                }, {
+                                                    onSuccess: () => {
+                                                        setMergeDialogOpen(false);
+                                                        setSelectedDuplicates(new Set());
+                                                        setMergeDrivers([]);
+                                                        router.reload();
+                                                    },
+                                                    onError: (errors) => {
+                                                        console.error('Merge error:', errors);
+                                                        alert('Failed to merge drivers. Please try again.');
+                                                    },
+                                                });
+                                            } catch (error) {
+                                                console.error('Merge error:', error);
+                                                alert('Failed to merge drivers. Please try again.');
+                                            }
+                                        }}
+                                    >
+                                        Merge
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

@@ -2,6 +2,7 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm, router } from '@inertiajs/react';
@@ -13,21 +14,33 @@ interface RidingCompany {
 }
 
 interface DocumentRequirementsCreateProps {
-    ridingCompany: RidingCompany;
+    ridingCompany?: RidingCompany;
+    ridingCompanies?: RidingCompany[];
 }
 
-export default function DocumentRequirementsCreate({ ridingCompany }: DocumentRequirementsCreateProps) {
+export default function DocumentRequirementsCreate({ ridingCompany, ridingCompanies = [] }: DocumentRequirementsCreateProps) {
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [formData, setFormData] = useState<any>(null);
 
-    const { data, setData, post, processing, errors } = useForm({
+    // If ridingCompany is provided (from URL), use it as default, otherwise use empty array
+    const defaultRidingCompanyIds = ridingCompany ? [ridingCompany.id.toString()] : [];
+
+    const { data, setData, post, processing, errors, transform } = useForm({
         name: '',
         type: 'file',
         required: false,
         instructions: '',
         active: true,
         add_to_existing_drivers: false,
+        riding_company_ids: defaultRidingCompanyIds,
+        default_status: 'pending', // Default status for documents created from this requirement
     });
+
+    // Transform data before submitting - convert string IDs to integers
+    transform((data) => ({
+        ...data,
+        riding_company_ids: data.riding_company_ids.map((id: string | number) => parseInt(id.toString())),
+    }));
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -44,18 +57,26 @@ export default function DocumentRequirementsCreate({ ridingCompany }: DocumentRe
             add_to_existing_drivers: addToDrivers,
         };
         // Use router.post directly to send the data
-        router.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/document-requirements`, submitData);
+        // If ridingCompany is provided, use the old route, otherwise use new route with multiple companies
+        if (ridingCompany) {
+            router.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/document-requirements`, submitData);
+        } else {
+            router.post(`/ridingcarcompanies/document-requirements`, submitData);
+        }
     };
 
     return (
         <AppLayout>
-            <Head title={`Create Document Requirement - ${ridingCompany.name}`} />
+            <Head title="Create Document Requirement" />
 
             <div className="p-6">
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold">Create Document Requirement</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Add a new document requirement for <strong>{ridingCompany.name}</strong>
+                        {ridingCompany 
+                            ? `Add a new document requirement for ${ridingCompany.name}`
+                            : 'Add a new document requirement for one or more riding companies'
+                        }
                     </p>
                 </div>
 
@@ -107,6 +128,34 @@ export default function DocumentRequirementsCreate({ ridingCompany }: DocumentRe
                                 />
                             </div>
 
+                            {ridingCompanies.length > 0 && (
+                                <div className="md:col-span-2">
+                                    <Label htmlFor="riding_company_ids">
+                                        Riding Companies <span className="text-red-500">*</span>
+                                    </Label>
+                                    <MultiSelect
+                                        options={ridingCompanies.map((company) => ({
+                                            value: company.id.toString(),
+                                            label: company.name,
+                                        }))}
+                                        value={data.riding_company_ids}
+                                        onChange={(value) => setData('riding_company_ids', value)}
+                                        placeholder="Select riding companies..."
+                                        className="w-full"
+                                        searchable={true}
+                                    />
+                                    {errors.riding_company_ids && (
+                                        <p className="text-sm text-red-500 mt-1">{errors.riding_company_ids}</p>
+                                    )}
+                                    <p className="mt-1 text-xs text-neutral-500">
+                                        {ridingCompany 
+                                            ? `This requirement will be created for ${ridingCompany.name} and any additional companies you select.`
+                                            : 'Select one or more riding companies. This requirement will be applied to drivers in the selected companies.'
+                                        }
+                                    </p>
+                                </div>
+                            )}
+
                             <div>
                                 <Label htmlFor="type">
                                     Document Type <span className="text-red-500">*</span>
@@ -126,8 +175,32 @@ export default function DocumentRequirementsCreate({ ridingCompany }: DocumentRe
                                 {errors.type && <p className="text-sm text-red-500">{errors.type}</p>}
                             </div>
 
+                            <div>
+                                <Label htmlFor="default_status">
+                                    Default Status <span className="text-red-500">*</span>
+                                </Label>
+                                <select
+                                    id="default_status"
+                                    name="default_status"
+                                    value={data.default_status}
+                                    onChange={(e) => setData('default_status', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                    required
+                                >
+                                    <option value="pending">Pending</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                                {errors.default_status && (
+                                    <p className="text-sm text-red-500">{errors.default_status}</p>
+                                )}
+                                <p className="mt-1 text-xs text-neutral-500">
+                                    Default status for documents created from this requirement.
+                                </p>
+                            </div>
+
                             <div className="md:col-span-2">
-                                <Label htmlFor="instructions">Instructions</Label>
+                                <Label htmlFor="instructions">Instructions / Notes</Label>
                                 <textarea
                                     id="instructions"
                                     name="instructions"
@@ -135,11 +208,14 @@ export default function DocumentRequirementsCreate({ ridingCompany }: DocumentRe
                                     onChange={(e) => setData('instructions', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
                                     rows={3}
-                                    placeholder="Provide instructions for this document requirement..."
+                                    placeholder="Provide instructions or notes for this document requirement..."
                                 />
                                 {errors.instructions && (
                                     <p className="text-sm text-red-500">{errors.instructions}</p>
                                 )}
+                                <p className="mt-1 text-xs text-neutral-500">
+                                    Additional notes or instructions that will be copied to driver documents.
+                                </p>
                             </div>
 
                             <div>
@@ -180,7 +256,10 @@ export default function DocumentRequirementsCreate({ ridingCompany }: DocumentRe
 
                     <div className="flex justify-end gap-4">
                         <Link
-                            href={`/ridingcarcompanies/riding-companies/${ridingCompany.id}/document-requirements`}
+                            href={ridingCompany 
+                                ? `/ridingcarcompanies/riding-companies/${ridingCompany.id}/document-requirements`
+                                : '/drivers/driver-documents'
+                            }
                         >
                             <Button type="button" variant="outline">
                                 Cancel
@@ -197,7 +276,10 @@ export default function DocumentRequirementsCreate({ ridingCompany }: DocumentRe
                         <DialogHeader>
                             <DialogTitle>Add to Existing Drivers?</DialogTitle>
                             <DialogDescription>
-                                Do you want to add this document requirement to all existing drivers for <strong>{ridingCompany.name}</strong>?
+                                {ridingCompany 
+                                    ? `Do you want to add this document requirement to all existing drivers for ${ridingCompany.name}?`
+                                    : 'Do you want to add this document requirement to all existing drivers for the selected riding companies?'
+                                }
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>

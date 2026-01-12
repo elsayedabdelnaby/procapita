@@ -1,5 +1,11 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import axios from 'axios';
 import { 
     ArrowLeft, 
@@ -107,9 +113,13 @@ export function WhatsAppWindow({
     const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
     const [recordedAudio, setRecordedAudio] = useState<{ blob: Blob; url: string } | null>(null);
     const [replyToMessage, setReplyToMessage] = useState<WhatsAppMessage | null>(null);
+    const [viewingMedia, setViewingMedia] = useState<{ url: string; type: 'image' | 'video'; filename?: string } | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const windowRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
+    const shouldAutoScrollRef = useRef<boolean>(true);
+    const lastMessageCountRef = useRef<number>(0);
 
     // Get WhatsApp service URL from environment or use default
     const whatsappServiceUrl = (window as any).WHATSAPP_SERVICE_URL || import.meta.env.VITE_WHATSAPP_SERVICE_URL || 'http://localhost:3001';
@@ -164,18 +174,26 @@ export function WhatsAppWindow({
     }, [isOpen, companyId, ridingCompanyId, driverPhoneNumbers]);
 
     useEffect(() => {
-        if (selectedChat) {
+        if (selectedChat && nodeApiBasePath) {
             setMessages([]);
+            setLoadingMessages(true);
+            // Enable auto-scroll when selecting a new chat
+            shouldAutoScrollRef.current = true;
+            lastMessageCountRef.current = 0;
             loadMessages(selectedChat.id);
             // Poll for new messages every 10 seconds
             const interval = setInterval(() => {
-                if (!loadingMessages) {
-                loadMessages(selectedChat.id);
+                if (!loadingMessages && selectedChat) {
+                    loadMessages(selectedChat.id);
                 }
             }, 10000);
             return () => clearInterval(interval);
+        } else if (selectedChat && !nodeApiBasePath) {
+            console.error('[WhatsApp] Cannot load messages: nodeApiBasePath is not set');
+            setLoadingMessages(false);
+            setMessages([]);
         }
-    }, [selectedChat]);
+    }, [selectedChat, nodeApiBasePath]);
 
     useEffect(() => {
         if (initialChatPhone && chats.length > 0) {
@@ -303,9 +321,43 @@ export function WhatsAppWindow({
         }
     }, [initialChatPhone, chats, loading]);
 
+    // Handle scroll position - only auto-scroll if user is near bottom or new messages were added
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (!messagesContainerRef.current) return;
+        
+        const container = messagesContainerRef.current;
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100; // 100px threshold
+        const hasNewMessages = messages.length > lastMessageCountRef.current;
+        
+        // Only auto-scroll if:
+        // 1. User is near bottom (within 100px), OR
+        // 2. New messages were added (message count increased)
+        if (shouldAutoScrollRef.current && (isNearBottom || hasNewMessages)) {
+            // Use scrollTop instead of scrollIntoView to avoid affecting page scroll
+            requestAnimationFrame(() => {
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            });
+        }
+        
+        lastMessageCountRef.current = messages.length;
     }, [messages]);
+
+    // Track scroll position to detect manual scrolling
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        const handleScroll = () => {
+            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+            shouldAutoScrollRef.current = isNearBottom;
+        };
+
+        // Use passive listener for better performance
+        container.addEventListener('scroll', handleScroll, { passive: true });
+        return () => container.removeEventListener('scroll', handleScroll);
+    }, []);
 
     const loadChats = async () => {
         if (!nodeApiBasePath) {
@@ -380,21 +432,30 @@ export function WhatsAppWindow({
     };
 
     const [loadingMessages, setLoadingMessages] = useState(false);
-    const messagesContainerRef = useRef<HTMLDivElement>(null);
-
     const loadMessages = async (chatId: string) => {
-        if (!nodeApiBasePath) return;
+        if (!nodeApiBasePath) {
+            console.error('[WhatsApp] loadMessages: nodeApiBasePath is not set');
+            setLoadingMessages(false);
+            return;
+        }
         
         setLoadingMessages(true);
         try {
+            console.log('[WhatsApp] Loading messages for chat:', chatId);
+            console.log('[WhatsApp] API Path:', nodeApiBasePath);
+            console.log('[WhatsApp] Full URL:', `${whatsappServiceUrl}${nodeApiBasePath}/chats/${chatId}/messages`);
+            
             const response = await axios.get(
                 `${whatsappServiceUrl}${nodeApiBasePath}/chats/${chatId}/messages`
             );
             const newMessages = response.data.messages || [];
-            console.log(`Loaded ${newMessages.length} messages`);
+            console.log(`[WhatsApp] Loaded ${newMessages.length} messages`);
             setMessages(newMessages);
         } catch (error: any) {
-            console.error('Error loading messages:', error);
+            console.error('[WhatsApp] Error loading messages:', error);
+            console.error('[WhatsApp] Error response:', error.response?.data);
+            // Set empty messages array on error to show "No messages yet" instead of infinite loading
+            setMessages([]);
         } finally {
             setLoadingMessages(false);
         }
@@ -453,6 +514,8 @@ export function WhatsAppWindow({
             );
             setMessageText('');
             setReplyToMessage(null);
+            // Enable auto-scroll when sending a new message
+            shouldAutoScrollRef.current = true;
             // Reload messages
             loadMessages(selectedChat.id);
         } catch (error: any) {
@@ -622,8 +685,6 @@ export function WhatsAppWindow({
         chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         chat.phone.includes(searchQuery)
     );
-
-    if (!isOpen) return null;
 
     const windowContent = (
         <div 
@@ -959,47 +1020,94 @@ export function WhatsAppWindow({
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                                                                         </svg>
                                                                     )}
-                                                                    <span>{message.filename || message.mimetype || 'Media'}</span>
+                                                                    <span className="flex-1">{message.filename || message.mimetype || 'Media'}</span>
+                                                                    <span className="text-xs text-neutral-400">(غير متاح)</span>
                                                                 </div>
                                                             )}
                                                             {/* Image */}
                                                             {message.mediaUrl && message.mimetype?.startsWith('image/') && (
                                                                 <div className="relative group">
-                                                        <img 
-                                                            src={message.mediaUrl} 
-                                                            alt="Media" 
-                                                                        className="max-w-full rounded cursor-pointer"
-                                                                        onClick={() => window.open(message.mediaUrl, '_blank')}
+                                                                    <img 
+                                                                        src={message.mediaUrl} 
+                                                                        alt="Media" 
+                                                                        className="max-w-full max-h-[400px] rounded cursor-pointer object-contain"
+                                                                        onClick={() => setViewingMedia({ 
+                                                                            url: message.mediaUrl!, 
+                                                                            type: 'image',
+                                                                            filename: message.filename 
+                                                                        })}
                                                                     />
-                                                                    <button
-                                                                        onClick={() => downloadMedia(message.mediaUrl!, message.filename || `image_${message.timestamp}.jpg`, message.mimetype)}
-                                                                        className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                        title="Download"
-                                                                    >
-                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                                        </svg>
-                                                                    </button>
+                                                                    <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                window.open(message.mediaUrl!, '_blank');
+                                                                            }}
+                                                                            className="bg-black/50 text-white p-1.5 rounded-full hover:bg-black/70"
+                                                                            title="Open in new tab"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                            </svg>
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setViewingMedia({ 
+                                                                                    url: message.mediaUrl!, 
+                                                                                    type: 'image',
+                                                                                    filename: message.filename 
+                                                                                });
+                                                                            }}
+                                                                            className="bg-black/50 text-white p-1.5 rounded-full hover:bg-black/70"
+                                                                            title="View Full Size"
+                                                                        >
+                                                                            <Maximize className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                downloadMedia(message.mediaUrl!, message.filename || `image_${message.timestamp}.jpg`, message.mimetype);
+                                                                            }}
+                                                                            className="bg-black/50 text-white p-1.5 rounded-full hover:bg-black/70"
+                                                                            title="Download"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                                            </svg>
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                             {/* Audio/Voice */}
                                                             {message.mediaUrl && (message.mimetype?.startsWith('audio/') || message.type === 'ptt') && (
-                                                                <div className="flex items-center gap-2 min-w-[200px]">
+                                                                <div className="flex items-center gap-2 min-w-[200px] bg-neutral-50 dark:bg-neutral-800 rounded-lg p-2">
                                                                     <audio 
                                                                         controls 
                                                                         src={message.mediaUrl} 
-                                                                        className="h-10 w-full"
-                                                                        style={{ maxWidth: '250px' }}
+                                                                        className="h-10 flex-1"
+                                                                        style={{ maxWidth: '300px', minWidth: '200px' }}
                                                                     />
+                                                                    <div className="flex gap-1">
+                                                                        <button
+                                                                            onClick={() => window.open(message.mediaUrl!, '_blank')}
+                                                                            className="text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 p-1.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700"
+                                                                            title="Open in new tab"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                            </svg>
+                                                                        </button>
                                                                     <button
                                                                         onClick={() => downloadMedia(message.mediaUrl!, message.filename || `audio_${message.timestamp}.ogg`, message.mimetype)}
-                                                                        className="text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 p-1"
+                                                                            className="text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 p-1.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700"
                                                                         title="Download"
                                                                     >
                                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                                                         </svg>
                                                                     </button>
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                             {/* Video */}
@@ -1008,36 +1116,93 @@ export function WhatsAppWindow({
                                                                     <video 
                                                                         controls 
                                                                         src={message.mediaUrl} 
-                                                                        className="max-w-full rounded"
-                                                                        style={{ maxHeight: '300px' }}
+                                                                        className="max-w-full max-h-[400px] rounded cursor-pointer"
+                                                                        onClick={() => setViewingMedia({ 
+                                                                            url: message.mediaUrl!, 
+                                                                            type: 'video',
+                                                                            filename: message.filename 
+                                                                        })}
                                                                     />
-                                                                    <button
-                                                                        onClick={() => downloadMedia(message.mediaUrl!, message.filename || `video_${message.timestamp}.mp4`, message.mimetype)}
-                                                                        className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                        title="Download"
-                                                                    >
-                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                                        </svg>
-                                                                    </button>
+                                                                    <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                window.open(message.mediaUrl!, '_blank');
+                                                                            }}
+                                                                            className="bg-black/50 text-white p-1.5 rounded-full hover:bg-black/70"
+                                                                            title="Open in new tab"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                            </svg>
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setViewingMedia({ 
+                                                                                    url: message.mediaUrl!, 
+                                                                                    type: 'video',
+                                                                                    filename: message.filename 
+                                                                                });
+                                                                            }}
+                                                                            className="bg-black/50 text-white p-1.5 rounded-full hover:bg-black/70"
+                                                                            title="View Full Size"
+                                                                        >
+                                                                            <Maximize className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                downloadMedia(message.mediaUrl!, message.filename || `video_${message.timestamp}.mp4`, message.mimetype);
+                                                                            }}
+                                                                            className="bg-black/50 text-white p-1.5 rounded-full hover:bg-black/70"
+                                                                            title="Download"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                                            </svg>
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                             {/* Document/File */}
                                                             {message.mediaUrl && message.mimetype && !message.mimetype.startsWith('image/') && !message.mimetype.startsWith('audio/') && !message.mimetype.startsWith('video/') && message.type !== 'ptt' && (
                                                                 <div 
-                                                                    className="flex items-center gap-2 p-2 bg-neutral-100 dark:bg-neutral-700 rounded cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-600"
-                                                                    onClick={() => downloadMedia(message.mediaUrl!, message.filename || `file_${message.timestamp}`, message.mimetype)}
+                                                                    className="flex items-center gap-2 p-3 bg-neutral-100 dark:bg-neutral-700 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-600 border border-neutral-200 dark:border-neutral-600"
                                                                 >
-                                                                    <svg className="w-8 h-8 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <svg className="w-10 h-10 text-neutral-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                                                                     </svg>
                                                                     <div className="flex-1 min-w-0">
                                                                         <p className="text-sm font-medium truncate">{message.filename || 'Document'}</p>
-                                                                        <p className="text-xs text-neutral-500">{message.mimetype}</p>
+                                                                        <p className="text-xs text-neutral-500 mt-0.5">{message.mimetype}</p>
                                                                     </div>
-                                                                    <svg className="w-5 h-5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <div className="flex gap-1">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                window.open(message.mediaUrl!, '_blank');
+                                                                            }}
+                                                                            className="text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 p-2 rounded hover:bg-neutral-300 dark:hover:bg-neutral-500"
+                                                                            title="Open in new tab"
+                                                                        >
+                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                            </svg>
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                downloadMedia(message.mediaUrl!, message.filename || `file_${message.timestamp}`, message.mimetype);
+                                                                            }}
+                                                                            className="text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 p-2 rounded hover:bg-neutral-300 dark:hover:bg-neutral-500"
+                                                                            title="Download"
+                                                                        >
+                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                                                     </svg>
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -1248,17 +1413,84 @@ export function WhatsAppWindow({
         </div>
     );
 
+    // Media Viewer Dialog Component (shared between both return statements)
+    const mediaViewerDialog = (
+        <Dialog open={!!viewingMedia} onOpenChange={(open) => !open && setViewingMedia(null)}>
+            <DialogContent className="!max-w-[95vw] !max-h-[95vh] p-0 overflow-hidden flex flex-col">
+                {viewingMedia && (
+                    <>
+                        <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
+                            <DialogTitle className="flex items-center justify-between">
+                                <span>{viewingMedia.filename || (viewingMedia.type === 'image' ? 'Image' : 'Video')}</span>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => downloadMedia(
+                                            viewingMedia.url,
+                                            viewingMedia.filename || `${viewingMedia.type}_${Date.now()}.${viewingMedia.type === 'image' ? 'jpg' : 'mp4'}`,
+                                            viewingMedia.type === 'image' ? 'image/jpeg' : 'video/mp4'
+                                        )}
+                                    >
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                        </svg>
+                                        Download
+                                    </Button>
+                                </div>
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-black/5 dark:bg-black/20">
+                            {viewingMedia.type === 'image' ? (
+                                <img
+                                    src={viewingMedia.url}
+                                    alt={viewingMedia.filename || 'Image'}
+                                    className="max-w-full max-h-[85vh] object-contain rounded"
+                                    style={{ cursor: 'zoom-in' }}
+                                    onClick={() => {
+                                        window.open(viewingMedia.url, '_blank');
+                                    }}
+                                />
+                            ) : (
+                                <video
+                                    controls
+                                    src={viewingMedia.url}
+                                    className="max-w-full max-h-[85vh] rounded"
+                                    autoPlay
+                                />
+                            )}
+                        </div>
+                    </>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+
+    if (!isOpen) {
+        return mediaViewerDialog;
+    }
+
     if (isFloating) {
         return (
-            <div className="fixed bottom-4 right-4 z-[100] shadow-2xl rounded-lg overflow-hidden" style={{ width: '900px', height: '700px' }}>
-                {windowContent}
-            </div>
+            <>
+                <div className="fixed bottom-4 right-4 z-[100] shadow-2xl rounded-lg overflow-hidden" style={{ width: '900px', height: '700px' }}>
+                    {windowContent}
+                </div>
+                
+                {/* Media Viewer Dialog */}
+                {mediaViewerDialog}
+            </>
         );
     }
 
     return (
-        <div className="h-full flex flex-col border-l border-neutral-200 dark:border-neutral-700">
-            {windowContent}
-        </div>
+        <>
+            <div className="h-full flex flex-col border-l border-neutral-200 dark:border-neutral-700">
+                {windowContent}
+            </div>
+            
+            {/* Media Viewer Dialog */}
+            {mediaViewerDialog}
+        </>
     );
 }
