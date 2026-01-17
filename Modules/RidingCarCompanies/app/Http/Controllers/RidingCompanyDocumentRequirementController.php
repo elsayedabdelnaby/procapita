@@ -50,29 +50,59 @@ class RidingCompanyDocumentRequirementController extends Controller
             ->get();
 
         // Get all driver documents to show which ones are being used
-        $driverDocumentsQuery = \Modules\Drivers\app\Models\DriverDocument::with(['ridingCompany'])
-            ->whereHas('driver', function ($q) use ($companyId) {
-                $q->whereNull('deleted_at');
-                if ($companyId) {
+        $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
+
+        if ($hasNameColumn) {
+            $driverDocumentsQuery = \Modules\Drivers\app\Models\DriverDocument::with(['ridingCompany'])
+                ->whereHas('driver', function ($q) use ($companyId) {
+                    $q->whereNull('deleted_at');
+                    if ($companyId) {
+                        $q->where('company_id', $companyId);
+                    }
+                })
+                ->whereNotNull('name');
+
+            if ($companyId) {
+                $driverDocumentsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
                     $q->where('company_id', $companyId);
-                }
-            })
-            ->whereNotNull('name');
+                });
+            }
 
-        if ($companyId) {
-            $driverDocumentsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
-                $q->where('company_id', $companyId);
-            });
+            $driverDocuments = $driverDocumentsQuery
+                ->select('name', 'riding_company_id')
+                ->selectRaw('COUNT(DISTINCT driver_id) as driver_count')
+                ->groupBy('name', 'riding_company_id')
+                ->get()
+                ->keyBy(function ($doc) {
+                    return $doc->name.'_'.$doc->riding_company_id;
+                });
+        } else {
+            // Use document_name relationship if name column doesn't exist
+            $driverDocumentsQuery = \Modules\Drivers\app\Models\DriverDocument::with(['ridingCompany', 'documentName'])
+                ->whereHas('driver', function ($q) use ($companyId) {
+                    $q->whereNull('deleted_at');
+                    if ($companyId) {
+                        $q->where('company_id', $companyId);
+                    }
+                })
+                ->whereNotNull('document_name_id');
+
+            if ($companyId) {
+                $driverDocumentsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
+                    $q->where('company_id', $companyId);
+                });
+            }
+
+            $driverDocuments = $driverDocumentsQuery
+                ->join('document_names', 'driver_documents.document_name_id', '=', 'document_names.id')
+                ->select('document_names.name as name', 'driver_documents.riding_company_id')
+                ->selectRaw('COUNT(DISTINCT driver_documents.driver_id) as driver_count')
+                ->groupBy('document_names.name', 'driver_documents.riding_company_id')
+                ->get()
+                ->keyBy(function ($doc) {
+                    return $doc->name.'_'.$doc->riding_company_id;
+                });
         }
-
-        $driverDocuments = $driverDocumentsQuery
-            ->select('name', 'riding_company_id')
-            ->selectRaw('COUNT(DISTINCT driver_id) as driver_count')
-            ->groupBy('name', 'riding_company_id')
-            ->get()
-            ->keyBy(function ($doc) {
-                return $doc->name.'_'.$doc->riding_company_id;
-            });
 
         // Group requirements by name and collect all riding companies for each name
         $groupedRequirements = $allRequirements->groupBy('name');
@@ -246,7 +276,8 @@ class RidingCompanyDocumentRequirementController extends Controller
         }
 
         // Get all drivers for this riding company
-        $driversQuery = \Modules\Drivers\app\Models\Driver::with(['documents'])
+        $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
+        $driversQuery = \Modules\Drivers\app\Models\Driver::with(['documents'.($hasNameColumn ? '' : '.documentName')])
             ->where('riding_company_id', $documentRequirement->riding_company_id)
             ->whereNull('deleted_at');
 
@@ -262,8 +293,14 @@ class RidingCompanyDocumentRequirementController extends Controller
             ->get(['id', 'name', 'type', 'required', 'active']);
 
         // Map drivers with their documents
-        $driversWithDocuments = $drivers->map(function ($driver) use ($allDocumentRequirements) {
-            $driverDocuments = $driver->documents->keyBy('name');
+        $driversWithDocuments = $drivers->map(function ($driver) use ($allDocumentRequirements, $hasNameColumn) {
+            if ($hasNameColumn) {
+                $driverDocuments = $driver->documents->keyBy('name');
+            } else {
+                $driverDocuments = $driver->documents->keyBy(function ($doc) {
+                    return $doc->documentName?->name ?? $doc->name ?? null;
+                });
+            }
 
             $documentsStatus = [];
             foreach ($allDocumentRequirements as $requirement) {

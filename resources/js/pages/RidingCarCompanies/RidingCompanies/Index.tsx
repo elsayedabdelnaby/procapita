@@ -23,6 +23,7 @@ interface RidingCompany {
     country?: string;
     city?: string;
     logo_path?: string;
+    logo_url?: string;
     contact_email?: string;
     contact_phone?: string;
     active: boolean;
@@ -72,24 +73,46 @@ export default function RidingCompaniesIndex({ ridingCompanies }: RidingCompanie
                 </div>
 
                 <Card className="p-6">
+                    <style>{`
+                        .riding-companies-table table th:nth-child(1),
+                        .riding-companies-table table td:nth-child(1) {
+                            min-width: 150px;
+                        }
+                        .riding-companies-table table th:nth-child(2),
+                        .riding-companies-table table td:nth-child(2) {
+                            min-width: 120px;
+                        }
+                    `}</style>
                     {ridingCompanies.length > 0 ? (
+                        <div className="riding-companies-table">
                         <DataTable
                             data={ridingCompanies}
                             columns={[
                                 {
                                     header: 'Name',
                                     accessor: (row) => (
-                                        <Link
-                                            href={`/ridingcarcompanies/riding-companies/${row.id}`}
-                                            className="font-medium hover:underline"
-                                        >
-                                            {row.name}
-                                        </Link>
+                                        <div className="flex items-center gap-2 min-w-[150px]">
+                                            {row.logo_url && (
+                                                <img
+                                                    src={row.logo_url}
+                                                    alt={`${row.name} logo`}
+                                                    className="h-8 max-w-[40px] w-auto object-contain flex-shrink-0"
+                                                />
+                                            )}
+                                            <Link
+                                                href={`/ridingcarcompanies/riding-companies/${row.id}`}
+                                                className="font-medium hover:underline truncate min-w-0"
+                                            >
+                                                {row.name}
+                                            </Link>
+                                        </div>
                                     ),
+                                    className: 'min-w-[150px]',
                                 },
                                 {
                                     header: 'Main Company',
                                     accessor: (row) => row.company?.name || '-',
+                                    className: 'min-w-[120px]',
                                 },
                                 {
                                     header: 'Country',
@@ -149,6 +172,7 @@ export default function RidingCompaniesIndex({ ridingCompanies }: RidingCompanie
                                 </>
                             )}
                         />
+                        </div>
                     ) : (
                         <div className="py-8 text-center text-neutral-500">
                             <p>No riding companies found.</p>

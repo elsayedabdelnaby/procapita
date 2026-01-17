@@ -1659,12 +1659,29 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
         );
     };
 
+    // Document permissions - using drivers.drivers.* permissions
     const canUploadDocument = () => {
-        return hasPermission('drivers.driverdocuments.upload');
+        return hasPermission('drivers.drivers.upload-document') || hasPermission('drivers.driverdocuments.upload');
     };
 
     const canViewDocument = () => {
-        return hasPermission('drivers.driverdocuments.view');
+        return hasPermission('drivers.drivers.view-document') || hasPermission('drivers.driverdocuments.view');
+    };
+
+    const canDeleteDocument = () => {
+        return hasPermission('drivers.drivers.delete-document') || hasPermission('drivers.driverdocuments.delete-file');
+    };
+
+    const canRejectDocument = () => {
+        return hasPermission('drivers.drivers.reject-document') || hasPermission('drivers.driverdocuments.set-rejected');
+    };
+
+    const canApproveDocument = () => {
+        return hasPermission('drivers.drivers.approve-document') || hasPermission('drivers.driverdocuments.set-approved');
+    };
+
+    const canPendingDocument = () => {
+        return hasPermission('drivers.drivers.pending-document') || hasPermission('drivers.driverdocuments.set-pending');
     };
 
     const canReplaceDocument = () => {
@@ -1672,15 +1689,15 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
     };
 
     const canSetPending = () => {
-        return hasPermission('drivers.driverdocuments.set-pending');
+        return hasPermission('drivers.drivers.pending-document') || hasPermission('drivers.driverdocuments.set-pending');
     };
 
     const canSetApproved = () => {
-        return hasPermission('drivers.driverdocuments.set-approved');
+        return hasPermission('drivers.drivers.approve-document') || hasPermission('drivers.driverdocuments.set-approved');
     };
 
     const canSetRejected = () => {
-        return hasPermission('drivers.driverdocuments.set-rejected');
+        return hasPermission('drivers.drivers.reject-document') || hasPermission('drivers.driverdocuments.set-rejected');
     };
 
     const [uploadingDocId, setUploadingDocId] = useState<number | null>(null);
@@ -2468,7 +2485,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                         </th>
                                                     );
                                                 }
-                                                if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to', 'riding_company'].includes(col.id)) {
+                                                if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to', 'riding_company', 'last_assigned_by'].includes(col.id)) {
                                                     return (
                                                         <th key={col.id} className="px-4 py-2">
                                                             <div className="relative">
@@ -2496,6 +2513,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                           col.id === 'lead_status' ? (filterOptions?.leadStatuses || []) :
                                                                           col.id === 'lead_stage' ? ((filterOptions as any)?.leadStages || []) :
                                                                           col.id === 'assigned_to' ? (filterOptions?.users || []) :
+                                                                          col.id === 'last_assigned_by' ? (filterOptions?.users || []) :
                                                                           col.id === 'riding_company' ? (filterOptions?.ridingCompanies || []) : []).map((option: any) => (
                                                                             <SelectItem key={option.id} value={String(option.id)}>
                                                                                 {option.name}
@@ -3823,64 +3841,74 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-2 flex-wrap">
-                                                                {doc.uploaded_path ? (
-                                                                    <>
-                                                                        {/* Status buttons - only show if file is uploaded */}
-                                                                        {(canSetPending() || canSetApproved() || canSetRejected()) && (
-                                                                            <div className="flex items-center gap-1 border rounded-md p-1">
-                                                                                {canSetPending() && (
-                                                                                    <Button
-                                                                                        variant={doc.status === 'pending' ? 'default' : 'ghost'}
-                                                                                        size="sm"
-                                                                                        className={`h-7 px-3 text-xs ${
-                                                                                            doc.status === 'pending'
-                                                                                                ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                                                                        }`}
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            handleUpdateStatus(doc.id, 'pending');
-                                                                                        }}
-                                                                                    >
-                                                                                        PENDING
-                                                                                    </Button>
-                                                                                )}
-                                                                                {canSetApproved() && (
-                                                                                    <Button
-                                                                                        variant={doc.status === 'approved' ? 'default' : 'ghost'}
-                                                                                        size="sm"
-                                                                                        className={`h-7 px-3 text-xs ${
-                                                                                            doc.status === 'approved'
-                                                                                                ? 'bg-green-500 hover:bg-green-600 text-white'
-                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                                                                        }`}
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            handleUpdateStatus(doc.id, 'approved');
-                                                                                        }}
-                                                                                    >
-                                                                                        APPROVED
-                                                                                    </Button>
-                                                                                )}
-                                                                                {canSetRejected() && (
-                                                                                    <Button
-                                                                                        variant={doc.status === 'rejected' ? 'default' : 'ghost'}
-                                                                                        size="sm"
-                                                                                        className={`h-7 px-3 text-xs ${
-                                                                                            doc.status === 'rejected'
-                                                                                                ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                                                                        }`}
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            handleUpdateStatus(doc.id, 'rejected');
-                                                                                        }}
-                                                                                    >
-                                                                                        REJECT
-                                                                                    </Button>
-                                                                                )}
-                                                                            </div>
+                                                                {/* EMPTY status - show if file is NOT uploaded */}
+                                                                {!doc.uploaded_path && (
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="h-7 px-3 text-xs bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+                                                                        disabled
+                                                                    >
+                                                                        EMPTY
+                                                                    </Button>
+                                                                )}
+
+                                                                {/* Status buttons - only show if file is uploaded */}
+                                                                {doc.uploaded_path && (canSetPending() || canSetApproved() || canSetRejected()) && (
+                                                                    <div className="flex items-center gap-1 border rounded-md p-1">
+                                                                        {canSetPending() && (
+                                                                            <Button
+                                                                                variant={doc.status === 'pending' ? 'default' : 'ghost'}
+                                                                                size="sm"
+                                                                                className={`h-7 px-3 text-xs ${
+                                                                                    doc.status === 'pending'
+                                                                                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                }`}
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleUpdateStatus(doc.id, 'pending');
+                                                                                }}
+                                                                            >
+                                                                                PENDING
+                                                                            </Button>
                                                                         )}
+                                                                        {canSetApproved() && (
+                                                                            <Button
+                                                                                variant={doc.status === 'approved' ? 'default' : 'ghost'}
+                                                                                size="sm"
+                                                                                className={`h-7 px-3 text-xs ${
+                                                                                    doc.status === 'approved'
+                                                                                        ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                }`}
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleUpdateStatus(doc.id, 'approved');
+                                                                                }}
+                                                                            >
+                                                                                APPROVED
+                                                                            </Button>
+                                                                        )}
+                                                                        {canSetRejected() && (
+                                                                            <Button
+                                                                                variant={doc.status === 'rejected' ? 'default' : 'ghost'}
+                                                                                size="sm"
+                                                                                className={`h-7 px-3 text-xs ${
+                                                                                    doc.status === 'rejected'
+                                                                                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                }`}
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleUpdateStatus(doc.id, 'rejected');
+                                                                                }}
+                                                                            >
+                                                                                REJECT
+                                                                            </Button>
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                                         {canViewDocument() && (
                                                                             <Button
                                                                                 variant="outline"
@@ -4672,12 +4700,16 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                     <SelectValue placeholder="Select user..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">-- None --</SelectItem>
-                                    {filterOptions.users?.map((user) => (
-                                        <SelectItem key={user.id} value={String(user.id)}>
-                                            {user.name}
-                                        </SelectItem>
-                                    ))}
+                                    <SelectItem value="__none__">-- None --</SelectItem>
+                                    {filterOptions.users?.filter(user => user && user.id != null && user.id !== undefined && String(user.id).trim() !== '').map((user) => {
+                                        const userId = String(user.id);
+                                        if (!userId || userId.trim() === '') return null;
+                                        return (
+                                            <SelectItem key={user.id} value={userId}>
+                                                {user.name}
+                                            </SelectItem>
+                                        );
+                                    })}
                                 </SelectContent>
                             </Select>
                             {errors.assigned_to && (

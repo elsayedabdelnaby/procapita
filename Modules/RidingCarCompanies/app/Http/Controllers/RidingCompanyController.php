@@ -16,6 +16,7 @@ use Modules\Core\app\Models\Company;
 use Modules\Core\app\Models\Role;
 use Modules\Core\app\Services\RoleService;
 use Modules\Drivers\app\Models\LeadSource;
+use Modules\Marketing\app\Models\Campaign;
 use Modules\RidingCarCompanies\app\Http\Requests\RidingCompanyStoreRequest;
 use Modules\RidingCarCompanies\app\Http\Requests\RidingCompanyUpdateRequest;
 use Modules\RidingCarCompanies\app\Services\RidingCompanyService;
@@ -63,6 +64,7 @@ class RidingCompanyController extends Controller
                 'country' => $company->country,
                 'city' => $company->city,
                 'logo_path' => $company->logo_path,
+                'logo_url' => $company->logo_url,
                 'contact_email' => $company->contact_email,
                 'contact_phone' => $company->contact_phone,
                 'active' => $company->active,
@@ -316,6 +318,7 @@ class RidingCompanyController extends Controller
                     'required' => $req->required,
                     'active' => $req->active,
                 ])->toArray(),
+                'document_names' => $this->getDocumentNamesForRidingCompany($ridingCompany->id),
                 'integrations' => $ridingCompany->integrations->map(fn ($integration) => [
                     'id' => $integration->id,
                     'type' => $integration->type,
@@ -336,6 +339,13 @@ class RidingCompanyController extends Controller
                 ->map(fn ($source) => [
                     'id' => $source->id,
                     'name' => $source->name,
+                ])->toArray(),
+            'campaigns' => Campaign::where('company_id', $ridingCompany->company_id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn ($campaign) => [
+                    'id' => $campaign->id,
+                    'name' => $campaign->name,
                 ])->toArray(),
             'roles' => Role::where('team_id', $ridingCompany->company_id)
                 ->orderBy('name')
@@ -520,6 +530,32 @@ class RidingCompanyController extends Controller
      * Extract user IDs from distribution_users array
      * Handles both array of IDs and array of objects with user_id
      */
+    private function getDocumentNamesForRidingCompany(int $ridingCompanyId): array
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('document_names')) {
+            return [];
+        }
+
+        $documentNames = \Modules\Drivers\app\Models\DocumentName::query()
+            ->where(function ($q) use ($ridingCompanyId) {
+                $q->whereJsonContains('riding_company_ids', $ridingCompanyId)
+                  ->orWhereJsonContains('riding_company_ids', (string) $ridingCompanyId);
+            })
+            ->orderBy('name')
+            ->get();
+
+        return $documentNames->map(function ($docName) {
+            return [
+                'id' => $docName->id,
+                'name' => $docName->name,
+                'type' => $docName->type ?? 'file',
+                'required' => $docName->required ?? false,
+                'active' => $docName->active ?? true,
+                'status' => $docName->status ?? 'pending',
+            ];
+        })->toArray();
+    }
+
     private function extractUserIdsFromDistributionUsers(array $distributionUsers): array
     {
         if (empty($distributionUsers)) {

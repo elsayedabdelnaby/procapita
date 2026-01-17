@@ -77,7 +77,21 @@ class UserUpdateRequest extends FormRequest
             ],
             'is_company_admin' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
-            'roles' => ['nullable', 'array'],
+            'role_id' => [
+                'nullable',
+                'integer',
+                'exists:roles,id',
+                function ($attribute, $value, $fail) use ($companyId) {
+                    if ($value) {
+                        $role = \Modules\Core\app\Models\Role::find($value);
+                        if ($role && $companyId && $role->team_id != $companyId) {
+                            $fail('The selected role does not belong to this company.');
+                        }
+                    }
+                },
+            ],
+            // Keep 'roles' for backward compatibility but validate it's empty or single item
+            'roles' => ['nullable', 'array', 'max:1'],
             'roles.*' => [
                 'integer',
                 'exists:roles,id',
@@ -102,6 +116,8 @@ class UserUpdateRequest extends FormRequest
             'mobile1.required' => 'Mobile 1 is required.',
             'password.min' => 'Password must be at least 8 characters.',
             'company_id.exists' => 'Selected company does not exist.',
+            'role_id.exists' => 'The selected role does not exist.',
+            'roles.max' => 'A user can only have one role.',
             'roles.*.exists' => 'One or more selected roles do not exist.',
             'permissions.*.exists' => 'One or more selected permissions do not exist.',
         ];

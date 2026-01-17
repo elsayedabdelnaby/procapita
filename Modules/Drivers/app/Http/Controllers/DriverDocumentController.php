@@ -94,28 +94,54 @@ class DriverDocumentController extends Controller
     {
         $companyId = $this->getCompanyId();
 
-        // Get unique documents grouped by name and riding_company_id
-        $uniqueDocuments = \Modules\Drivers\app\Models\DriverDocument::with(['ridingCompany'])
-            ->whereHas('driver', function ($q) use ($companyId) {
-                $q->whereNull('deleted_at');
-                if ($companyId) {
-                    $q->where('company_id', $companyId);
-                }
-            })
-            ->whereNotNull('name')
-            ->select('name', 'riding_company_id')
-            ->selectRaw('MIN(id) as id')
-            ->selectRaw('MIN(created_at) as created_at')
-            ->groupBy('name', 'riding_company_id')
-            ->orderBy('riding_company_id')
-            ->orderBy('name')
-            ->get();
+        // Check if name column exists, otherwise use document_name relationship
+        $hasNameColumn = Schema::hasColumn('driver_documents', 'name');
+
+        if ($hasNameColumn) {
+            // Get unique documents grouped by name and riding_company_id
+            $uniqueDocuments = \Modules\Drivers\app\Models\DriverDocument::with(['ridingCompany'])
+                ->whereHas('driver', function ($q) use ($companyId) {
+                    $q->whereNull('deleted_at');
+                    if ($companyId) {
+                        $q->where('company_id', $companyId);
+                    }
+                })
+                ->whereNotNull('name')
+                ->select('name', 'riding_company_id')
+                ->selectRaw('MIN(id) as id')
+                ->selectRaw('MIN(created_at) as created_at')
+                ->groupBy('name', 'riding_company_id')
+                ->orderBy('riding_company_id')
+                ->orderBy('name')
+                ->get();
+        } else {
+            // Use document_name relationship if name column doesn't exist
+            $uniqueDocuments = \Modules\Drivers\app\Models\DriverDocument::with(['ridingCompany', 'documentName'])
+                ->whereHas('driver', function ($q) use ($companyId) {
+                    $q->whereNull('deleted_at');
+                    if ($companyId) {
+                        $q->where('company_id', $companyId);
+                    }
+                })
+                ->whereNotNull('document_name_id')
+                ->join('document_names', 'driver_documents.document_name_id', '=', 'document_names.id')
+                ->select('document_names.name as name', 'driver_documents.riding_company_id')
+                ->selectRaw('MIN(driver_documents.id) as id')
+                ->selectRaw('MIN(driver_documents.created_at) as created_at')
+                ->groupBy('document_names.name', 'driver_documents.riding_company_id')
+                ->orderBy('driver_documents.riding_company_id')
+                ->orderBy('document_names.name')
+                ->get();
+        }
 
         // Map unique documents
-        $allDocuments = $uniqueDocuments->map(function ($doc) {
+        $allDocuments = $uniqueDocuments->map(function ($doc) use ($hasNameColumn) {
+            // Handle both cases: direct name column or from join
+            $name = $hasNameColumn ? $doc->name : ($doc->name ?? $doc->documentName?->name ?? null);
+            
             return [
                 'id' => $doc->id,
-                'name' => $doc->name,
+                'name' => $name,
                 'riding_companies' => $doc->ridingCompany ? [[
                     'id' => $doc->ridingCompany->id,
                     'name' => $doc->ridingCompany->name,
@@ -476,9 +502,19 @@ class DriverDocumentController extends Controller
         try {
             $companyId = $this->getCompanyId();
 
+            // Check if name column exists, otherwise use document_name relationship
+            $hasNameColumn = Schema::hasColumn('driver_documents', 'name');
+
             // Get all documents with the same name and riding_company_id
-            $query = \Modules\Drivers\app\Models\DriverDocument::where('name', $request->name)
-                ->where('riding_company_id', $request->riding_company_id);
+            if ($hasNameColumn) {
+                $query = \Modules\Drivers\app\Models\DriverDocument::where('name', $request->name)
+                    ->where('riding_company_id', $request->riding_company_id);
+            } else {
+                $query = \Modules\Drivers\app\Models\DriverDocument::whereHas('documentName', function ($q) use ($request) {
+                    $q->where('name', $request->name);
+                })
+                    ->where('riding_company_id', $request->riding_company_id);
+            }
 
             if ($companyId) {
                 $query->whereHas('driver', function ($q) use ($companyId) {
@@ -739,6 +775,22 @@ class DriverDocumentController extends Controller
         ]);
 
         try {
+            // Check if document has uploaded file
+            $document = \Modules\Drivers\app\Models\DriverDocument::findOrFail($driverDocument);
+            
+            if (!$document->uploaded_path) {
+                if ($request->expectsJson() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Cannot update status. File must be uploaded first.',
+                    ], 400);
+                }
+
+                return redirect()
+                    ->back()
+                    ->with('error', 'Cannot update status. File must be uploaded first.');
+            }
+
             $this->driverDocumentService->updateStatus(
                 $driverDocument,
                 $request->status,

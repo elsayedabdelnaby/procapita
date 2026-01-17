@@ -3,12 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import AppLayout from '@/layouts/app-layout';
 import { Company, Role } from '@/types/core';
 import { Head, Link, useForm } from '@inertiajs/react';
 import axios from 'axios';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 
 interface Permission {
     id: number;
@@ -34,12 +35,56 @@ export default function RoleEdit({
     const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
     const [expandedEntities, setExpandedEntities] = useState<Record<string, boolean>>({});
 
-    const { data, setData, put, processing, errors } = useForm({
+    const { data, setData, put, processing, errors, transform } = useForm({
         name: role.name || '',
         parent_id: role.parent_id || '',
         module_name: role.module_name || '',
         entity_name: role.entity_name || '',
         permissions: (role.permissions || []).map((p: Permission) => p.id) as number[],
+    });
+
+    // Transform data before submitting - remove old view- permissions if new permissions exist
+    transform((data) => {
+        let finalPermissions = [...(data.permissions || [])];
+        
+        if (permissions['drivers']?.['driverfields']) {
+            const driverfieldPermIds = permissions['drivers']['driverfields'].map(p => p.id);
+            const hasNewPermissions = finalPermissions.some((id: number) => {
+                if (!driverfieldPermIds.includes(id)) return false;
+                const perm = permissions['drivers']['driverfields'].find(p => p.id === id);
+                if (!perm) return false;
+                const action = perm.action || '';
+                const name = perm.name || '';
+                // Check if it's a new permission (invisible, read, write)
+                return action.startsWith('invisible-') || 
+                       action.startsWith('read-') || 
+                       action.startsWith('write-') ||
+                       name.includes('.invisible-') ||
+                       name.includes('.read-') ||
+                       name.includes('.write-');
+            });
+            
+            // If new permissions exist, remove old view- permissions
+            if (hasNewPermissions) {
+                finalPermissions = finalPermissions.filter((id: number) => {
+                    if (!driverfieldPermIds.includes(id)) return true; // Keep non-driverfield permissions
+                    const perm = permissions['drivers']['driverfields'].find(p => p.id === id);
+                    if (!perm) return true;
+                    const action = perm.action || '';
+                    const name = perm.name || '';
+                    // Remove old view- permissions
+                    if (action.startsWith('view-') || name.includes('.view-')) {
+                        return false;
+                    }
+                    return true; // Keep new permissions (invisible, read, write)
+                });
+            }
+        }
+        
+        return {
+            ...data,
+            permissions: finalPermissions,
+        };
     });
 
     const toggleModule = (moduleName: string) => {
@@ -86,7 +131,12 @@ export default function RoleEdit({
         const currentPermissions = data.permissions || [];
         const modulePermissions: number[] = [];
 
-        Object.values(permissions[moduleName] || {}).forEach((entityPermissions) => {
+        // For drivers module, exclude driverfields permissions (they are handled separately)
+        Object.entries(permissions[moduleName] || {}).forEach(([entityName, entityPermissions]) => {
+            if (moduleName === 'drivers' && entityName === 'driverfields') {
+                // Skip driverfields - they are handled by radio buttons
+                return;
+            }
             entityPermissions.forEach((permission) => {
                 modulePermissions.push(permission.id);
             });
@@ -107,6 +157,53 @@ export default function RoleEdit({
         entityName: string,
         checked: boolean
     ) => {
+        // Special handling for driverfields: use default "read" permission for all fields
+        if (moduleName === 'drivers' && entityName === 'driverfields') {
+            const currentPermissions = data.permissions || [];
+            const fields = Object.keys(driverFieldMapping);
+            const newPermissions = [...currentPermissions];
+
+            if (checked) {
+                // Add "read" permission for all fields (default state)
+                fields.forEach((fieldName) => {
+                    const fieldPerms = driverFieldsPermissions[fieldName];
+                    const readPermId = fieldPerms?.read?.id;
+                    
+                    // If fieldPerms not found, search in permissions
+                    if (!readPermId && permissions['drivers']?.['driverfields']) {
+                        const perm = permissions['drivers']['driverfields'].find(
+                            (p) => p.action === `read-${fieldName}` || p.name === `drivers.driverfields.read-${fieldName}`
+                        );
+                        if (perm && !newPermissions.includes(perm.id)) {
+                            newPermissions.push(perm.id);
+                        }
+                    } else if (readPermId && !newPermissions.includes(readPermId)) {
+                        newPermissions.push(readPermId);
+                    }
+                });
+                
+                // Remove any existing invisible/write permissions for driverfields to avoid conflicts
+                const driverfieldPermIds = (permissions['drivers']?.['driverfields'] || []).map(p => p.id);
+                const filteredPermissions = newPermissions.filter(id => {
+                    if (!driverfieldPermIds.includes(id)) return true;
+                    // Check if this is a read permission
+                    const perm = permissions['drivers']['driverfields'].find(p => p.id === id);
+                    return perm && (perm.action?.startsWith('read-') || perm.name?.includes('.read-'));
+                });
+                
+                setData('permissions', filteredPermissions);
+            } else {
+                // Remove all driverfields permissions
+                const driverfieldPermIds = (permissions['drivers']?.['driverfields'] || []).map(p => p.id);
+                setData(
+                    'permissions',
+                    currentPermissions.filter((id) => !driverfieldPermIds.includes(id))
+                );
+            }
+            return;
+        }
+
+        // Normal entity handling
         const currentPermissions = data.permissions || [];
         const entityPermissions = (permissions[moduleName]?.[entityName] || []).map(
             (p) => p.id
@@ -122,8 +219,414 @@ export default function RoleEdit({
         }
     };
 
+    // Field mapping for Drivers fields
+    const driverFieldMapping: Record<string, string> = {
+        'assigned_to': 'Assigned To',
+        'campaign': 'Campaign',
+        'cancel_reason': 'Cancel Reasons',
+        'car_or_scooter': 'Car or Scooter',
+        'city': 'City',
+        'current_stage': 'Current Stage',
+        'email': 'Email',
+        'lead_status_comment': 'Feedback Comment',
+        'has_worked_before': 'Has the driver worked before?',
+        'lead_source': 'Lead Source',
+        'lead_stage': 'Lead Stage',
+        'lead_status': 'Lead Status',
+        'full_name': 'Name',
+        'next_follow_up': 'Next Follow-up',
+        'phone': 'Phone',
+        'vehicle_type': 'Vehicle Type',
+        'vehicle_type_and_year': 'Vehicle Type and Year',
+        'whatsapp_phone': 'WhatsApp',
+        'worked_with_us_before': 'Worked With Us Before',
+    };
+
+    // Group driverfields permissions by field name
+    const driverFieldsPermissions = useMemo(() => {
+        if (!permissions['drivers'] || !permissions['drivers']['driverfields']) {
+            console.log('[driverFieldsPermissions] No driverfields permissions found');
+            return {};
+        }
+
+        const fields: Record<string, { invisible?: Permission; read?: Permission; write?: Permission }> = {};
+        
+        console.log('[driverFieldsPermissions] Processing permissions:', permissions['drivers']['driverfields'].length);
+        console.log('[driverFieldsPermissions] Sample permissions:', JSON.stringify(permissions['drivers']['driverfields'].slice(0, 5).map(p => ({
+            id: p.id,
+            name: p.name,
+            action: p.action
+        })), null, 2));
+        
+        permissions['drivers']['driverfields'].forEach((permission) => {
+            const action = permission.action || '';
+            const permName = permission.name || '';
+            
+            // Check if it's one of the new field permissions (invisible, read, write)
+            let fieldName: string | null = null;
+            let permissionType: 'invisible' | 'read' | 'write' | null = null;
+            
+            // Try to extract from action first (format: "invisible-{fieldName}")
+            if (action && action.startsWith('invisible-')) {
+                fieldName = action.replace(/^invisible-/, '');
+                permissionType = 'invisible';
+            } else if (action && action.startsWith('read-')) {
+                fieldName = action.replace(/^read-/, '');
+                permissionType = 'read';
+            } else if (action && action.startsWith('write-')) {
+                fieldName = action.replace(/^write-/, '');
+                permissionType = 'write';
+            } 
+            // Try to extract from permission name (format: "drivers.driverfields.invisible-{fieldName}")
+            else if (permName && permName.includes('invisible-')) {
+                // Match pattern: drivers.driverfields.invisible-{fieldName}
+                const match = permName.match(/invisible-(.+)$/);
+                if (match && match[1]) {
+                    fieldName = match[1];
+                    permissionType = 'invisible';
+                }
+            } else if (permName && permName.includes('read-')) {
+                const match = permName.match(/read-(.+)$/);
+                if (match && match[1]) {
+                    fieldName = match[1];
+                    permissionType = 'read';
+                }
+            } else if (permName && permName.includes('write-')) {
+                const match = permName.match(/write-(.+)$/);
+                if (match && match[1]) {
+                    fieldName = match[1];
+                    permissionType = 'write';
+                }
+            }
+            
+            if (fieldName && permissionType) {
+                // Normalize field name (handle any variations)
+                const normalizedFieldName = fieldName.trim();
+                if (!fields[normalizedFieldName]) {
+                    fields[normalizedFieldName] = {};
+                }
+                
+                fields[normalizedFieldName][permissionType] = permission;
+                console.log(`[driverFieldsPermissions] Added ${permissionType} permission for field "${normalizedFieldName}":`, {
+                    id: permission.id,
+                    name: permission.name,
+                    action: permission.action
+                });
+            } else {
+                // Debug: log permissions that weren't matched
+                if (permName && (permName.includes('invisible-') || permName.includes('read-') || permName.includes('write-'))) {
+                    console.log(`[driverFieldsPermissions] Permission not matched:`, {
+                        id: permission.id,
+                        name: permission.name,
+                        action: permission.action,
+                        reason: 'Could not extract field name'
+                    });
+                }
+            }
+        });
+
+        console.log('[driverFieldsPermissions] Final fields:', Object.keys(fields));
+        return fields;
+    }, [permissions]);
+
+    // Check if "Read" permission is selected in drivers.drivers entity
+    const isDriversEntityReadSelected = useMemo(() => {
+        if (!permissions['drivers'] || !permissions['drivers']['drivers']) {
+            return false;
+        }
+        const readPermission = permissions['drivers']['drivers'].find(
+            (p) => p.action === 'read' || p.name === 'drivers.drivers.read'
+        );
+        if (!readPermission) {
+            return false;
+        }
+        
+        const currentPerms = (data.permissions || []).map(p => typeof p === 'string' ? parseInt(p, 10) : p);
+        const isSelected = currentPerms.includes(readPermission.id);
+        
+        console.log('[isDriversEntityReadSelected]', {
+            readPermissionId: readPermission.id,
+            currentPerms: currentPerms.slice(0, 10),
+            isSelected
+        });
+        
+        return isSelected;
+    }, [permissions, data.permissions]);
+
+    // Auto-expand driverfields entity when "Read" in drivers.drivers entity is selected
+    useEffect(() => {
+        console.log('[useEffect] isDriversEntityReadSelected:', isDriversEntityReadSelected);
+        if (isDriversEntityReadSelected) {
+            console.log('[useEffect] Expanding drivers module and driverfields entity');
+            // Expand drivers module
+            setExpandedModules((prev) => {
+                if (prev.drivers) {
+                    console.log('[useEffect] Drivers module already expanded');
+                    return prev;
+                }
+                console.log('[useEffect] Expanding drivers module');
+                return {
+                    ...prev,
+                    drivers: true,
+                };
+            });
+            // Expand driverfields entity
+            setExpandedEntities((prev) => {
+                if (prev['drivers-driverfields']) {
+                    console.log('[useEffect] Driverfields entity already expanded');
+                    return prev;
+                }
+                console.log('[useEffect] Expanding driverfields entity');
+                return {
+                    ...prev,
+                    'drivers-driverfields': true,
+                };
+            });
+        }
+    }, [isDriversEntityReadSelected]);
+
+    // Get current field permission state
+    const getFieldPermissionState = (fieldName: string): 'invisible' | 'read' | 'write' | null => {
+        const fieldPerms = driverFieldsPermissions[fieldName];
+        let invisiblePermId: number | null = null;
+        let readPermId: number | null = null;
+        let writePermId: number | null = null;
+
+        if (fieldPerms) {
+            invisiblePermId = fieldPerms.invisible?.id || null;
+            readPermId = fieldPerms.read?.id || null;
+            writePermId = fieldPerms.write?.id || null;
+        } else {
+            // Fallback: search in all permissions
+            if (permissions['drivers'] && permissions['drivers']['driverfields']) {
+                permissions['drivers']['driverfields'].forEach((perm) => {
+                    const action = perm.action || '';
+                    const permName = perm.name || '';
+                    
+                    // Check by exact match first
+                    if (action === `invisible-${fieldName}` || 
+                        permName === `drivers.driverfields.invisible-${fieldName}` ||
+                        permName.endsWith(`.invisible-${fieldName}`)) {
+                        invisiblePermId = perm.id;
+                    } else if (action === `read-${fieldName}` || 
+                               permName === `drivers.driverfields.read-${fieldName}` ||
+                               permName.endsWith(`.read-${fieldName}`)) {
+                        readPermId = perm.id;
+                    } else if (action === `write-${fieldName}` || 
+                               permName === `drivers.driverfields.write-${fieldName}` ||
+                               permName.endsWith(`.write-${fieldName}`)) {
+                        writePermId = perm.id;
+                    }
+                });
+            }
+        }
+
+        // Check which permission is currently selected in data.permissions
+        // Convert to numbers for comparison (permissions array contains numbers)
+        const currentPerms = (data.permissions || []).map(p => typeof p === 'string' ? parseInt(p, 10) : p);
+        
+        if (writePermId && currentPerms.includes(writePermId)) {
+            return 'write';
+        }
+        if (readPermId && currentPerms.includes(readPermId)) {
+            return 'read';
+        }
+        if (invisiblePermId && currentPerms.includes(invisiblePermId)) {
+            return 'invisible';
+        }
+        
+        // If no permission is selected, return null (will default to 'invisible' in UI)
+        return null;
+    };
+
+    // Handle field permission change
+    const handleFieldPermissionChange = (fieldName: string, value: 'invisible' | 'read' | 'write') => {
+        console.log(`[handleFieldPermissionChange] Called for field "${fieldName}" with value "${value}"`);
+        const currentPermissions = data.permissions || [];
+        console.log(`[handleFieldPermissionChange] Current permissions:`, currentPermissions.slice(0, 10));
+        let newPermissions = [...currentPermissions];
+
+        // Find all permissions for this field (invisible, read, write)
+        const fieldPerms = driverFieldsPermissions[fieldName];
+        let invisiblePermId: number | null = null;
+        let readPermId: number | null = null;
+        let writePermId: number | null = null;
+
+        console.log(`[handleFieldPermissionChange] Field permissions for "${fieldName}":`, fieldPerms);
+
+        if (fieldPerms) {
+            invisiblePermId = fieldPerms.invisible?.id || null;
+            readPermId = fieldPerms.read?.id || null;
+            writePermId = fieldPerms.write?.id || null;
+            console.log(`[handleFieldPermissionChange] Found from driverFieldsPermissions:`, {
+                invisiblePermId,
+                readPermId,
+                writePermId
+            });
+        }
+        
+        // Fallback: search in all permissions
+        if (!invisiblePermId && !readPermId && !writePermId) {
+            if (permissions['drivers'] && permissions['drivers']['driverfields']) {
+                console.log(`[handleFieldPermissionChange] Searching for permissions for field "${fieldName}" in:`, 
+                    permissions['drivers']['driverfields'].map(p => ({ id: p.id, name: p.name, action: p.action }))
+                );
+                
+                permissions['drivers']['driverfields'].forEach((perm) => {
+                    const action = perm.action || '';
+                    const permName = perm.name || '';
+                    
+                    // Check by exact match first - try action field
+                    if (action === `invisible-${fieldName}`) {
+                        invisiblePermId = perm.id;
+                        console.log(`[handleFieldPermissionChange] Found invisible permission for "${fieldName}" via action:`, perm.id, perm.name);
+                    } else if (action === `read-${fieldName}`) {
+                        readPermId = perm.id;
+                        console.log(`[handleFieldPermissionChange] Found read permission for "${fieldName}" via action:`, perm.id, perm.name);
+                    } else if (action === `write-${fieldName}`) {
+                        writePermId = perm.id;
+                        console.log(`[handleFieldPermissionChange] Found write permission for "${fieldName}" via action:`, perm.id, perm.name);
+                    }
+                    // Check by permission name (exact match)
+                    else if (permName === `drivers.driverfields.invisible-${fieldName}`) {
+                        invisiblePermId = perm.id;
+                        console.log(`[handleFieldPermissionChange] Found invisible permission for "${fieldName}" via name exact:`, perm.id, perm.name);
+                    } else if (permName === `drivers.driverfields.read-${fieldName}`) {
+                        readPermId = perm.id;
+                        console.log(`[handleFieldPermissionChange] Found read permission for "${fieldName}" via name exact:`, perm.id, perm.name);
+                    } else if (permName === `drivers.driverfields.write-${fieldName}`) {
+                        writePermId = perm.id;
+                        console.log(`[handleFieldPermissionChange] Found write permission for "${fieldName}" via name exact:`, perm.id, perm.name);
+                    }
+                    // Fallback: check if permission name contains the field name (for partial matches)
+                    else if (permName.includes(`invisible-${fieldName}`) && permName.includes('driverfields') && !invisiblePermId) {
+                        invisiblePermId = perm.id;
+                        console.log(`[handleFieldPermissionChange] Found invisible permission for "${fieldName}" via contains:`, perm.id, perm.name);
+                    } else if (permName.includes(`read-${fieldName}`) && permName.includes('driverfields') && !readPermId) {
+                        readPermId = perm.id;
+                        console.log(`[handleFieldPermissionChange] Found read permission for "${fieldName}" via contains:`, perm.id, perm.name);
+                    } else if (permName.includes(`write-${fieldName}`) && permName.includes('driverfields') && !writePermId) {
+                        writePermId = perm.id;
+                        console.log(`[handleFieldPermissionChange] Found write permission for "${fieldName}" via contains:`, perm.id, perm.name);
+                    }
+                });
+                
+                // If still not found, log all available permissions for debugging
+                if (!invisiblePermId && !readPermId && !writePermId) {
+                    console.log(`[handleFieldPermissionChange] No permissions found for "${fieldName}". Available permissions:`, 
+                        permissions['drivers']['driverfields'].map(p => ({ id: p.id, name: p.name, action: p.action }))
+                    );
+                }
+            }
+        }
+
+        // Debug logging (remove in production)
+        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+            console.log(`Changing ${fieldName} to ${value}:`, {
+                invisiblePermId,
+                readPermId,
+                writePermId,
+                currentPermissions: currentPermissions.length
+            });
+        }
+
+        // Remove all field permissions first (remove any that match the pattern for this specific field)
+        // Get all permission IDs for this field
+        const allFieldPermissionIds: number[] = [];
+        if (invisiblePermId) allFieldPermissionIds.push(invisiblePermId);
+        if (readPermId) allFieldPermissionIds.push(readPermId);
+        if (writePermId) allFieldPermissionIds.push(writePermId);
+        
+        console.log(`[handleFieldPermissionChange] All permission IDs for field "${fieldName}":`, allFieldPermissionIds);
+        
+        // Remove all permissions for this field
+        newPermissions = newPermissions.filter(id => {
+            const shouldRemove = allFieldPermissionIds.includes(id);
+            if (shouldRemove) {
+                console.log(`[handleFieldPermissionChange] Removing permission ID ${id} for field "${fieldName}"`);
+            }
+            return !shouldRemove;
+        });
+        
+        console.log(`[handleFieldPermissionChange] After removing old permissions:`, newPermissions);
+
+        // Add the selected permission if it exists
+        const selectedPermId = value === 'invisible' ? invisiblePermId : 
+                              value === 'read' ? readPermId : 
+                              value === 'write' ? writePermId : null;
+
+        console.log(`[handleFieldPermissionChange] Selected permission ID for "${fieldName}" -> "${value}":`, selectedPermId);
+
+        if (selectedPermId) {
+            // Make sure we don't add duplicates
+            if (!newPermissions.includes(selectedPermId)) {
+                newPermissions.push(selectedPermId);
+                console.log(`[handleFieldPermissionChange] Added permission ID ${selectedPermId} for ${fieldName} -> ${value}`);
+            } else {
+                console.log(`[handleFieldPermissionChange] Permission ID ${selectedPermId} already exists, skipping`);
+            }
+        } else {
+            // Debug: log if permission ID not found
+            console.error(`[handleFieldPermissionChange] Permission ID not found for ${fieldName} -> ${value}`, {
+                invisiblePermId,
+                readPermId,
+                writePermId,
+                fieldPerms,
+                availablePerms: permissions['drivers']?.['driverfields']?.map(p => ({ id: p.id, name: p.name, action: p.action }))
+            });
+        }
+
+        console.log(`[handleFieldPermissionChange] Before setData - newPermissions:`, newPermissions);
+        console.log(`[handleFieldPermissionChange] Before setData - currentPermissions:`, currentPermissions);
+        console.log(`[handleFieldPermissionChange] Permissions to remove/add:`, {
+            fieldName,
+            value,
+            selectedPermId,
+            invisiblePermId,
+            readPermId,
+            writePermId
+        });
+        
+        // Remove old view- permissions for this field if new permissions are being set
+        if (selectedPermId && permissions['drivers']?.['driverfields']) {
+            const oldViewPerm = permissions['drivers']['driverfields'].find(
+                (p) => (p.action === `view-${fieldName}` || p.name === `drivers.driverfields.view-${fieldName}`) &&
+                       newPermissions.includes(p.id)
+            );
+            if (oldViewPerm) {
+                newPermissions = newPermissions.filter(id => id !== oldViewPerm.id);
+                console.log(`[handleFieldPermissionChange] Removed old view- permission for "${fieldName}": ${oldViewPerm.name}`);
+            }
+        }
+        
+        // Use setData with the new permissions array
+        setData('permissions', newPermissions);
+        
+        // Force a re-render by logging the change
+        console.log(`[handleFieldPermissionChange] setData called with ${newPermissions.length} permissions`);
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Debug: Log what we're sending (transform will clean old permissions)
+        const driverfieldPerms = (data.permissions || []).filter((id: number) => {
+            if (!permissions['drivers']?.['driverfields']) return false;
+            const permIds = permissions['drivers']['driverfields'].map(p => p.id);
+            return permIds.includes(id);
+        });
+        
+        console.log('[handleSubmit] Submitting role update (before transform):', {
+            totalPermissions: data.permissions?.length || 0,
+            driverfieldPermissions: driverfieldPerms.length,
+            driverfieldPermissionIds: driverfieldPerms.slice(0, 10),
+            sampleDriverfieldPerms: driverfieldPerms.slice(0, 5).map((id: number) => {
+                const perm = permissions['drivers']?.['driverfields']?.find(p => p.id === id);
+                return perm ? { id: perm.id, name: perm.name, action: perm.action } : null;
+            }).filter(Boolean)
+        });
+        
+        // Transform will automatically clean old permissions before submit
         put(`/core/companies/${company.id}/roles/${role.id}`);
     };
 
@@ -280,9 +783,14 @@ export default function RoleEdit({
 
                                 <div className="max-h-[600px] space-y-2 overflow-y-auto rounded-md border p-4">
                                     {Object.entries(permissions).map(([moduleName, entities]) => {
-                                        const modulePermissions = Object.values(entities)
-                                            .flat()
-                                            .map((p) => p.id);
+                                        // For drivers module, exclude driverfields from module-level selection
+                                        const modulePermissions = Object.entries(entities)
+                                            .filter(([entityName]) => {
+                                                // Exclude driverfields from module-level checkbox
+                                                return !(moduleName === 'drivers' && entityName === 'driverfields');
+                                            })
+                                            .flatMap(([, entityPermissions]) => entityPermissions.map((p) => p.id));
+                                        
                                         const allModuleSelected =
                                             modulePermissions.length > 0 &&
                                             modulePermissions.every((id) =>
@@ -341,17 +849,43 @@ export default function RoleEdit({
 
                                                 {isModuleExpanded && (
                                                     <div className="p-3 space-y-3">
-                                                        {Object.entries(entities).map(
+                                                        {Object.entries(entities)
+                                                            .sort(([a], [b]) => {
+                                                                // For drivers module, show "drivers" entity before "driverfields"
+                                                                if (moduleName === 'drivers') {
+                                                                    if (a === 'drivers' && b === 'driverfields') {
+                                                                        console.log('[Sort] drivers before driverfields');
+                                                                        return -1;
+                                                                    }
+                                                                    if (a === 'driverfields' && b === 'drivers') {
+                                                                        console.log('[Sort] driverfields after drivers');
+                                                                        return 1;
+                                                                    }
+                                                                }
+                                                                return a.localeCompare(b);
+                                                            })
+                                                            .map(
                                                             ([entityName, entityPermissions]) => {
                                                                 const entityPermissionIds =
                                                                     entityPermissions.map(
                                                                         (p) => p.id
                                                                     );
-                                                                const allEntitySelected =
-                                                                    entityPermissionIds.length > 0 &&
-                                                                    entityPermissionIds.every((id) =>
-                                                                        data.permissions?.includes(id)
-                                                                    );
+                                                                
+                                                                // For driverfields, check if at least one permission per field is selected
+                                                                let allEntitySelected: boolean;
+                                                                if (moduleName === 'drivers' && entityName === 'driverfields') {
+                                                                    const fields = Object.keys(driverFieldMapping);
+                                                                    allEntitySelected = fields.length > 0 && fields.every((fieldName) => {
+                                                                        const state = getFieldPermissionState(fieldName);
+                                                                        return state !== null; // At least one permission (invisible, read, or write) is selected
+                                                                    });
+                                                                } else {
+                                                                    allEntitySelected =
+                                                                        entityPermissionIds.length > 0 &&
+                                                                        entityPermissionIds.every((id) =>
+                                                                            data.permissions?.includes(id)
+                                                                        );
+                                                                }
                                                                 const entityKey = `${moduleName}-${entityName}`;
                                                                 const isEntityExpanded =
                                                                     expandedEntities[entityKey] ?? true;
@@ -387,6 +921,7 @@ export default function RoleEdit({
                                                                                     <ChevronRight className="h-4 w-4" />
                                                                                 )}
                                                                             </button>
+                                                                            {/* Show checkbox for driverfields - it will set default "read" for all fields */}
                                                                             <Checkbox
                                                                                 id={`entity-${moduleName}-${entityName}`}
                                                                                 checked={
@@ -406,7 +941,7 @@ export default function RoleEdit({
                                                                                 }
                                                                             />
                                                                             <Label
-                                                                                htmlFor={`entity-${moduleName}-${entityName}`}
+                                                                                htmlFor={moduleName === 'drivers' && entityName === 'driverfields' ? undefined : `entity-${moduleName}-${entityName}`}
                                                                                 className="flex-1 cursor-pointer font-medium capitalize"
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
@@ -425,42 +960,167 @@ export default function RoleEdit({
                                                                         </div>
 
                                                                         {isEntityExpanded && (
-                                                                            <div className="p-3 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
-                                                                                {entityPermissions.map(
-                                                                                    (permission) => (
-                                                                                        <div
-                                                                                            key={
-                                                                                                permission.id
-                                                                                            }
-                                                                                            className="flex items-center gap-2"
-                                                                                        >
-                                                                                            <Checkbox
-                                                                                                id={`permission-${permission.id}`}
-                                                                                                checked={data.permissions?.includes(
-                                                                                                    permission.id
-                                                                                                )}
-                                                                                                onCheckedChange={(
-                                                                                                    checked
-                                                                                                ) =>
-                                                                                                    handlePermissionToggle(
-                                                                                                        permission.id,
-                                                                                                        checked as boolean
-                                                                                                    )
-                                                                                                }
-                                                                                            />
-                                                                                            <Label
-                                                                                                htmlFor={`permission-${permission.id}`}
-                                                                                                className="text-sm font-normal capitalize cursor-pointer"
-                                                                                            >
-                                                                                                {permission.action ||
-                                                                                                    permission.name.split(
-                                                                                                        '.'
-                                                                                                    )[2]}
-                                                                                            </Label>
+                                                                            <>
+                                                                                {/* Special handling for Drivers Fields */}
+                                                                                {moduleName === 'drivers' && entityName === 'driverfields' ? (
+                                                                                    <div className="p-4 space-y-4">
+                                                                                        <div className="rounded-md bg-blue-50 p-3 dark:bg-blue-900/20 mb-4">
+                                                                                            <p className="text-sm text-blue-900 dark:text-blue-100">
+                                                                                                <strong>Field Permissions:</strong> Select one option per field (Invisible, Read only, or Write)
+                                                                                            </p>
                                                                                         </div>
-                                                                                    )
+                                                                                        <div className="space-y-4">
+                                                                                            {Object.keys(driverFieldMapping).map((fieldName) => {
+                                                                                                const fieldLabel = driverFieldMapping[fieldName];
+                                                                                                const currentState = getFieldPermissionState(fieldName);
+                                                                                                const fieldPerms = driverFieldsPermissions[fieldName];
+                                                                                                
+                                                                                                // Get permission IDs from entityPermissions if fieldPerms is empty
+                                                                                                let invisiblePermId: number | null = null;
+                                                                                                let readPermId: number | null = null;
+                                                                                                let writePermId: number | null = null;
+
+                                                                                                if (fieldPerms) {
+                                                                                                    invisiblePermId = fieldPerms.invisible?.id || null;
+                                                                                                    readPermId = fieldPerms.read?.id || null;
+                                                                                                    writePermId = fieldPerms.write?.id || null;
+                                                                                                } else {
+                                                                                                    // Fallback: search in entityPermissions
+                                                                                                    entityPermissions.forEach((perm) => {
+                                                                                                        const action = perm.action || perm.name.split('.')[2];
+                                                                                                        if (action === `invisible-${fieldName}`) {
+                                                                                                            invisiblePermId = perm.id;
+                                                                                                        } else if (action === `read-${fieldName}`) {
+                                                                                                            readPermId = perm.id;
+                                                                                                        } else if (action === `write-${fieldName}`) {
+                                                                                                            writePermId = perm.id;
+                                                                                                        }
+                                                                                                    });
+                                                                                                }
+
+                                                                                                // If not found in fieldPerms, search in entityPermissions
+                                                                                                if (!invisiblePermId && !readPermId && !writePermId) {
+                                                                                                    entityPermissions.forEach((perm) => {
+                                                                                                        const action = perm.action || '';
+                                                                                                        const permName = perm.name || '';
+                                                                                                        
+                                                                                                        // Check by action first
+                                                                                                        if (action === `invisible-${fieldName}` || permName.endsWith(`.invisible-${fieldName}`)) {
+                                                                                                            invisiblePermId = perm.id;
+                                                                                                        } else if (action === `read-${fieldName}` || permName.endsWith(`.read-${fieldName}`)) {
+                                                                                                            readPermId = perm.id;
+                                                                                                        } else if (action === `write-${fieldName}` || permName.endsWith(`.write-${fieldName}`)) {
+                                                                                                            writePermId = perm.id;
+                                                                                                        }
+                                                                                                    });
+                                                                                                }
+
+                                                                                                // Always show all fields - display all 3 options
+                                                                                                // Determine the current state
+                                                                                                const state = currentState ?? (invisiblePermId ? 'invisible' : null);
+                                                                                                
+                                                                                                return (
+                                                                                                    <div key={fieldName} className="border rounded-md p-3">
+                                                                                                        <div className="flex items-center justify-between mb-2">
+                                                                                                            <Label className="text-sm font-medium">
+                                                                                                                {fieldLabel}
+                                                                                                            </Label>
+                                                                                                        </div>
+                                                                                                        <RadioGroup
+                                                                                                            value={state || 'invisible'}
+                                                                                                            onValueChange={(value) => {
+                                                                                                                console.log(`[Field Permission] Changing ${fieldName} from ${state} to ${value}`);
+                                                                                                                handleFieldPermissionChange(fieldName, value as 'invisible' | 'read' | 'write');
+                                                                                                            }}
+                                                                                                            className="flex gap-6"
+                                                                                                        >
+                                                                                                            <div className="flex items-center space-x-2">
+                                                                                                                <RadioGroupItem 
+                                                                                                                    value="invisible" 
+                                                                                                                    id={`${fieldName}-invisible`}
+                                                                                                                />
+                                                                                                                <Label 
+                                                                                                                    htmlFor={`${fieldName}-invisible`} 
+                                                                                                                    className="text-sm cursor-pointer"
+                                                                                                                >
+                                                                                                                    Invisible
+                                                                                                                </Label>
+                                                                                                            </div>
+                                                                                                            <div className="flex items-center space-x-2">
+                                                                                                                <RadioGroupItem 
+                                                                                                                    value="read" 
+                                                                                                                    id={`${fieldName}-read`}
+                                                                                                                />
+                                                                                                                <Label 
+                                                                                                                    htmlFor={`${fieldName}-read`} 
+                                                                                                                    className="text-sm cursor-pointer"
+                                                                                                                >
+                                                                                                                    Read only
+                                                                                                                </Label>
+                                                                                                            </div>
+                                                                                                            <div className="flex items-center space-x-2">
+                                                                                                                <RadioGroupItem 
+                                                                                                                    value="write" 
+                                                                                                                    id={`${fieldName}-write`}
+                                                                                                                />
+                                                                                                                <Label 
+                                                                                                                    htmlFor={`${fieldName}-write`} 
+                                                                                                                    className="text-sm cursor-pointer"
+                                                                                                                >
+                                                                                                                    Write
+                                                                                                                </Label>
+                                                                                                            </div>
+                                                                                                        </RadioGroup>
+                                                                                                        {/* Debug info in development */}
+                                                                                                        {typeof window !== 'undefined' && process.env.NODE_ENV === 'development' && (
+                                                                                                            <div className="mt-2 text-xs text-neutral-500">
+                                                                                                                IDs: invisible={invisiblePermId}, read={readPermId}, write={writePermId} | State: {state} | Current Perms: {JSON.stringify(data.permissions?.slice(0, 5))}
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                );
+                                                                                            })}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="p-3 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+                                                                                        {entityPermissions.map(
+                                                                                            (permission) => (
+                                                                                                <div
+                                                                                                    key={
+                                                                                                        permission.id
+                                                                                                    }
+                                                                                                    className="flex items-center gap-2"
+                                                                                                >
+                                                                                                    <Checkbox
+                                                                                                        id={`permission-${permission.id}`}
+                                                                                                        checked={data.permissions?.includes(
+                                                                                                            permission.id
+                                                                                                        )}
+                                                                                                        onCheckedChange={(
+                                                                                                            checked
+                                                                                                        ) =>
+                                                                                                            handlePermissionToggle(
+                                                                                                                permission.id,
+                                                                                                                checked as boolean
+                                                                                                            )
+                                                                                                        }
+                                                                                                    />
+                                                                                                    <Label
+                                                                                                        htmlFor={`permission-${permission.id}`}
+                                                                                                        className="text-sm font-normal capitalize cursor-pointer"
+                                                                                                    >
+                                                                                                        {permission.action ||
+                                                                                                            permission.name.split(
+                                                                                                                '.'
+                                                                                                            )[2]}
+                                                                                                    </Label>
+                                                                                                </div>
+                                                                                            )
+                                                                                        )}
+                                                                                    </div>
                                                                                 )}
-                                                                            </div>
+                                                                            </>
                                                                         )}
                                                                     </div>
                                                                 );

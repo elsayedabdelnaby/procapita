@@ -251,6 +251,17 @@ class HandleInertiaRequests extends Middleware
                         'entity_name' => $p->entity_name,
                         'action' => $p->action,
                     ])->unique('id')->values()->toArray(),
+                    'roles' => $user->roles ? $user->roles->map(fn ($role) => [
+                        'id' => $role->id,
+                        'name' => $role->name,
+                        'permissions' => $role->permissions ? $role->permissions->map(fn ($p) => [
+                            'id' => $p->id,
+                            'name' => $p->name,
+                            'module_name' => $p->module_name,
+                            'entity_name' => $p->entity_name,
+                            'action' => $p->action,
+                        ])->toArray() : [],
+                    ])->toArray() : [],
                 ] : null,
             ],
             'navigation' => $user ? $this->getNavigationItems($user, $ridingCompanies) : [],

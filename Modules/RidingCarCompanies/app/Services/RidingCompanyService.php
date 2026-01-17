@@ -61,6 +61,8 @@ class RidingCompanyService
                         'max_drivers_per_day' => $scenario['max_drivers_per_day'] ?? 10,
                         'distribution_by_lead_source_enabled' => $scenario['distribution_by_lead_source_enabled'] ?? false,
                         'distribution_by_lead_sources' => $scenario['distribution_by_lead_sources'] ?? [],
+                        'distribution_by_campaign_enabled' => $scenario['distribution_by_campaign_enabled'] ?? false,
+                        'distribution_by_campaigns' => $scenario['distribution_by_campaigns'] ?? [],
                         'assigned_to_users' => $scenario['assigned_to_users'] ?? [],
                         'assigned_to_roles' => $scenario['assigned_to_roles'] ?? [],
                         'active' => $scenario['active'] ?? true,
@@ -348,6 +350,11 @@ class RidingCompanyService
         // Filter by lead source if enabled
         if (! empty($scenario['distribution_by_lead_source_enabled']) && ! empty($scenario['distribution_by_lead_sources'])) {
             $driversQuery->whereIn('lead_source_id', $scenario['distribution_by_lead_sources']);
+        }
+
+        // Filter by campaign if enabled
+        if (! empty($scenario['distribution_by_campaign_enabled']) && ! empty($scenario['distribution_by_campaigns'])) {
+            $driversQuery->whereIn('campaign_id', $scenario['distribution_by_campaigns']);
         }
 
         // Load assignedUsers relationship to check if drivers are already distributed

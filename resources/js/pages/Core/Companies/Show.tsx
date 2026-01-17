@@ -33,6 +33,18 @@ interface CompanyShowProps {
     roles?: Role[];
     roleHierarchy?: Role[];
     ridingCompanies?: RidingCompany[];
+    documentRequirements?: Array<{
+        id: number;
+        name: string;
+        type: string;
+        required: boolean;
+        active: boolean;
+        status: string;
+        riding_companies?: Array<{
+            id: number;
+            name: string;
+        }>;
+    }>;
     activities?: Array<{
         id: number;
         description: string;
@@ -50,7 +62,7 @@ interface CompanyShowProps {
     }>;
 }
 
-export default function CompanyShow({ company, statistics, users, roles, roleHierarchy, ridingCompanies = [], activities = [] }: CompanyShowProps) {
+export default function CompanyShow({ company, statistics, users, roles, roleHierarchy, ridingCompanies = [], documentRequirements = [], activities = [] }: CompanyShowProps) {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'roles' | 'hierarchy' | 'updates'>('overview');
     const [deleteUserDialog, setDeleteUserDialog] = useState<{ open: boolean; user: CoreUser | null }>({
@@ -418,6 +430,73 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
                                     </div>
                                 </div>
                             </div>
+                        </Card>
+
+                        {/* Document Requirements */}
+                        <Card className="p-6">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-lg font-semibold">Document Requirements</h2>
+                                <div className="flex gap-2">
+                                    <Link href="/drivers/driver-documents">
+                                        <Button variant="outline" size="sm">View All</Button>
+                                    </Link>
+                                    <Link href="/drivers/driver-documents/create">
+                                        <Button size="sm">Create New Requirement</Button>
+                                    </Link>
+                                </div>
+                            </div>
+                            {documentRequirements && documentRequirements.length > 0 ? (
+                                <div className="space-y-3">
+                                    {documentRequirements.map((req) => (
+                                        <div
+                                            key={req.id}
+                                            className="flex items-center justify-between rounded-md border p-4 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+                                        >
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <Link
+                                                        href={`/drivers/driver-documents/${req.id}/edit`}
+                                                        className="font-medium hover:underline"
+                                                    >
+                                                        {req.name}
+                                                    </Link>
+                                                    <Badge variant={req.active ? 'default' : 'secondary'} className="text-xs">
+                                                        {req.active ? 'Active' : 'Inactive'}
+                                                    </Badge>
+                                                    {req.required && (
+                                                        <Badge variant="destructive" className="text-xs">
+                                                            Required
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                {req.riding_companies && req.riding_companies.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-2">
+                                                        {req.riding_companies.map((rc) => (
+                                                            <Badge key={rc.id} variant="outline" className="text-xs">
+                                                                {rc.name}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Link href={`/drivers/driver-documents/${req.id}/edit`}>
+                                                    <Button variant="ghost" size="sm">
+                                                        Edit
+                                                    </Button>
+                                                </Link>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="py-8 text-center text-neutral-500">
+                                    <p className="mb-2">No document requirements found.</p>
+                                    <Link href="/drivers/driver-documents/create">
+                                        <Button size="sm" className="mt-2">Create First Document Requirement</Button>
+                                    </Link>
+                                </div>
+                            )}
                         </Card>
                     </div>
                 )}

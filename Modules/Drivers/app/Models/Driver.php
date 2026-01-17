@@ -50,12 +50,14 @@ class Driver extends Model
         'cancel_reason',
         'driver_num',
         'duplicate',
+        'confirm_duplicate',
         'next_time',
         'worked_with_us_before',
         'vehicle_type_and_year',
         'city',
         'feedback_count',
         'vehicle_type',
+        'car_or_scooter',
         'has_worked_before',
         'governorate',
     ];
@@ -67,6 +69,7 @@ class Driver extends Model
             'last_follow_up' => 'datetime',
             'assigned_time' => 'datetime',
             'last_assigned_time' => 'datetime',
+            'confirm_duplicate' => 'boolean',
         ];
     }
 

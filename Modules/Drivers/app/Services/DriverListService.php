@@ -15,11 +15,17 @@ class DriverListService
     {
         $query = DriverList::query();
 
-        // Filter by company if not super admin
+        // For non-super admins, get lists from the same company (or null company_id)
+        // But also include shared lists - we'll filter by isAccessibleBy which handles the access logic
         if (! $user->isSuperAdmin() && $companyId) {
+            // Get lists from same company OR lists that are shared (might be from different companies)
             $query->where(function ($q) use ($companyId) {
-                $q->where('company_id', $companyId)
-                    ->orWhereNull('company_id');
+                $q->where(function ($subQ) use ($companyId) {
+                    $subQ->where('company_id', $companyId)
+                        ->orWhereNull('company_id');
+                })
+                // Also include all shared lists - isAccessibleBy will check if user has access
+                ->orWhere('is_shared', true);
             });
         }
 
@@ -28,9 +34,41 @@ class DriverListService
             ->orderBy('name')
             ->get();
 
+        // Log the lists found before filtering
+        \Log::info('Lists found before filtering', [
+            'user_id' => $user->id,
+            'user_name' => $user->name,
+            'total_lists' => $lists->count(),
+            'list_ids' => $lists->pluck('id')->toArray(),
+            'list_details' => $lists->map(function ($list) {
+                return [
+                    'id' => $list->id,
+                    'name' => $list->name,
+                    'company_id' => $list->company_id,
+                    'is_shared' => $list->is_shared,
+                    'shared_with_users' => $list->shared_with_users,
+                    'created_by' => $list->created_by,
+                ];
+            })->toArray(),
+        ]);
+
         // Filter by access
-        return $lists->filter(function ($list) use ($user) {
-            return $list->isAccessibleBy($user);
+        $accessibleLists = $lists->filter(function ($list) use ($user) {
+            $isAccessible = $list->isAccessibleBy($user);
+            
+            // Log for debugging
+            \Log::info('Checking list access', [
+                'list_id' => $list->id,
+                'list_name' => $list->name,
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'is_shared' => $list->is_shared,
+                'shared_with_users' => $list->shared_with_users,
+                'created_by' => $list->created_by,
+                'is_accessible' => $isAccessible,
+            ]);
+            
+            return $isAccessible;
         })->values()->map(function ($list) {
             return [
                 'id' => $list->id,
@@ -43,6 +81,17 @@ class DriverListService
                 'any_conditions' => $list->any_conditions ?? [],
             ];
         })->toArray();
+
+        // Log final result
+        \Log::info('Accessible lists for user', [
+            'user_id' => $user->id,
+            'user_name' => $user->name,
+            'total_lists' => $lists->count(),
+            'accessible_lists' => count($accessibleLists),
+            'list_ids' => array_column($accessibleLists, 'id'),
+        ]);
+
+        return $accessibleLists;
     }
 
     /**
@@ -57,6 +106,13 @@ class DriverListService
                 ->update(['is_default' => false]);
         }
 
+        // Ensure shared_with_users is an array of integers
+        $sharedWithUsers = $data['shared_with_users'] ?? [];
+        if (! is_array($sharedWithUsers)) {
+            $sharedWithUsers = [];
+        }
+        $sharedWithUsers = array_map('intval', array_filter($sharedWithUsers));
+
         return DriverList::create([
             'name' => $data['name'],
             'company_id' => $user->isSuperAdmin() ? ($companyId ?? null) : $user->company_id,
@@ -64,7 +120,7 @@ class DriverListService
             'columns' => $data['columns'] ?? [],
             'all_conditions' => $data['all_conditions'] ?? [],
             'any_conditions' => $data['any_conditions'] ?? [],
-            'shared_with_users' => $data['shared_with_users'] ?? [],
+            'shared_with_users' => $sharedWithUsers,
             'shared_with_groups' => $data['shared_with_groups'] ?? [],
             'is_shared' => $data['is_shared'] ?? false,
             'is_default' => $data['is_default'] ?? false,
@@ -89,18 +145,46 @@ class DriverListService
                 ->update(['is_default' => false]);
         }
 
-        $list->update([
-            'name' => $data['name'],
-            'columns' => $data['columns'] ?? [],
-            'all_conditions' => $data['all_conditions'] ?? [],
-            'any_conditions' => $data['any_conditions'] ?? [],
-            'shared_with_users' => $data['shared_with_users'] ?? [],
-            'shared_with_groups' => $data['shared_with_groups'] ?? [],
+        // Ensure shared_with_users is an array of integers
+        $sharedWithUsers = $data['shared_with_users'] ?? [];
+        if (! is_array($sharedWithUsers)) {
+            $sharedWithUsers = [];
+        }
+        // Filter out null/empty values and convert to integers
+        $sharedWithUsers = array_values(array_map('intval', array_filter($sharedWithUsers, fn($id) => !empty($id))));
+
+        // Log for debugging (remove in production)
+        \Log::info('Updating list shared_with_users', [
+            'list_id' => $list->id,
             'is_shared' => $data['is_shared'] ?? false,
-            'is_default' => $data['is_default'] ?? false,
-            'show_in_metrics' => $data['show_in_metrics'] ?? false,
-            'default_sort_column' => $data['default_sort_column'] ?? null,
-            'default_sort_order' => $data['default_sort_order'] ?? 'asc',
+            'shared_with_users' => $sharedWithUsers,
+            'raw_data' => $data['shared_with_users'] ?? null,
+        ]);
+
+        $list->update([
+            'name' => $data['name'] ?? $list->name,
+            'columns' => $data['columns'] ?? $list->columns ?? [],
+            'all_conditions' => $data['all_conditions'] ?? $list->all_conditions ?? [],
+            'any_conditions' => $data['any_conditions'] ?? $list->any_conditions ?? [],
+            'shared_with_users' => $sharedWithUsers,
+            'shared_with_groups' => $data['shared_with_groups'] ?? $list->shared_with_groups ?? [],
+            'is_shared' => $data['is_shared'] ?? $list->is_shared ?? false,
+            'is_default' => $data['is_default'] ?? $list->is_default ?? false,
+            'show_in_metrics' => $data['show_in_metrics'] ?? $list->show_in_metrics ?? false,
+            'default_sort_column' => $data['default_sort_column'] ?? $list->default_sort_column ?? null,
+            'default_sort_order' => $data['default_sort_order'] ?? $list->default_sort_order ?? 'asc',
+        ]);
+
+        // Refresh the model to ensure it has the latest data
+        $list->refresh();
+
+        // Log after refresh to verify data was saved correctly
+        \Log::info('List updated and refreshed', [
+            'list_id' => $list->id,
+            'list_name' => $list->name,
+            'is_shared' => $list->is_shared,
+            'shared_with_users' => $list->shared_with_users,
+            'raw_shared_with_users' => $list->getAttributes()['shared_with_users'] ?? null,
         ]);
     }
 
@@ -112,7 +196,6 @@ class DriverListService
         return [
             ['value' => 'id', 'label' => 'ID', 'type' => 'number'],
             ['value' => 'driver_num', 'label' => 'Driver Number', 'type' => 'text'],
-            ['value' => 'duplicate', 'label' => 'Duplicate', 'type' => 'number'],
             ['value' => 'duplicate', 'label' => 'Duplicate Count', 'type' => 'number'],
             ['value' => 'full_name', 'label' => 'Full Name', 'type' => 'text'],
             ['value' => 'phone', 'label' => 'Phone', 'type' => 'text'],
@@ -140,6 +223,7 @@ class DriverListService
             ['value' => 'notes', 'label' => 'Notes', 'type' => 'textarea'],
             ['value' => 'cancel_reason', 'label' => 'Cancel Reasons', 'type' => 'text'],
             ['value' => 'vehicle_type', 'label' => 'Vehicle Type', 'type' => 'text'],
+            ['value' => 'car_or_scooter', 'label' => 'Car or Scooter', 'type' => 'picklist'],
             ['value' => 'vehicle_type_and_year', 'label' => 'Vehicle Type and Year', 'type' => 'text'],
             ['value' => 'has_worked_before', 'label' => 'Has the driver worked before?', 'type' => 'text'],
             ['value' => 'worked_with_us_before', 'label' => 'Worked with us before', 'type' => 'text'],
@@ -149,7 +233,8 @@ class DriverListService
             ['value' => 'uuid', 'label' => 'UUID', 'type' => 'text'],
             ['value' => 'created_at', 'label' => 'Created At', 'type' => 'datetime'],
             ['value' => 'updated_at', 'label' => 'Updated At', 'type' => 'datetime'],
-            ['value' => 'confirm_duplicate', 'label' => 'Confirm Duplicate', 'type' => 'text'],
+            ['value' => 'allow_duplicate', 'label' => 'Allow Duplicate', 'type' => 'checkbox'],
+            ['value' => 'confirm_duplicate', 'label' => 'Confirm Duplicate', 'type' => 'checkbox'],
         ];
     }
 
@@ -196,8 +281,11 @@ class DriverListService
         // Apply any conditions (OR)
         if (! empty($list->any_conditions) && is_array($list->any_conditions)) {
             $query->where(function ($q) use ($list) {
+                $firstCondition = true;
                 foreach ($list->any_conditions as $condition) {
-                    $this->applyCondition($q, $condition, 'or');
+                    // First condition in OR group should use 'where', rest use 'or'
+                    $this->applyCondition($q, $condition, $firstCondition ? 'and' : 'or');
+                    $firstCondition = false;
                 }
             });
         }
@@ -217,7 +305,8 @@ class DriverListService
         }
 
         // Skip virtual fields that don't exist in database
-        if ($field === 'confirm_duplicate') {
+        // Note: confirm_duplicate is now a real field in database, so we don't skip it
+        if ($field === 'allow_duplicate') {
             // This is a UI-only field, not stored in database
             // Return without applying condition
             return;
@@ -278,13 +367,17 @@ class DriverListService
                 break;
             case 'more_than_days_ago':
                 if ($value) {
+                    // More than X days ago means the date is before (now - X days)
                     $query->{$method}($field, '<', now()->subDays((int) $value)->toDateString());
                 }
                 break;
             case 'in_less_than':
                 if ($value) {
-                    $query->{$method}($field, '<=', now()->addDays((int) $value)->toDateString())
-                        ->{$method}($field, '>=', now()->toDateString());
+                    $startDate = now()->toDateString();
+                    $endDate = now()->addDays((int) $value)->toDateString();
+                    $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                        $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                    });
                 }
                 break;
             case 'in_more_than':
@@ -304,28 +397,46 @@ class DriverListService
                 break;
                 // Date period operators
             case 'previous_week':
-                $query->{$method}($field, '>=', now()->startOfWeek()->subWeek()->toDateString())
-                    ->{$method}($field, '<=', now()->endOfWeek()->subWeek()->toDateString());
+                $startDate = now()->startOfWeek()->subWeek()->toDateString();
+                $endDate = now()->endOfWeek()->subWeek()->toDateString();
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'current_week':
-                $query->{$method}($field, '>=', now()->startOfWeek()->toDateString())
-                    ->{$method}($field, '<=', now()->endOfWeek()->toDateString());
+                $startDate = now()->startOfWeek()->toDateString();
+                $endDate = now()->endOfWeek()->toDateString();
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'next_week':
-                $query->{$method}($field, '>=', now()->startOfWeek()->addWeek()->toDateString())
-                    ->{$method}($field, '<=', now()->endOfWeek()->addWeek()->toDateString());
+                $startDate = now()->startOfWeek()->addWeek()->toDateString();
+                $endDate = now()->endOfWeek()->addWeek()->toDateString();
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'previous_month':
-                $query->{$method}($field, '>=', now()->startOfMonth()->subMonth()->toDateString())
-                    ->{$method}($field, '<=', now()->endOfMonth()->subMonth()->toDateString());
+                $startDate = now()->startOfMonth()->subMonth()->toDateString();
+                $endDate = now()->endOfMonth()->subMonth()->toDateString();
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'current_month':
-                $query->{$method}($field, '>=', now()->startOfMonth()->toDateString())
-                    ->{$method}($field, '<=', now()->endOfMonth()->toDateString());
+                $startDate = now()->startOfMonth()->toDateString();
+                $endDate = now()->endOfMonth()->toDateString();
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'next_month':
-                $query->{$method}($field, '>=', now()->startOfMonth()->addMonth()->toDateString())
-                    ->{$method}($field, '<=', now()->endOfMonth()->addMonth()->toDateString());
+                $startDate = now()->startOfMonth()->addMonth()->toDateString();
+                $endDate = now()->endOfMonth()->addMonth()->toDateString();
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'last_7_days':
                 $query->{$method}($field, '>=', now()->subDays(7)->toDateString());
@@ -346,12 +457,18 @@ class DriverListService
                 $query->{$method}($field, '>=', now()->subDays(120)->toDateString());
                 break;
             case 'next_30_days':
-                $query->{$method}($field, '>=', now()->toDateString())
-                    ->{$method}($field, '<=', now()->addDays(30)->toDateString());
+                $startDate = now()->toDateString();
+                $endDate = now()->addDays(30)->toDateString();
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'next_60_days':
-                $query->{$method}($field, '>=', now()->toDateString())
-                    ->{$method}($field, '<=', now()->addDays(60)->toDateString());
+                $startDate = now()->toDateString();
+                $endDate = now()->addDays(60)->toDateString();
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'yesterday':
                 $query->{$method}($field, '=', now()->yesterday()->toDateString());
@@ -364,16 +481,25 @@ class DriverListService
                 break;
                 // Fiscal Year and Quarter operators (assuming calendar year/quarter)
             case 'previous_fy':
-                $query->{$method}($field, '>=', now()->startOfYear()->subYear()->toDateString())
-                    ->{$method}($field, '<=', now()->endOfYear()->subYear()->toDateString());
+                $startDate = now()->startOfYear()->subYear()->toDateString();
+                $endDate = now()->endOfYear()->subYear()->toDateString();
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'current_fy':
-                $query->{$method}($field, '>=', now()->startOfYear()->toDateString())
-                    ->{$method}($field, '<=', now()->endOfYear()->toDateString());
+                $startDate = now()->startOfYear()->toDateString();
+                $endDate = now()->endOfYear()->toDateString();
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'next_fy':
-                $query->{$method}($field, '>=', now()->startOfYear()->addYear()->toDateString())
-                    ->{$method}($field, '<=', now()->endOfYear()->addYear()->toDateString());
+                $startDate = now()->startOfYear()->addYear()->toDateString();
+                $endDate = now()->endOfYear()->addYear()->toDateString();
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'previous_fq':
                 $now = now();
@@ -388,8 +514,9 @@ class DriverListService
                 $endMonth = $previousQuarter * 3;
                 $startDate = \Carbon\Carbon::create($year, $startMonth, 1)->startOfMonth()->toDateString();
                 $endDate = \Carbon\Carbon::create($year, $endMonth, 1)->endOfMonth()->toDateString();
-                $query->{$method}($field, '>=', $startDate)
-                    ->{$method}($field, '<=', $endDate);
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'current_fq':
                 $now = now();
@@ -398,8 +525,9 @@ class DriverListService
                 $endMonth = $currentQuarter * 3;
                 $startDate = \Carbon\Carbon::create($now->year, $startMonth, 1)->startOfMonth()->toDateString();
                 $endDate = \Carbon\Carbon::create($now->year, $endMonth, 1)->endOfMonth()->toDateString();
-                $query->{$method}($field, '>=', $startDate)
-                    ->{$method}($field, '<=', $endDate);
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
             case 'next_fq':
                 $now = now();
@@ -414,8 +542,9 @@ class DriverListService
                 $endMonth = $nextQuarter * 3;
                 $startDate = \Carbon\Carbon::create($year, $startMonth, 1)->startOfMonth()->toDateString();
                 $endDate = \Carbon\Carbon::create($year, $endMonth, 1)->endOfMonth()->toDateString();
-                $query->{$method}($field, '>=', $startDate)
-                    ->{$method}($field, '<=', $endDate);
+                $query->{$method}(function ($q) use ($field, $startDate, $endDate) {
+                    $q->where($field, '>=', $startDate)->where($field, '<=', $endDate);
+                });
                 break;
                 // Time operators
             case 'less_than':

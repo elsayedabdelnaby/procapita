@@ -43,6 +43,18 @@ class DriverList extends Model
         ];
     }
 
+    /**
+     * Accessor to ensure shared_with_users is always an array
+     */
+    public function getSharedWithUsersAttribute($value)
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return is_array($value) ? $value : [];
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
@@ -60,29 +72,93 @@ class DriverList extends Model
     {
         // Creator can always access
         if ($this->created_by === $user->id) {
+            \Log::info('List accessible by creator', [
+                'list_id' => $this->id,
+                'list_name' => $this->name,
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+            ]);
             return true;
         }
 
         // If not shared, only creator can access
         if (! $this->is_shared) {
+            \Log::info('List not shared', [
+                'list_id' => $this->id,
+                'list_name' => $this->name,
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+            ]);
             return false;
         }
 
-        // Check if shared with all users
-        if ($this->is_shared && empty($this->shared_with_users) && empty($this->shared_with_groups)) {
+        // Get shared_with_users - use accessor which handles JSON decoding
+        $sharedWithUsers = $this->shared_with_users;
+        
+        // Ensure it's an array
+        if (! is_array($sharedWithUsers)) {
+            $sharedWithUsers = [];
+        }
+
+        // Get shared_with_groups - handle JSON string or array
+        $sharedWithGroups = $this->shared_with_groups;
+        if (is_string($sharedWithGroups)) {
+            $sharedWithGroups = json_decode($sharedWithGroups, true) ?? [];
+        }
+        if (! is_array($sharedWithGroups)) {
+            $sharedWithGroups = [];
+        }
+
+        // Check if shared with all users (empty arrays means shared with all)
+        if (empty($sharedWithUsers) && empty($sharedWithGroups)) {
+            \Log::info('List shared with all users', [
+                'list_id' => $this->id,
+                'list_name' => $this->name,
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+            ]);
             return true;
         }
 
         // Check if shared with user
-        if (is_array($this->shared_with_users) && in_array($user->id, $this->shared_with_users)) {
+        // Convert user IDs to integers for comparison
+        $sharedWithUsers = array_map('intval', array_filter($sharedWithUsers, fn($id) => !empty($id)));
+        $userId = (int) $user->id;
+        
+        // Log for debugging
+        \Log::info('Checking list access', [
+            'list_id' => $this->id,
+            'list_name' => $this->name,
+            'user_id' => $userId,
+            'user_name' => $user->name,
+            'is_shared' => $this->is_shared,
+            'shared_with_users' => $sharedWithUsers,
+            'user_in_list' => in_array($userId, $sharedWithUsers, true),
+            'raw_shared_with_users' => $this->getAttributes()['shared_with_users'] ?? null,
+        ]);
+        
+        if (in_array($userId, $sharedWithUsers, true)) {
+            \Log::info('User found in shared_with_users', [
+                'list_id' => $this->id,
+                'list_name' => $this->name,
+                'user_id' => $userId,
+                'user_name' => $user->name,
+            ]);
             return true;
         }
 
         // TODO: Check if shared with user's groups (if groups are implemented)
-        // if (is_array($this->shared_with_groups) && $user->hasGroup($this->shared_with_groups)) {
+        // if (is_array($sharedWithGroups) && $user->hasGroup($sharedWithGroups)) {
         //     return true;
         // }
 
+        \Log::info('List not accessible - user not in shared list', [
+            'list_id' => $this->id,
+            'list_name' => $this->name,
+            'user_id' => $userId,
+            'user_name' => $user->name,
+            'shared_with_users' => $sharedWithUsers,
+        ]);
         return false;
     }
 }

@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { type SharedData } from '@/types';
 import { formatDate } from '@/utils/date-format';
 import { EGYPT_GOVERNORATES } from '@/constants/egypt-governorates';
+import { useFieldPermissions } from '@/hooks/use-field-permissions';
 
 interface Company {
     id: number;
@@ -76,6 +77,9 @@ export default function DriversCreate({
     const currentUser = auth?.user;
     const isAdmin = currentUser?.is_super_admin || currentUser?.is_company_admin || false;
     
+    // Field permissions hook
+    const { canViewDriverField, canEditDriverField } = useFieldPermissions();
+    
     const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies || []);
     const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns || []);
     const [leadSources, setLeadSources] = useState<LeadSource[]>(initialLeadSources || []);
@@ -109,6 +113,7 @@ export default function DriversCreate({
         cancel_reason: '',
         feedback_count: 0,
         vehicle_type: '',
+        car_or_scooter: '',
         has_worked_before: '',
         governorate: '',
     });
@@ -393,7 +398,12 @@ export default function DriversCreate({
                 preserveScroll: true,
                 preserveState: true,
                 onSuccess: () => {
-                    router.visit('/drivers/drivers');
+                    // Reload drivers list to show the new driver immediately
+                    router.reload({ 
+                        only: ['drivers', 'filterOptions'],
+                        preserveState: true,
+                        preserveScroll: true
+                    });
                 },
                 onError: (errors) => {
                     console.error('Error creating driver:', errors);
@@ -404,8 +414,17 @@ export default function DriversCreate({
             post('/drivers/drivers', {
                 preserveScroll: true,
                 preserveState: true,
-                onSuccess: () => {
-                    // Success handled by Inertia
+                onSuccess: (page) => {
+                    // Reload drivers list to show the new driver immediately
+                    router.reload({ 
+                        only: ['drivers', 'filterOptions'],
+                        preserveState: true,
+                        preserveScroll: true
+                    });
+                },
+                onError: (errors) => {
+                    // Don't reset form data on error - preserve all field values
+                    console.error('Error creating driver:', errors);
                 },
             });
         }
@@ -421,7 +440,12 @@ export default function DriversCreate({
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => {
-                router.visit('/drivers/drivers');
+                // Reload drivers list to show the new driver immediately
+                router.reload({ 
+                    only: ['drivers', 'filterOptions'],
+                    preserveState: true,
+                    preserveScroll: true
+                });
             },
         });
     };
@@ -572,74 +596,89 @@ export default function DriversCreate({
                                 <input type="hidden" name="company_id" value={selectedCompany.id} />
                             )}
 
-                            <div className="md:col-span-2">
+                            {canViewDriverField('full_name') && (
+                                <div className="md:col-span-2">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="full_name" className="flex items-center gap-2">
+                                            Full Name <span className="text-red-500">*</span>
+                                            {!data.full_name && (
+                                                <span className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded">Required</span>
+                                            )}
+                                        </Label>
+                                    <FormField
+                                            label=""
+                                        name="full_name"
+                                        value={data.full_name}
+                                        onChange={(e) => setData('full_name', e.target.value)}
+                                        error={errors.full_name}
+                                        placeholder="e.g., John Doe"
+                                            className={showValidation && !data.full_name ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}
+                                        disabled={!canEditDriverField('full_name')}
+                                    />
+                                    </div>
+                                </div>
+                            )}
+
+                            {canViewDriverField('phone') && (
                                 <div className="space-y-2">
-                                    <Label htmlFor="full_name" className="flex items-center gap-2">
-                                        Full Name <span className="text-red-500">*</span>
-                                        {!data.full_name && (
+                                    <Label htmlFor="phone" className="flex items-center gap-2">
+                                        Phone <span className="text-red-500">*</span>
+                                        {!data.phone && (
                                             <span className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded">Required</span>
                                         )}
                                     </Label>
                                 <FormField
                                         label=""
-                                    name="full_name"
-                                    value={data.full_name}
-                                    onChange={(e) => setData('full_name', e.target.value)}
-                                    error={errors.full_name}
-                                    placeholder="e.g., John Doe"
-                                        className={showValidation && !data.full_name ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}
+                                    name="phone"
+                                    value={data.phone}
+                                    onChange={(e) => setData('phone', e.target.value)}
+                                    error={errors.phone}
+                                        className={showValidation && !data.phone ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}
+                                    required
+                                    placeholder="+1234567890"
+                                    disabled={!canEditDriverField('phone')}
                                 />
                                 </div>
-                            </div>
+                            )}
 
-                            <div className="space-y-2">
-                                <Label htmlFor="phone" className="flex items-center gap-2">
-                                    Phone <span className="text-red-500">*</span>
-                                    {!data.phone && (
-                                        <span className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded">Required</span>
-                                    )}
-                                </Label>
-                            <FormField
-                                    label=""
-                                name="phone"
-                                value={data.phone}
-                                onChange={(e) => setData('phone', e.target.value)}
-                                error={errors.phone}
-                                    className={showValidation && !data.phone ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}
-                                required
-                                placeholder="+1234567890"
-                            />
-                            </div>
-
-                            <FormField
-                                label="WhatsApp Phone"
-                                name="whatsapp_phone"
-                                value={data.whatsapp_phone}
-                                onChange={(e) => setData('whatsapp_phone', e.target.value)}
-                                error={errors.whatsapp_phone}
-                                placeholder="+1234567890"
-                            />
-
-                            <FormField
-                                label="Email"
-                                name="email"
-                                type="email"
-                                value={data.email}
-                                onChange={(e) => setData('email', e.target.value)}
-                                error={errors.email}
-                                placeholder="driver@example.com"
-                            />
-
-                            <div className="md:col-span-2 flex items-center space-x-2">
-                                <Checkbox
-                                    id="confirm_duplicate_basic"
-                                    checked={confirmDuplicate}
-                                    onCheckedChange={(checked) => setConfirmDuplicate(checked as boolean)}
+                            {canViewDriverField('whatsapp_phone') && (
+                                <FormField
+                                    label="WhatsApp Phone"
+                                    name="whatsapp_phone"
+                                    value={data.whatsapp_phone}
+                                    onChange={(e) => setData('whatsapp_phone', e.target.value)}
+                                    error={errors.whatsapp_phone}
+                                    placeholder="+1234567890"
+                                    disabled={!canEditDriverField('whatsapp_phone')}
                                 />
-                                <Label htmlFor="confirm_duplicate_basic" className="text-sm font-normal cursor-pointer">
-                                    Confirm Duplicate
-                                </Label>
-                            </div>
+                            )}
+
+                            {canViewDriverField('email') && (
+                                <FormField
+                                    label="Email"
+                                    name="email"
+                                    type="email"
+                                    value={data.email}
+                                    onChange={(e) => setData('email', e.target.value)}
+                                    error={errors.email}
+                                    placeholder="driver@example.com"
+                                    disabled={!canEditDriverField('email')}
+                                />
+                            )}
+
+                            {canViewDriverField('confirm_duplicate') && (
+                                <div className="md:col-span-2 flex items-center space-x-2">
+                                    <Checkbox
+                                        id="confirm_duplicate_basic"
+                                        checked={confirmDuplicate}
+                                        onCheckedChange={(checked) => setConfirmDuplicate(checked as boolean)}
+                                        disabled={!canEditDriverField('confirm_duplicate')}
+                                    />
+                                    <Label htmlFor="confirm_duplicate_basic" className="text-sm font-normal cursor-pointer">
+                                        Confirm Duplicate
+                                    </Label>
+                                </div>
+                            )}
                         </div>
                     </Card>
 
@@ -677,16 +716,17 @@ export default function DriversCreate({
                                 )}
                             </div>
 
-                            <div>
-                                <Label htmlFor="campaign_id">Campaign</Label>
-                                <select
-                                    id="campaign_id"
-                                    name="campaign_id"
-                                    value={data.campaign_id}
-                                    onChange={(e) => setData('campaign_id', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                    disabled={loadingCampaigns || (companies && !data.company_id)}
-                                >
+                            {canViewDriverField('campaign') && (
+                                <div>
+                                    <Label htmlFor="campaign_id">Campaign</Label>
+                                    <select
+                                        id="campaign_id"
+                                        name="campaign_id"
+                                        value={data.campaign_id}
+                                        onChange={(e) => setData('campaign_id', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        disabled={loadingCampaigns || (companies && !data.company_id) || !canEditDriverField('campaign')}
+                                    >
                                     <option value="">
                                         {loadingCampaigns
                                             ? 'Loading...'
@@ -699,11 +739,12 @@ export default function DriversCreate({
                                             {campaign.name}
                                         </option>
                                     ))}
-                                </select>
-                                {errors.campaign_id && (
-                                    <p className="text-sm text-red-500">{errors.campaign_id}</p>
-                                )}
-                            </div>
+                                    </select>
+                                    {errors.campaign_id && (
+                                        <p className="text-sm text-red-500">{errors.campaign_id}</p>
+                                    )}
+                                </div>
+                            )}
 
                             <div>
                                 <Label htmlFor="lead_source_id">
@@ -1168,11 +1209,15 @@ export default function DriversCreate({
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="none">-- None --</SelectItem>
-                                            {users.map((user) => (
-                                                <SelectItem key={user.id} value={String(user.id)}>
-                                                    {user.name}
-                                                </SelectItem>
-                                            ))}
+                                            {users.filter(user => user && user.id != null && user.id !== undefined && String(user.id).trim() !== '').map((user) => {
+                                                const userId = String(user.id).trim();
+                                                if (!userId || userId === '') return null;
+                                                return (
+                                                    <SelectItem key={user.id} value={userId}>
+                                                        {user.name}
+                                                    </SelectItem>
+                                                );
+                                            })}
                                         </SelectContent>
                                     </Select>
                                 )}
@@ -1181,80 +1226,114 @@ export default function DriversCreate({
                                 )}
                             </div>
 
-                            <div className="md:col-span-2">
-                                <Label htmlFor="notes">Notes</Label>
-                                <textarea
-                                    id="notes"
-                                    name="notes"
-                                    value={data.notes}
-                                    onChange={(e) => setData('notes', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                    rows={3}
-                                    placeholder="Additional notes about the driver..."
-                                />
-                                {errors.notes && (
-                                    <p className="text-sm text-red-500">{errors.notes}</p>
-                                )}
-                            </div>
+                            {canViewDriverField('notes') && (
+                                <div className="md:col-span-2">
+                                    <Label htmlFor="notes">Notes</Label>
+                                    <textarea
+                                        id="notes"
+                                        name="notes"
+                                        value={data.notes}
+                                        onChange={(e) => setData('notes', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        rows={3}
+                                        placeholder="Additional notes about the driver..."
+                                        disabled={!canEditDriverField('notes')}
+                                    />
+                                    {errors.notes && (
+                                        <p className="text-sm text-red-500">{errors.notes}</p>
+                                    )}
+                                </div>
+                            )}
 
-                            <div>
-                                <Label htmlFor="cancel_reason">
-                                    Cancel Reasons
-                                    {isCancelReasonRequired() && <span className="text-red-500">*</span>}
-                                </Label>
-                                <Select
-                                    value={data.cancel_reason || undefined}
-                                    onValueChange={(value) => setData('cancel_reason', value || '')}
-                                    required={isCancelReasonRequired()}
-                                >
-                                    <SelectTrigger className={isCancelReasonRequired() && !data.cancel_reason ? 'border-red-500' : ''}>
-                                        <SelectValue placeholder="Select cancel reason..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Not interested">Not interested</SelectItem>
-                                        <SelectItem value="Wrong Number">Wrong Number</SelectItem>
-                                        <SelectItem value="Under Age">Under Age</SelectItem>
-                                        <SelectItem value="Duplicated">Duplicated</SelectItem>
-                                        <SelectItem value="Wrong Documents">Wrong Documents</SelectItem>
-                                        <SelectItem value="Car Not Accepted">Car Not Accepted</SelectItem>
-                                        <SelectItem value="Other">Other</SelectItem>
-                                        <SelectItem value="Already driver">Already driver</SelectItem>
-                                        <SelectItem value="Expired">Expired</SelectItem>
-                                        <SelectItem value="Cities">Cities</SelectItem>
-                                        <SelectItem value="Dont have driving license">Dont have driving license</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                {errors.cancel_reason && (
-                                    <p className="text-sm text-red-500">{errors.cancel_reason}</p>
-                                )}
-                                {isCancelReasonRequired() && !data.cancel_reason && !errors.cancel_reason && (
-                                    <p className="text-sm text-red-500">Cancel reason is required for this lead status.</p>
-                                )}
-                            </div>
+                            {canViewDriverField('cancel_reason') && (
+                                <div>
+                                    <Label htmlFor="cancel_reason">
+                                        Cancel Reasons
+                                        {isCancelReasonRequired() && <span className="text-red-500">*</span>}
+                                    </Label>
+                                    <Select
+                                        value={data.cancel_reason || undefined}
+                                        onValueChange={(value) => setData('cancel_reason', value || '')}
+                                        required={isCancelReasonRequired()}
+                                        disabled={!canEditDriverField('cancel_reason')}
+                                    >
+                                        <SelectTrigger className={isCancelReasonRequired() && !data.cancel_reason ? 'border-red-500' : ''}>
+                                            <SelectValue placeholder="Select cancel reason..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Not interested">Not interested</SelectItem>
+                                            <SelectItem value="Wrong Number">Wrong Number</SelectItem>
+                                            <SelectItem value="Under Age">Under Age</SelectItem>
+                                            <SelectItem value="Duplicated">Duplicated</SelectItem>
+                                            <SelectItem value="Wrong Documents">Wrong Documents</SelectItem>
+                                            <SelectItem value="Car Not Accepted">Car Not Accepted</SelectItem>
+                                            <SelectItem value="Other">Other</SelectItem>
+                                            <SelectItem value="Already driver">Already driver</SelectItem>
+                                            <SelectItem value="Expired">Expired</SelectItem>
+                                            <SelectItem value="Cities">Cities</SelectItem>
+                                            <SelectItem value="Dont have driving license">Dont have driving license</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.cancel_reason && (
+                                        <p className="text-sm text-red-500">{errors.cancel_reason}</p>
+                                    )}
+                                    {isCancelReasonRequired() && !data.cancel_reason && !errors.cancel_reason && (
+                                        <p className="text-sm text-red-500">Cancel reason is required for this lead status.</p>
+                                    )}
+                                </div>
+                            )}
 
-                            <div>
-                                <Label htmlFor="vehicle_type">Vehicle Type</Label>
-                                <FormField
-                                    label=""
-                                    name="vehicle_type"
-                                    value={data.vehicle_type}
-                                    onChange={(e) => setData('vehicle_type', e.target.value)}
-                                    error={errors.vehicle_type}
-                                    placeholder="Enter vehicle type..."
-                                />
-                            </div>
+                            {canViewDriverField('vehicle_type') && (
+                                <div>
+                                    <Label htmlFor="vehicle_type">Vehicle Type</Label>
+                                    <FormField
+                                        label=""
+                                        name="vehicle_type"
+                                        value={data.vehicle_type}
+                                        onChange={(e) => setData('vehicle_type', e.target.value)}
+                                        error={errors.vehicle_type}
+                                        placeholder="Enter vehicle type..."
+                                        disabled={!canEditDriverField('vehicle_type')}
+                                    />
+                                </div>
+                            )}
 
-                            <div>
-                                <Label htmlFor="has_worked_before">Has the driver worked before?</Label>
-                                <FormField
-                                    label=""
-                                    name="has_worked_before"
-                                    value={data.has_worked_before}
-                                    onChange={(e) => setData('has_worked_before', e.target.value)}
-                                    error={errors.has_worked_before}
-                                    placeholder="Enter information about previous work experience..."
-                                />
-                            </div>
+                            {canViewDriverField('car_or_scooter') && (
+                                <div>
+                                    <Label htmlFor="car_or_scooter">Car or Scooter</Label>
+                                    <Select
+                                        value={data.car_or_scooter}
+                                        onValueChange={(value) => setData('car_or_scooter', value)}
+                                        disabled={!canEditDriverField('car_or_scooter')}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select Car or Scooter" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Car">Car</SelectItem>
+                                            <SelectItem value="Scooter">Scooter</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.car_or_scooter && (
+                                        <p className="text-sm text-red-500 mt-1">{errors.car_or_scooter}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {canViewDriverField('has_worked_before') && (
+                                <div>
+                                    <Label htmlFor="has_worked_before">Has the driver worked before?</Label>
+                                    <FormField
+                                        label=""
+                                        name="has_worked_before"
+                                        value={data.has_worked_before}
+                                        onChange={(e) => setData('has_worked_before', e.target.value)}
+                                        error={errors.has_worked_before}
+                                        placeholder="Enter information about previous work experience..."
+                                        disabled={!canEditDriverField('has_worked_before')}
+                                    />
+                                </div>
+                            )}
 
                             <div>
                                 <Label htmlFor="governorate">Governorate</Label>
@@ -1266,11 +1345,16 @@ export default function DriversCreate({
                                         <SelectValue placeholder="Select governorate..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {EGYPT_GOVERNORATES.map((gov) => (
-                                            <SelectItem key={gov} value={gov}>
-                                                {gov}
-                                            </SelectItem>
-                                        ))}
+                                        {EGYPT_GOVERNORATES.filter(gov => gov && typeof gov === 'string' && gov.trim() !== '').map((gov) => {
+                                            if (!gov || typeof gov !== 'string' || gov.trim() === '') return null;
+                                            const govValue = gov.trim();
+                                            if (govValue === '') return null;
+                                            return (
+                                                <SelectItem key={govValue} value={govValue}>
+                                                    {govValue}
+                                                </SelectItem>
+                                            );
+                                        })}
                                     </SelectContent>
                                 </Select>
                                 {errors.governorate && (
@@ -1278,37 +1362,42 @@ export default function DriversCreate({
                                 )}
                             </div>
 
-                            <div>
-                                <Label htmlFor="feedback_count">Feedback Count</Label>
-                                <FormField
-                                    label=""
-                                    name="feedback_count"
-                                    type="number"
-                                    value={String(data.feedback_count || 0)}
-                                    onChange={(e) => setData('feedback_count', parseInt(e.target.value) || 0)}
-                                    error={errors.feedback_count}
-                                    disabled
-                                    className="bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
-                                />
-                                <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically incremented when lead status is updated</p>
-                            </div>
+                            {canViewDriverField('feedback_count') && (
+                                <div>
+                                    <Label htmlFor="feedback_count">Feedback Count</Label>
+                                    <FormField
+                                        label=""
+                                        name="feedback_count"
+                                        type="number"
+                                        value={String(data.feedback_count || 0)}
+                                        onChange={(e) => setData('feedback_count', parseInt(e.target.value) || 0)}
+                                        error={errors.feedback_count}
+                                        disabled
+                                        className="bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
+                                    />
+                                    <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically incremented when lead status is updated</p>
+                                </div>
+                            )}
                         </div>
                     </Card>
 
                     <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="allow_duplicate"
-                                checked={allowDuplicate}
-                                onCheckedChange={(checked) => setAllowDuplicate(checked as boolean)}
-                            />
-                            <Label htmlFor="allow_duplicate" className="text-sm font-normal cursor-pointer">
-                                Duplicate
-                            </Label>
-                            <span className="text-xs text-neutral-500">
-                                (Allow creation even if duplicate exists)
-                            </span>
-                        </div>
+                        {canViewDriverField('duplicate') && (
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="allow_duplicate"
+                                    checked={allowDuplicate}
+                                    onCheckedChange={(checked) => setAllowDuplicate(checked as boolean)}
+                                    disabled={!canEditDriverField('duplicate')}
+                                />
+                                <Label htmlFor="allow_duplicate" className="text-sm font-normal cursor-pointer">
+                                    Duplicate
+                                </Label>
+                                <span className="text-xs text-neutral-500">
+                                    (Allow creation even if duplicate exists)
+                                </span>
+                            </div>
+                        )}
                         <div className="flex gap-4">
                             <Link href="/drivers/drivers">
                                 <Button type="button" variant="outline">

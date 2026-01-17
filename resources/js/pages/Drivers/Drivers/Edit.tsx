@@ -12,6 +12,7 @@ import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { formatDate } from '@/utils/date-format';
 import { EGYPT_GOVERNORATES } from '@/constants/egypt-governorates';
+import { useFieldPermissions } from '@/hooks/use-field-permissions';
 
 interface Company {
     id: number;
@@ -96,6 +97,9 @@ export default function DriversEdit({
     const isCompanyAdmin = currentUser?.is_company_admin || false;
     const isSuperAdmin = currentUser?.is_super_admin || false;
     
+    // Field permissions hook
+    const { canViewDriverField, canEditDriverField } = useFieldPermissions();
+    
     // Hide riding company field if user has a specific riding company assigned (not admin)
     const showRidingCompanyField = isSuperAdmin || isCompanyAdmin || !userRidingCompanyId;
     
@@ -106,7 +110,7 @@ export default function DriversEdit({
     const [clearFieldsOnReassign, setClearFieldsOnReassign] = useState<Set<string>>(new Set());
     const [setLeadStatusToNew, setSetLeadStatusToNew] = useState(false);
     const [pendingSubmit, setPendingSubmit] = useState<(() => void) | null>(null);
-    const [confirmDuplicate, setConfirmDuplicate] = useState(false);
+    const [confirmDuplicate, setConfirmDuplicate] = useState(driver.confirm_duplicate || false);
     const originalAssignedTo = driver.assigned_to;
     const isAdmin = isSuperAdmin || isCompanyAdmin;
 
@@ -131,6 +135,7 @@ export default function DriversEdit({
         cancel_reason: driver.cancel_reason || '',
         feedback_count: driver.feedback_count || 0,
         vehicle_type: driver.vehicle_type || '',
+        car_or_scooter: driver.car_or_scooter || '',
         has_worked_before: driver.has_worked_before || '',
         governorate: driver.governorate || '',
     });
@@ -270,8 +275,15 @@ export default function DriversEdit({
                 set_lead_status_to_new: setLeadStatusToNew,
                 confirm_duplicate: isAdmin ? confirmDuplicate : true,
             }),
+            preserveScroll: true,
+            preserveState: true,
             onSuccess: () => {
-                router.visit('/drivers/drivers');
+                // Reload drivers list to show updates immediately
+                router.reload({ 
+                    only: ['drivers', 'filterOptions'],
+                    preserveState: true,
+                    preserveScroll: true
+                });
             },
         });
     };
@@ -375,51 +387,66 @@ export default function DriversEdit({
                                 </div>
                             )}
 
+                                {canViewDriverField('full_name') && (
+                                    <FormField
+                                        label="Full Name"
+                                        name="full_name"
+                                        value={data.full_name}
+                                        onChange={(e) => setData('full_name', e.target.value)}
+                                        error={errors.full_name}
+                                        required
+                                        disabled={!canEditDriverField('full_name')}
+                                    />
+                                )}
+
+                            {canViewDriverField('phone') && (
                                 <FormField
-                                    label="Full Name"
-                                    name="full_name"
-                                    value={data.full_name}
-                                    onChange={(e) => setData('full_name', e.target.value)}
-                                    error={errors.full_name}
+                                    label="Phone"
+                                    name="phone"
+                                    value={data.phone}
+                                    onChange={(e) => setData('phone', e.target.value)}
+                                    error={errors.phone}
                                     required
+                                    disabled={!canEditDriverField('phone')}
                                 />
+                            )}
 
-                            <FormField
-                                label="Phone"
-                                name="phone"
-                                value={data.phone}
-                                onChange={(e) => setData('phone', e.target.value)}
-                                error={errors.phone}
-                                required
-                            />
-
-                            <FormField
-                                label="WhatsApp Phone"
-                                name="whatsapp_phone"
-                                value={data.whatsapp_phone}
-                                onChange={(e) => setData('whatsapp_phone', e.target.value)}
-                                error={errors.whatsapp_phone}
-                            />
-
-                            <FormField
-                                label="Email"
-                                name="email"
-                                type="email"
-                                value={data.email}
-                                onChange={(e) => setData('email', e.target.value)}
-                                error={errors.email}
-                            />
-
-                            <div className="md:col-span-2 flex items-center space-x-2">
-                                <Checkbox
-                                    id="confirm_duplicate_edit"
-                                    checked={confirmDuplicate}
-                                    onCheckedChange={(checked) => setConfirmDuplicate(checked as boolean)}
+                            {canViewDriverField('whatsapp_phone') && (
+                                <FormField
+                                    label="WhatsApp Phone"
+                                    name="whatsapp_phone"
+                                    value={data.whatsapp_phone}
+                                    onChange={(e) => setData('whatsapp_phone', e.target.value)}
+                                    error={errors.whatsapp_phone}
+                                    disabled={!canEditDriverField('whatsapp_phone')}
                                 />
-                                <Label htmlFor="confirm_duplicate_edit" className="text-sm font-normal cursor-pointer">
-                                    Confirm Duplicate
-                                </Label>
-                            </div>
+                            )}
+
+                            {canViewDriverField('email') && (
+                                <FormField
+                                    label="Email"
+                                    name="email"
+                                    type="email"
+                                    value={data.email}
+                                    onChange={(e) => setData('email', e.target.value)}
+                                    error={errors.email}
+                                    disabled={!canEditDriverField('email')}
+                                />
+                            )}
+
+                            {canViewDriverField('confirm_duplicate') && (
+                                <div className="md:col-span-2 flex items-center space-x-2">
+                                    <Checkbox
+                                        id="confirm_duplicate_edit"
+                                        checked={confirmDuplicate}
+                                        onCheckedChange={(checked) => setConfirmDuplicate(checked as boolean)}
+                                        disabled={!canEditDriverField('confirm_duplicate')}
+                                    />
+                                    <Label htmlFor="confirm_duplicate_edit" className="text-sm font-normal cursor-pointer">
+                                        Confirm Duplicate
+                                    </Label>
+                                </div>
+                            )}
                         </div>
                     </Card>
 
@@ -428,138 +455,155 @@ export default function DriversEdit({
                         <div className="grid gap-4 md:grid-cols-2">
                             {/* Riding Company field is hidden in edit mode */}
 
-                            <div>
-                                <Label htmlFor="campaign_id">Campaign</Label>
-                                <select
-                                    id="campaign_id"
-                                    name="campaign_id"
-                                    value={data.campaign_id}
-                                    onChange={(e) => setData('campaign_id', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                >
-                                    <option value="">Select a campaign</option>
-                                    {campaigns.map((campaign) => (
-                                        <option key={campaign.id} value={String(campaign.id)}>
-                                            {campaign.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.campaign_id && (
-                                    <p className="text-sm text-red-500">{errors.campaign_id}</p>
-                                )}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="lead_source_id">Lead Source</Label>
-                                <select
-                                    id="lead_source_id"
-                                    name="lead_source_id"
-                                    value={data.lead_source_id}
-                                    onChange={(e) => setData('lead_source_id', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                >
-                                    <option value="">Select a lead source</option>
-                                    {leadSources.map((source) => (
-                                        <option key={source.id} value={String(source.id)}>
-                                            {source.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.lead_source_id && (
-                                    <p className="text-sm text-red-500">{errors.lead_source_id}</p>
-                                )}
-                            </div>
-
-                            {/* Lead Status Group with Green Border */}
-                            <div className="rounded-lg border-2 border-green-500 dark:border-green-600 bg-green-100/50 dark:bg-green-900/30 p-4 grid grid-cols-2 gap-4">
+                            {canViewDriverField('campaign') && (
                                 <div>
-                                    <Label htmlFor="lead_status_id" className="font-bold text-green-700 dark:text-green-300">Lead Status <span className="text-red-500">*</span></Label>
+                                    <Label htmlFor="campaign_id">Campaign</Label>
                                     <select
-                                        id="lead_status_id"
-                                        name="lead_status_id"
-                                        value={data.lead_status_id}
-                                        onChange={(e) => setData('lead_status_id', e.target.value)}
+                                        id="campaign_id"
+                                        name="campaign_id"
+                                        value={data.campaign_id}
+                                        onChange={(e) => setData('campaign_id', e.target.value)}
                                         className="w-full rounded-md border px-3 py-2"
-                                        required
+                                        disabled={!canEditDriverField('campaign')}
                                     >
-                                        <option value="">-- Select Lead Status (Required) --</option>
-                                        {leadStatuses.map((status) => (
-                                            <option key={status.id} value={String(status.id)}>
-                                                {status.name}
+                                        <option value="">Select a campaign</option>
+                                        {campaigns.map((campaign) => (
+                                            <option key={campaign.id} value={String(campaign.id)}>
+                                                {campaign.name}
                                             </option>
                                         ))}
                                     </select>
-                                    {errors.lead_status_id && (
-                                        <p className="text-sm text-red-500">{errors.lead_status_id}</p>
+                                    {errors.campaign_id && (
+                                        <p className="text-sm text-red-500">{errors.campaign_id}</p>
                                     )}
                                 </div>
+                            )}
 
+                            {canViewDriverField('lead_source') && (
                                 <div>
-                                    <Label htmlFor="lead_status_comment" className="font-bold text-green-700 dark:text-green-300">
-                                        Feedback Comment
-                                        {isFollowUpRequired() && <span className="text-red-500 ml-1">*</span>}
-                                    </Label>
-                                    <textarea
-                                        id="lead_status_comment"
-                                        name="lead_status_comment"
-                                        value={data.lead_status_comment}
-                                        onChange={(e) => setData('lead_status_comment', e.target.value)}
-                                        className={`w-full rounded-md border px-3 py-2 ${isFollowUpRequired() && !data.lead_status_comment ? 'border-red-500' : ''}`}
-                                        rows={3}
-                                        placeholder="Enter lead status comment..."
-                                        required={isFollowUpRequired()}
-                                    />
-                                    {errors.lead_status_comment && (
-                                        <p className="text-sm text-red-500">{errors.lead_status_comment}</p>
-                                    )}
-                                    {isFollowUpRequired() && !data.lead_status_comment && !errors.lead_status_comment && (
-                                        <p className="text-sm text-red-500">Feedback comment is required for this lead status.</p>
+                                    <Label htmlFor="lead_source_id">Lead Source</Label>
+                                    <select
+                                        id="lead_source_id"
+                                        name="lead_source_id"
+                                        value={data.lead_source_id}
+                                        onChange={(e) => setData('lead_source_id', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        disabled={!canEditDriverField('lead_source')}
+                                    >
+                                        <option value="">Select a lead source</option>
+                                        {leadSources.map((source) => (
+                                            <option key={source.id} value={String(source.id)}>
+                                                {source.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.lead_source_id && (
+                                        <p className="text-sm text-red-500">{errors.lead_source_id}</p>
                                     )}
                                 </div>
+                            )}
 
-                                <div>
-                                    <Label htmlFor="cancel_reason" className="font-bold text-green-700 dark:text-green-300">
-                                        Cancel Reasons
-                                        {isCancelReasonRequired() && <span className="text-red-500 ml-1">*</span>}
-                                    </Label>
-                                    <Select
-                                        value={data.cancel_reason || undefined}
-                                        onValueChange={(value) => setData('cancel_reason', value || '')}
-                                        required={isCancelReasonRequired()}
-                                    >
-                                        <SelectTrigger className={isCancelReasonRequired() && !data.cancel_reason ? 'border-red-500' : ''}>
-                                            <SelectValue placeholder="Select cancel reason..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Not interested">Not interested</SelectItem>
-                                            <SelectItem value="Wrong Number">Wrong Number</SelectItem>
-                                            <SelectItem value="Under Age">Under Age</SelectItem>
-                                            <SelectItem value="Duplicated">Duplicated</SelectItem>
-                                            <SelectItem value="Wrong Documents">Wrong Documents</SelectItem>
-                                            <SelectItem value="Car Not Accepted">Car Not Accepted</SelectItem>
-                                            <SelectItem value="Other">Other</SelectItem>
-                                            <SelectItem value="Already driver">Already driver</SelectItem>
-                                            <SelectItem value="Expired">Expired</SelectItem>
-                                            <SelectItem value="Cities">Cities</SelectItem>
-                                            <SelectItem value="Dont have driving license">Dont have driving license</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    {errors.cancel_reason && (
-                                        <p className="text-sm text-red-500">{errors.cancel_reason}</p>
+                            {/* Lead Status Group with Green Border */}
+                            {(canViewDriverField('lead_status') || canViewDriverField('lead_status_comment') || canViewDriverField('cancel_reason') || canViewDriverField('next_follow_up')) && (
+                                <div className="rounded-lg border-2 border-green-500 dark:border-green-600 bg-green-100/50 dark:bg-green-900/30 p-4 grid grid-cols-2 gap-4">
+                                    {canViewDriverField('lead_status') && (
+                                        <div>
+                                            <Label htmlFor="lead_status_id" className="font-bold text-green-700 dark:text-green-300">Lead Status <span className="text-red-500">*</span></Label>
+                                            <select
+                                                id="lead_status_id"
+                                                name="lead_status_id"
+                                                value={data.lead_status_id}
+                                                onChange={(e) => setData('lead_status_id', e.target.value)}
+                                                className="w-full rounded-md border px-3 py-2"
+                                                required
+                                                disabled={!canEditDriverField('lead_status')}
+                                            >
+                                                <option value="">-- Select Lead Status (Required) --</option>
+                                                {leadStatuses.map((status) => (
+                                                    <option key={status.id} value={String(status.id)}>
+                                                        {status.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {errors.lead_status_id && (
+                                                <p className="text-sm text-red-500">{errors.lead_status_id}</p>
+                                            )}
+                                        </div>
                                     )}
-                                    {isCancelReasonRequired() && !data.cancel_reason && !errors.cancel_reason && (
-                                        <p className="text-sm text-red-500">Cancel reason is required for this lead status.</p>
-                                    )}
-                                </div>
 
-                                <div className="col-span-2">
-                                    <Label 
-                                        htmlFor="next_follow_up" 
-                                        className="font-bold text-green-700 dark:text-green-300 block mb-1"
-                                    >
-                                        Next Follow-up
-                                        {isFollowUpRequired() && <span className="text-red-500 ml-1">*</span>}
-                                    </Label>
+                                    {canViewDriverField('lead_status_comment') && (
+                                        <div>
+                                            <Label htmlFor="lead_status_comment" className="font-bold text-green-700 dark:text-green-300">
+                                                Feedback Comment
+                                                {isFollowUpRequired() && <span className="text-red-500 ml-1">*</span>}
+                                            </Label>
+                                            <textarea
+                                                id="lead_status_comment"
+                                                name="lead_status_comment"
+                                                value={data.lead_status_comment}
+                                                onChange={(e) => setData('lead_status_comment', e.target.value)}
+                                                className={`w-full rounded-md border px-3 py-2 ${isFollowUpRequired() && !data.lead_status_comment ? 'border-red-500' : ''}`}
+                                                rows={3}
+                                                placeholder="Enter lead status comment..."
+                                                required={isFollowUpRequired()}
+                                                disabled={!canEditDriverField('lead_status_comment')}
+                                            />
+                                            {errors.lead_status_comment && (
+                                                <p className="text-sm text-red-500">{errors.lead_status_comment}</p>
+                                            )}
+                                            {isFollowUpRequired() && !data.lead_status_comment && !errors.lead_status_comment && (
+                                                <p className="text-sm text-red-500">Feedback comment is required for this lead status.</p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {canViewDriverField('cancel_reason') && (
+                                        <div>
+                                            <Label htmlFor="cancel_reason" className="font-bold text-green-700 dark:text-green-300">
+                                                Cancel Reasons
+                                                {isCancelReasonRequired() && <span className="text-red-500 ml-1">*</span>}
+                                            </Label>
+                                            <Select
+                                                value={data.cancel_reason || undefined}
+                                                onValueChange={(value) => setData('cancel_reason', value || '')}
+                                                required={isCancelReasonRequired()}
+                                                disabled={!canEditDriverField('cancel_reason')}
+                                            >
+                                                <SelectTrigger className={isCancelReasonRequired() && !data.cancel_reason ? 'border-red-500' : ''}>
+                                                    <SelectValue placeholder="Select cancel reason..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Not interested">Not interested</SelectItem>
+                                                    <SelectItem value="Wrong Number">Wrong Number</SelectItem>
+                                                    <SelectItem value="Under Age">Under Age</SelectItem>
+                                                    <SelectItem value="Duplicated">Duplicated</SelectItem>
+                                                    <SelectItem value="Wrong Documents">Wrong Documents</SelectItem>
+                                                    <SelectItem value="Car Not Accepted">Car Not Accepted</SelectItem>
+                                                    <SelectItem value="Other">Other</SelectItem>
+                                                    <SelectItem value="Already driver">Already driver</SelectItem>
+                                                    <SelectItem value="Expired">Expired</SelectItem>
+                                                    <SelectItem value="Cities">Cities</SelectItem>
+                                                    <SelectItem value="Dont have driving license">Dont have driving license</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            {errors.cancel_reason && (
+                                                <p className="text-sm text-red-500">{errors.cancel_reason}</p>
+                                            )}
+                                            {isCancelReasonRequired() && !data.cancel_reason && !errors.cancel_reason && (
+                                                <p className="text-sm text-red-500">Cancel reason is required for this lead status.</p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {canViewDriverField('next_follow_up') && (
+                                        <div className="col-span-2">
+                                            <Label 
+                                                htmlFor="next_follow_up" 
+                                                className="font-bold text-green-700 dark:text-green-300 block mb-1"
+                                            >
+                                                Next Follow-up
+                                                {isFollowUpRequired() && <span className="text-red-500 ml-1">*</span>}
+                                            </Label>
                                     <div className="flex gap-2 items-center">
                                         {/* Date Input (Hidden) */}
                                         <input
@@ -567,6 +611,7 @@ export default function DriversEdit({
                                             id="edit-next-follow-up-date"
                                             value={data.next_follow_up ? (data.next_follow_up.includes('T') ? data.next_follow_up.split('T')[0] : data.next_follow_up) : ''}
                                             onChange={(e) => {
+                                                if (!canEditDriverField('next_follow_up')) return;
                                                 const selectedDate = e.target.value;
                                                 if (selectedDate) {
                                                     // Ensure selected date is today or future
@@ -604,6 +649,7 @@ export default function DriversEdit({
                                             })()}
                                             className="absolute opacity-0 pointer-events-none"
                                             required={isFollowUpRequired()}
+                                            disabled={!canEditDriverField('next_follow_up')}
                                         />
                                         {/* Time Input (Hidden) */}
                                         <input
@@ -613,18 +659,24 @@ export default function DriversEdit({
                                                 ? data.next_follow_up.split('T')[1].slice(0, 5) 
                                                 : '00:00'}
                                             onChange={(e) => {
+                                                if (!canEditDriverField('next_follow_up')) return;
                                                 const selectedTime = e.target.value;
                                                 const existingDate = data.next_follow_up && data.next_follow_up.includes('T')
                                                     ? data.next_follow_up.split('T')[0]
                                                     : (data.next_follow_up || new Date().toISOString().split('T')[0]);
                                                 setData('next_follow_up', `${existingDate}T${selectedTime}`);
                                             }}
-                                            onFocus={() => setTimeEditingState('hours')}
+                                            onFocus={() => {
+                                                if (canEditDriverField('next_follow_up')) {
+                                                    setTimeEditingState('hours');
+                                                }
+                                            }}
                                             onBlur={() => {
                                                 // Delay to allow time picker to close
                                                 setTimeout(() => setTimeEditingState(null), 300);
                                             }}
                                             onInput={(e) => {
+                                                if (!canEditDriverField('next_follow_up')) return;
                                                 // Track which part is being edited
                                                 const timeInput = e.target as HTMLInputElement;
                                                 const currentTime = timeInput.value;
@@ -644,6 +696,7 @@ export default function DriversEdit({
                                                 }
                                             }}
                                             className="absolute opacity-0 pointer-events-none"
+                                            disabled={!canEditDriverField('next_follow_up')}
                                         />
                                         {/* Display */}
                                         <div className={`flex-1 rounded-md border px-3 py-2 bg-white dark:bg-neutral-800 flex items-center gap-2 ${isFollowUpRequired() && !data.next_follow_up ? 'border-red-500' : 'border-neutral-300 dark:border-neutral-600'}`}>
@@ -661,8 +714,9 @@ export default function DriversEdit({
                                                 return (
                                                     <>
                                                         <span 
-                                                            className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                            className={canEditDriverField('next_follow_up') ? "cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" : "cursor-not-allowed text-neutral-400"}
                                                             onClick={() => {
+                                                                if (!canEditDriverField('next_follow_up')) return;
                                                                 const dateInput = document.getElementById('edit-next-follow-up-date') as HTMLInputElement;
                                                                 if (dateInput) {
                                                                     dateInput.showPicker?.() || dateInput.focus();
@@ -672,8 +726,9 @@ export default function DriversEdit({
                                                             {day}
                                                         </span>
                                                         <span 
-                                                            className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                            className={canEditDriverField('next_follow_up') ? "cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" : "cursor-not-allowed text-neutral-400"}
                                                             onClick={() => {
+                                                                if (!canEditDriverField('next_follow_up')) return;
                                                                 const dateInput = document.getElementById('edit-next-follow-up-date') as HTMLInputElement;
                                                                 if (dateInput) {
                                                                     dateInput.showPicker?.() || dateInput.focus();
@@ -683,8 +738,9 @@ export default function DriversEdit({
                                                             -
                                                         </span>
                                                         <span 
-                                                            className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                            className={canEditDriverField('next_follow_up') ? "cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" : "cursor-not-allowed text-neutral-400"}
                                                             onClick={() => {
+                                                                if (!canEditDriverField('next_follow_up')) return;
                                                                 const dateInput = document.getElementById('edit-next-follow-up-date') as HTMLInputElement;
                                                                 if (dateInput) {
                                                                     dateInput.showPicker?.() || dateInput.focus();
@@ -694,8 +750,9 @@ export default function DriversEdit({
                                                             {month}
                                                         </span>
                                                         <span 
-                                                            className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                            className={canEditDriverField('next_follow_up') ? "cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" : "cursor-not-allowed text-neutral-400"}
                                                             onClick={() => {
+                                                                if (!canEditDriverField('next_follow_up')) return;
                                                                 const dateInput = document.getElementById('edit-next-follow-up-date') as HTMLInputElement;
                                                                 if (dateInput) {
                                                                     dateInput.showPicker?.() || dateInput.focus();
@@ -705,8 +762,9 @@ export default function DriversEdit({
                                                             -
                                                         </span>
                                                         <span 
-                                                            className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                            className={canEditDriverField('next_follow_up') ? "cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" : "cursor-not-allowed text-neutral-400"}
                                                             onClick={() => {
+                                                                if (!canEditDriverField('next_follow_up')) return;
                                                                 const dateInput = document.getElementById('edit-next-follow-up-date') as HTMLInputElement;
                                                                 if (dateInput) {
                                                                     dateInput.showPicker?.() || dateInput.focus();
@@ -717,12 +775,13 @@ export default function DriversEdit({
                                                         </span>
                                                         <span className="mx-2 text-neutral-400">|</span>
                                                         <span 
-                                                            className={`cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors ${
+                                                            className={`${canEditDriverField('next_follow_up') ? 'cursor-pointer hover:text-blue-600 dark:hover:text-blue-400' : 'cursor-not-allowed text-neutral-400'} transition-colors ${
                                                                 timeEditingState === 'hours' 
                                                                     ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1 rounded' 
                                                                     : ''
                                                             }`}
                                                             onClick={() => {
+                                                                if (!canEditDriverField('next_follow_up')) return;
                                                                 setTimeEditingState('hours');
                                                                 const timeInput = document.getElementById('edit-next-follow-up-time') as HTMLInputElement;
                                                                 if (timeInput) {
@@ -734,12 +793,13 @@ export default function DriversEdit({
                                                         </span>
                                                         <span className="text-neutral-400">:</span>
                                                         <span 
-                                                            className={`cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors ${
+                                                            className={`${canEditDriverField('next_follow_up') ? 'cursor-pointer hover:text-blue-600 dark:hover:text-blue-400' : 'cursor-not-allowed text-neutral-400'} transition-colors ${
                                                                 timeEditingState === 'minutes' 
                                                                     ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1 rounded' 
                                                                     : ''
                                                             }`}
                                                             onClick={() => {
+                                                                if (!canEditDriverField('next_follow_up')) return;
                                                                 setTimeEditingState('minutes');
                                                                 const timeInput = document.getElementById('edit-next-follow-up-time') as HTMLInputElement;
                                                                 if (timeInput) {
@@ -752,6 +812,7 @@ export default function DriversEdit({
                                                         <Select
                                                             value={ampm}
                                                         onValueChange={(value) => {
+                                                            if (!canEditDriverField('next_follow_up')) return;
                                                             const date = new Date(data.next_follow_up);
                                                             let hours = date.getHours();
                                                             const minutes = date.getMinutes();
@@ -781,6 +842,7 @@ export default function DriversEdit({
                                                             const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
                                                             setData('next_follow_up', `${dateStr}T${timeStr}`);
                                                         }}
+                                                        disabled={!canEditDriverField('next_follow_up')}
                                                         >
                                                             <SelectTrigger className="h-auto py-0 px-2 border-0 bg-transparent shadow-none hover:bg-blue-50 dark:hover:bg-blue-900/20">
                                                                 <SelectValue>{ampm}</SelectValue>
@@ -794,8 +856,9 @@ export default function DriversEdit({
                                                 );
                                             })() : (
                                                 <span 
-                                                    className="text-neutral-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                                    className={canEditDriverField('next_follow_up') ? "text-neutral-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" : "text-neutral-400 cursor-not-allowed"}
                                                     onClick={() => {
+                                                        if (!canEditDriverField('next_follow_up')) return;
                                                         // Try date first, if fails try time
                                                         const dateInput = document.getElementById('edit-next-follow-up-date') as HTMLInputElement;
                                                         if (dateInput) {
@@ -816,165 +879,210 @@ export default function DriversEdit({
                                     {errors.next_follow_up && (
                                         <p className="text-sm text-red-500">{errors.next_follow_up}</p>
                                     )}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
+                            )}
 
-                            <div>
-                                <Label htmlFor="last_follow_up">Last Follow-up</Label>
-                                <input
-                                    type="date"
-                                    id="last_follow_up"
-                                    name="last_follow_up"
-                                    value={data.last_follow_up}
-                                    disabled
-                                    className="w-full rounded-md border px-3 py-2 bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
-                                />
-                                <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically updated</p>
-                            </div>
+                            {canViewDriverField('last_follow_up') && (
+                                <div>
+                                    <Label htmlFor="last_follow_up">Last Follow-up</Label>
+                                    <input
+                                        type="date"
+                                        id="last_follow_up"
+                                        name="last_follow_up"
+                                        value={data.last_follow_up}
+                                        disabled
+                                        className="w-full rounded-md border px-3 py-2 bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
+                                    />
+                                    <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically updated</p>
+                                </div>
+                            )}
 
-                            <div>
-                                <Label htmlFor="lead_stage_id">Lead Stage</Label>
-                                <select
-                                    id="lead_stage_id"
-                                    name="lead_stage_id"
-                                    value={data.lead_stage_id}
-                                    onChange={(e) => setData('lead_stage_id', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                    disabled={loadingLeadStages || !data.riding_company_id}
-                                >
-                                    <option value="">
-                                        {loadingLeadStages
-                                            ? 'Loading...'
-                                            : !data.riding_company_id
-                                              ? 'Select a riding company first'
-                                              : 'Select a lead stage'}
-                                    </option>
-                                    {leadStages.map((stage) => (
-                                        <option key={stage.id} value={String(stage.id)}>
-                                            {stage.name}
+                            {canViewDriverField('lead_stage') && (
+                                <div>
+                                    <Label htmlFor="lead_stage_id">Lead Stage</Label>
+                                    <select
+                                        id="lead_stage_id"
+                                        name="lead_stage_id"
+                                        value={data.lead_stage_id}
+                                        onChange={(e) => setData('lead_stage_id', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        disabled={loadingLeadStages || !data.riding_company_id || !canEditDriverField('lead_stage')}
+                                    >
+                                        <option value="">
+                                            {loadingLeadStages
+                                                ? 'Loading...'
+                                                : !data.riding_company_id
+                                                  ? 'Select a riding company first'
+                                                  : 'Select a lead stage'}
                                         </option>
-                                    ))}
-                                </select>
-                                {errors.lead_stage_id && (
-                                    <p className="text-sm text-red-500">{errors.lead_stage_id}</p>
-                                )}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="assigned_to">
-                                    Assigned To <span className="text-red-500">*</span>
-                                </Label>
-                                <Select
-                                    value={data.assigned_to ? String(data.assigned_to) : undefined}
-                                    onValueChange={(value) => {
-                                        if (value === 'none') {
-                                            setData('assigned_to', null);
-                                        } else {
-                                            setData('assigned_to', Number(value));
-                                        }
-                                    }}
-                                >
-                                    <SelectTrigger className="mt-1">
-                                        <SelectValue placeholder="Select user..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">-- None --</SelectItem>
-                                        {users.map((user) => (
-                                            <SelectItem key={user.id} value={String(user.id)}>
-                                                {user.name}
-                                            </SelectItem>
+                                        {leadStages.map((stage) => (
+                                            <option key={stage.id} value={String(stage.id)}>
+                                                {stage.name}
+                                            </option>
                                         ))}
-                                    </SelectContent>
-                                </Select>
-                                {errors.assigned_to && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.assigned_to}</p>
-                                )}
-                            </div>
+                                    </select>
+                                    {errors.lead_stage_id && (
+                                        <p className="text-sm text-red-500">{errors.lead_stage_id}</p>
+                                    )}
+                                </div>
+                            )}
 
-                            <div>
-                                <Label htmlFor="notes">Notes</Label>
-                                <textarea
-                                    id="notes"
-                                    name="notes"
-                                    value={data.notes}
-                                    onChange={(e) => setData('notes', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                    rows={3}
-                                />
-                                {errors.notes && (
-                                    <p className="text-sm text-red-500">{errors.notes}</p>
-                                )}
-                            </div>
+                            {canViewDriverField('assigned_to') && (
+                                <div>
+                                    <Label htmlFor="assigned_to">
+                                        Assigned To <span className="text-red-500">*</span>
+                                    </Label>
+                                    <Select
+                                        value={data.assigned_to ? String(data.assigned_to) : undefined}
+                                        onValueChange={(value) => {
+                                            if (value === 'none') {
+                                                setData('assigned_to', null);
+                                            } else {
+                                                setData('assigned_to', Number(value));
+                                            }
+                                        }}
+                                        disabled={!canEditDriverField('assigned_to')}
+                                    >
+                                        <SelectTrigger className="mt-1">
+                                            <SelectValue placeholder="Select user..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">-- None --</SelectItem>
+                                            {users.map((user) => (
+                                                <SelectItem key={user.id} value={String(user.id)}>
+                                                    {user.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.assigned_to && (
+                                        <p className="text-sm text-red-500 mt-1">{errors.assigned_to}</p>
+                                    )}
+                                </div>
+                            )}
 
-                            <div>
-                                <Label htmlFor="vehicle_type">Vehicle Type</Label>
-                                <input
-                                    type="text"
-                                    id="vehicle_type"
-                                    name="vehicle_type"
-                                    value={data.vehicle_type}
-                                    onChange={(e) => setData('vehicle_type', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                    placeholder="Enter vehicle type..."
-                                />
-                                {errors.vehicle_type && (
-                                    <p className="text-sm text-red-500">{errors.vehicle_type}</p>
-                                )}
-                            </div>
+                            {canViewDriverField('notes') && (
+                                <div>
+                                    <Label htmlFor="notes">Notes</Label>
+                                    <textarea
+                                        id="notes"
+                                        name="notes"
+                                        value={data.notes}
+                                        onChange={(e) => setData('notes', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        rows={3}
+                                        disabled={!canEditDriverField('notes')}
+                                    />
+                                    {errors.notes && (
+                                        <p className="text-sm text-red-500">{errors.notes}</p>
+                                    )}
+                                </div>
+                            )}
 
-                            <div>
-                                <Label htmlFor="has_worked_before">Has the driver worked before?</Label>
-                                <input
-                                    type="text"
-                                    id="has_worked_before"
-                                    name="has_worked_before"
-                                    value={data.has_worked_before}
-                                    onChange={(e) => setData('has_worked_before', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                    placeholder="Enter information about previous work experience..."
-                                />
-                                {errors.has_worked_before && (
-                                    <p className="text-sm text-red-500">{errors.has_worked_before}</p>
-                                )}
-                            </div>
+                            {canViewDriverField('vehicle_type') && (
+                                <div>
+                                    <Label htmlFor="vehicle_type">Vehicle Type</Label>
+                                    <input
+                                        type="text"
+                                        id="vehicle_type"
+                                        name="vehicle_type"
+                                        value={data.vehicle_type}
+                                        onChange={(e) => setData('vehicle_type', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        placeholder="Enter vehicle type..."
+                                        disabled={!canEditDriverField('vehicle_type')}
+                                    />
+                                    {errors.vehicle_type && (
+                                        <p className="text-sm text-red-500">{errors.vehicle_type}</p>
+                                    )}
+                                </div>
+                            )}
 
-                            <div>
-                                <Label htmlFor="governorate">Governorate</Label>
-                                <Select
-                                    value={data.governorate || undefined}
-                                    onValueChange={(value) => setData('governorate', value || '')}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select governorate..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {EGYPT_GOVERNORATES.map((gov) => (
-                                            <SelectItem key={gov} value={gov}>
-                                                {gov}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {errors.governorate && (
-                                    <p className="text-sm text-red-500">{errors.governorate}</p>
-                                )}
-                            </div>
+                            {canViewDriverField('car_or_scooter') && (
+                                <div>
+                                    <Label htmlFor="car_or_scooter">Car or Scooter</Label>
+                                    <Select
+                                        value={data.car_or_scooter}
+                                        onValueChange={(value) => setData('car_or_scooter', value)}
+                                        disabled={!canEditDriverField('car_or_scooter')}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select Car or Scooter" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Car">Car</SelectItem>
+                                            <SelectItem value="Scooter">Scooter</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.car_or_scooter && (
+                                        <p className="text-sm text-red-500 mt-1">{errors.car_or_scooter}</p>
+                                    )}
+                                </div>
+                            )}
 
-                            <div>
-                                <Label htmlFor="feedback_count">Feedback Count</Label>
-                                <input
-                                    type="number"
-                                    id="feedback_count"
-                                    name="feedback_count"
-                                    value={data.feedback_count || 0}
-                                    disabled
-                                    className="w-full rounded-md border px-3 py-2 bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
-                                />
-                                <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically incremented when lead status is updated</p>
-                                {errors.feedback_count && (
-                                    <p className="text-sm text-red-500">{errors.feedback_count}</p>
-                                )}
-                            </div>
+                            {canViewDriverField('has_worked_before') && (
+                                <div>
+                                    <Label htmlFor="has_worked_before">Has the driver worked before?</Label>
+                                    <input
+                                        type="text"
+                                        id="has_worked_before"
+                                        name="has_worked_before"
+                                        value={data.has_worked_before}
+                                        onChange={(e) => setData('has_worked_before', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        placeholder="Enter information about previous work experience..."
+                                        disabled={!canEditDriverField('has_worked_before')}
+                                    />
+                                    {errors.has_worked_before && (
+                                        <p className="text-sm text-red-500">{errors.has_worked_before}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {canViewDriverField('governorate') && (
+                                <div>
+                                    <Label htmlFor="governorate">Governorate</Label>
+                                    <Select
+                                        value={data.governorate || undefined}
+                                        onValueChange={(value) => setData('governorate', value || '')}
+                                        disabled={!canEditDriverField('governorate')}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select governorate..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {EGYPT_GOVERNORATES.map((gov) => (
+                                                <SelectItem key={gov} value={gov}>
+                                                    {gov}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.governorate && (
+                                        <p className="text-sm text-red-500">{errors.governorate}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {canViewDriverField('feedback_count') && (
+                                <div>
+                                    <Label htmlFor="feedback_count">Feedback Count</Label>
+                                    <input
+                                        type="number"
+                                        id="feedback_count"
+                                        name="feedback_count"
+                                        value={data.feedback_count || 0}
+                                        disabled
+                                        className="w-full rounded-md border px-3 py-2 bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed"
+                                    />
+                                    <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically incremented when lead status is updated</p>
+                                    {errors.feedback_count && (
+                                        <p className="text-sm text-red-500">{errors.feedback_count}</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </Card>
 

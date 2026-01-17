@@ -9,6 +9,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Core\app\Http\Requests\RoleStoreRequest;
 use Modules\Core\app\Http\Requests\RoleUpdateRequest;
+use Modules\Core\app\Models\Permission;
 use Modules\Core\app\Services\CompanyService;
 use Modules\Core\app\Services\PermissionService;
 use Modules\Core\app\Services\RoleService;
@@ -44,6 +45,9 @@ class RoleController extends Controller
         if (! $companyModel) {
             abort(404, 'Company not found.');
         }
+
+        // Auto-create driver field permissions if they don't exist
+        $this->ensureDriverFieldPermissionsExist();
 
         $roles = $this->roleService->getAllRoles($company);
         $permissions = $this->permissionService->getGroupedPermissions();
@@ -96,6 +100,9 @@ class RoleController extends Controller
             abort(404, 'Role not found.');
         }
 
+        // Auto-create driver field permissions if they don't exist
+        $this->ensureDriverFieldPermissionsExist();
+
         $companyModel = $this->companyService->getCompanyById($company);
         $availableRoles = $this->roleService->getAllRoles($company);
         $permissions = $this->permissionService->getGroupedPermissions();
@@ -106,6 +113,52 @@ class RoleController extends Controller
             'availableRoles' => $availableRoles,
             'permissions' => $permissions,
         ]);
+    }
+
+    protected function ensureDriverFieldPermissionsExist(): void
+    {
+        $fields = [
+            'assigned_to',
+            'campaign',
+            'cancel_reason',
+            'car_or_scooter',
+            'city',
+            'current_stage',
+            'email',
+            'lead_status_comment',
+            'has_worked_before',
+            'lead_source',
+            'lead_stage',
+            'lead_status',
+            'full_name',
+            'next_follow_up',
+            'phone',
+            'vehicle_type',
+            'vehicle_type_and_year',
+            'whatsapp_phone',
+            'worked_with_us_before',
+            'duplicate',
+            'confirm_duplicate',
+        ];
+
+        foreach ($fields as $field) {
+            foreach (['invisible', 'read', 'write'] as $type) {
+                $action = "{$type}-{$field}";
+                $name = "drivers.driverfields.{$action}";
+
+                Permission::firstOrCreate(
+                    [
+                        'name' => $name,
+                        'guard_name' => 'web',
+                    ],
+                    [
+                        'module_name' => 'drivers',
+                        'entity_name' => 'driverfields',
+                        'action' => $action,
+                    ]
+                );
+            }
+        }
     }
 
     public function update(int $company, int $role, RoleUpdateRequest $request): RedirectResponse

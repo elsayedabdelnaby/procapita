@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { Head, useForm, router } from '@inertiajs/react';
+import { useState, useEffect } from 'react';
 import { X, Plus } from 'lucide-react';
 
 interface AvailableField {
@@ -47,93 +48,13 @@ export default function DriversListsEdit({
     users,
     isEdit,
 }: DriversListsEditProps) {
-    const { data, setData, post, put, processing, errors } = useForm({
-        name: list?.name || '',
-        columns: [],
-        all_conditions: list?.all_conditions || [],
-        any_conditions: list?.any_conditions || [],
-        shared_with_users: list?.shared_with_users || [],
-        is_shared: list?.is_shared || false,
-        is_default: list?.is_default || false,
-        show_in_metrics: list?.show_in_metrics || false,
-        default_sort_column: '',
-        default_sort_order: 'asc',
-    });
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (isEdit && list?.id) {
-            put(`/drivers/drivers/lists/${list.id}`, {
-                onSuccess: () => {
-                    router.visit('/drivers/drivers');
-                },
-                onError: (errors) => {
-                    console.error('Error updating list:', errors);
-                    if (errors && typeof errors === 'object') {
-                        const errorMessages = Object.values(errors).flat();
-                        alert('Error saving list: ' + errorMessages.join(', '));
-                    } else {
-                        alert('Error saving list. Please try again.');
-                    }
-                },
-            });
-        } else {
-            post('/drivers/drivers/lists', {
-                onSuccess: () => {
-                    router.visit('/drivers/drivers');
-                },
-                onError: (errors) => {
-                    console.error('Error creating list:', errors);
-                    if (errors && typeof errors === 'object') {
-                        const errorMessages = Object.values(errors).flat();
-                        alert('Error saving list: ' + errorMessages.join(', '));
-                    } else {
-                        alert('Error saving list. Please try again.');
-                    }
-                },
-            });
-        }
-    };
-
-    const addCondition = (type: 'all' | 'any') => {
-        const newCondition = {
-            field: '',
-            operator: '',
-            value: '',
-        };
-        
-        if (type === 'all') {
-            setData('all_conditions', [...data.all_conditions, newCondition]);
-        } else {
-            setData('any_conditions', [...data.any_conditions, newCondition]);
-        }
-    };
-
-    const removeCondition = (type: 'all' | 'any', index: number) => {
-        if (type === 'all') {
-            setData('all_conditions', data.all_conditions.filter((_, i) => i !== index));
-        } else {
-            setData('any_conditions', data.any_conditions.filter((_, i) => i !== index));
-        }
-    };
-
-    const updateCondition = (type: 'all' | 'any', index: number, field: string, value: any) => {
-        const conditions = type === 'all' ? [...(data.all_conditions || [])] : [...(data.any_conditions || [])];
-        if (!conditions[index]) {
-            conditions[index] = { field: '', operator: '', value: '' };
-        }
-        conditions[index] = { ...conditions[index], [field]: value };
-        
-        if (type === 'all') {
-            setData('all_conditions', conditions);
-        } else {
-            setData('any_conditions', conditions);
-        }
-    };
-
     const getOperatorsForField = (fieldType: string) => {
         switch (fieldType) {
+            case 'checkbox':
+                return [
+                    { value: 'is_enabled', label: 'Enabled' },
+                    { value: 'is_disabled', label: 'Disabled' },
+                ];
             case 'date':
             case 'datetime':
                 return [
@@ -221,6 +142,198 @@ export default function DriversListsEdit({
         }
     };
 
+    // Normalize conditions to ensure operator values are strings and valid
+    const normalizeConditions = (conditions: any[]) => {
+        if (!Array.isArray(conditions)) return [];
+        return conditions.map(condition => {
+            // Ensure operator is a string
+            let operator = condition.operator ? String(condition.operator).trim() : '';
+            
+            // If field exists and operator exists, validate operator against available operators
+            if (condition.field && operator) {
+                const fieldType = availableFields.find(f => f.value === condition.field)?.type || 'text';
+                const operators = getOperatorsForField(fieldType);
+                const isValidOperator = operators.some(op => {
+                    const opValue = String(op.value).trim();
+                    const condOpValue = String(operator).trim();
+                    return opValue === condOpValue;
+                });
+                
+                // Only log warning but don't clear operator - preserve what was saved
+                // The UI will handle invalid operators by showing "Select Operator"
+                if (!isValidOperator) {
+                    console.warn('Invalid operator found during normalization (preserving for debugging):', {
+                        field: condition.field,
+                        operator,
+                        fieldType,
+                        availableOperators: operators.map(op => op.value),
+                        condition
+                    });
+                    // Don't clear operator - let it be preserved so we can debug
+                    // The UI will show "Select Operator" if it's invalid
+                }
+            }
+            
+            return {
+                field: condition.field || '',
+                operator: operator, // Preserve operator even if invalid - UI will handle it
+                value: condition.value !== undefined && condition.value !== null ? condition.value : '',
+            };
+        });
+    };
+
+    // Clean conditions before submitting - remove empty or invalid conditions
+    const cleanConditions = (conditions: any[]) => {
+        if (!Array.isArray(conditions)) return [];
+        
+        return conditions
+            .filter(condition => {
+                // Keep only conditions that have both field and operator
+                const hasField = condition.field && String(condition.field).trim() !== '';
+                const hasOperator = condition.operator && String(condition.operator).trim() !== '';
+                return hasField && hasOperator;
+            })
+            .map(condition => ({
+                field: String(condition.field).trim(),
+                operator: String(condition.operator).trim(),
+                value: condition.value !== undefined && condition.value !== null ? condition.value : '',
+            }));
+    };
+
+    // Use useState for conditions to ensure proper reactivity
+    const [allConditions, setAllConditions] = useState<any[]>(list?.all_conditions ? normalizeConditions(list.all_conditions) : []);
+    const [anyConditions, setAnyConditions] = useState<any[]>(list?.any_conditions ? normalizeConditions(list.any_conditions) : []);
+    const [selectedUserForShare, setSelectedUserForShare] = useState<string>('');
+
+    const { data, setData, post, put, processing, errors, transform } = useForm({
+        name: list?.name || '',
+        columns: [],
+        all_conditions: allConditions,
+        any_conditions: anyConditions,
+        shared_with_users: list?.shared_with_users || [],
+        is_shared: list?.is_shared || false,
+        is_default: list?.is_default || false,
+        show_in_metrics: list?.show_in_metrics || false,
+        default_sort_column: '',
+        default_sort_order: 'asc',
+    });
+
+    // Sync form data with state when conditions change
+    useEffect(() => {
+        setData('all_conditions', allConditions);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [allConditions]);
+
+    useEffect(() => {
+        setData('any_conditions', anyConditions);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [anyConditions]);
+
+    // Transform data before submitting to clean conditions
+    transform((data) => ({
+        ...data,
+        all_conditions: cleanConditions(allConditions || []),
+        any_conditions: cleanConditions(anyConditions || []),
+    }));
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        // Debug: Log data before submitting
+        console.log('Submitting list data:', {
+            is_shared: data.is_shared,
+            shared_with_users: data.shared_with_users,
+            full_data: data,
+        });
+
+        if (isEdit && list?.id) {
+            put(`/drivers/drivers/lists/${list.id}`, {
+                onSuccess: () => {
+                    router.visit('/drivers/drivers');
+                },
+                onError: (errors) => {
+                    console.error('Error updating list:', errors);
+                    if (errors && typeof errors === 'object') {
+                        const errorMessages = Object.values(errors).flat();
+                        alert('Error saving list: ' + errorMessages.join(', '));
+                    } else {
+                        alert('Error saving list. Please try again.');
+                    }
+                },
+            });
+        } else {
+            post('/drivers/drivers/lists', {
+                onSuccess: () => {
+                    router.visit('/drivers/drivers');
+                },
+                onError: (errors) => {
+                    console.error('Error creating list:', errors);
+                    if (errors && typeof errors === 'object') {
+                        const errorMessages = Object.values(errors).flat();
+                        alert('Error saving list: ' + errorMessages.join(', '));
+                    } else {
+                        alert('Error saving list. Please try again.');
+                    }
+                },
+            });
+        }
+    };
+
+    const addCondition = (type: 'all' | 'any') => {
+        const newCondition = {
+            field: '',
+            operator: '',
+            value: '',
+        };
+        
+        if (type === 'all') {
+            setAllConditions([...allConditions, newCondition]);
+        } else {
+            setAnyConditions([...anyConditions, newCondition]);
+        }
+    };
+
+    const removeCondition = (type: 'all' | 'any', index: number) => {
+        if (type === 'all') {
+            setAllConditions(allConditions.filter((_, i) => i !== index));
+        } else {
+            setAnyConditions(anyConditions.filter((_, i) => i !== index));
+        }
+    };
+
+    const updateCondition = (type: 'all' | 'any', index: number, field: string, value: any) => {
+        // Use functional update to ensure we get the latest state
+        if (type === 'all') {
+            setAllConditions(prevConditions => {
+                const currentConditions = [...prevConditions];
+                
+                // Ensure the condition at index exists
+                if (!currentConditions[index]) {
+                    currentConditions[index] = { field: '', operator: '', value: '' };
+                }
+                
+                // Update the specific field in the condition - create a new object to ensure reactivity
+                currentConditions[index] = { ...currentConditions[index], [field]: value };
+                
+                return currentConditions;
+            });
+        } else {
+            setAnyConditions(prevConditions => {
+                const currentConditions = [...prevConditions];
+                
+                // Ensure the condition at index exists
+                if (!currentConditions[index]) {
+                    currentConditions[index] = { field: '', operator: '', value: '' };
+                }
+                
+                // Update the specific field in the condition - create a new object to ensure reactivity
+                currentConditions[index] = { ...currentConditions[index], [field]: value };
+                
+                return currentConditions;
+            });
+        }
+    };
+
     const getFieldType = (fieldValue: string) => {
         const field = availableFields.find((f) => f.value === fieldValue);
         return field?.type || 'text';
@@ -234,6 +347,11 @@ export default function DriversListsEdit({
 
         // Convert operator to string to ensure comparison works
         const operatorStr = String(operator).trim();
+
+        // For checkbox fields, don't show value field (operator itself determines the value)
+        if (fieldType === 'checkbox') {
+            return false;
+        }
 
         // For non-date fields (including number, integer, text, email, picklist), hide value only for is_empty and is_not_empty
         if (fieldType !== 'date' && fieldType !== 'datetime') {
@@ -275,6 +393,11 @@ export default function DriversListsEdit({
     };
 
     const getValueFieldType = (operator: string, fieldType: string) => {
+        // For checkbox fields, use checkbox input
+        if (fieldType === 'checkbox') {
+            return 'checkbox';
+        }
+
         // For number/integer fields, use number input
         if (fieldType === 'number' || fieldType === 'integer') {
             return 'number';
@@ -348,16 +471,32 @@ export default function DriversListsEdit({
                                         All conditions must be met together (logical AND). Example: Status = "Closed" AND Source = "Website" AND Value &gt; 1000
                                     </p>
                                 </div>
-                                {data.all_conditions.map((condition, index) => {
+                                {allConditions.map((condition, index) => {
                                     const fieldType = getFieldType(condition.field);
                                     const operators = getOperatorsForField(fieldType);
+                                    
+                                    // Use condition.operator directly - it's already saved in the form data
+                                    const operatorValue = condition.operator ? String(condition.operator).trim() : '';
+                                    
+                                    
                                     return (
                                         <div key={`all-condition-${index}-${condition.field}-${condition.operator}`} className="flex gap-2 items-end">
                                             <Select
                                                 value={condition.field || undefined}
-                                                onValueChange={(value) =>
-                                                    updateCondition('all', index, 'field', value)
-                                                }
+                                                onValueChange={(value) => {
+                                                    const newFieldType = getFieldType(value);
+                                                    const newOperators = getOperatorsForField(newFieldType);
+                                                    const currentOperator = condition.operator;
+                                                    
+                                                    // If current operator is not valid for new field type, clear it
+                                                    const isValidOperator = newOperators.some(op => String(op.value) === String(currentOperator));
+                                                    if (currentOperator && !isValidOperator) {
+                                                        updateCondition('all', index, 'operator', '');
+                                                        updateCondition('all', index, 'value', '');
+                                                    }
+                                                    
+                                                    updateCondition('all', index, 'field', value);
+                                                }}
                                             >
                                                 <SelectTrigger className="flex-1">
                                                     <SelectValue placeholder="Select Field" />
@@ -374,14 +513,27 @@ export default function DriversListsEdit({
                                                 <>
                                                     <Select
                                                         key={`all-operator-${index}-${condition.field}`}
-                                                        value={condition.operator ? String(condition.operator) : undefined}
+                                                        value={operatorValue || undefined}
                                                         onValueChange={(value) => {
+                                                            console.log('onValueChange - operator selected:', {
+                                                                value,
+                                                                valueType: typeof value,
+                                                                index,
+                                                                field: condition.field,
+                                                                currentOperator: condition.operator,
+                                                                currentCondition: condition,
+                                                                allConditions: data.all_conditions
+                                                            });
+                                                            
+                                                            // Update the condition immediately
                                                             updateCondition('all', index, 'operator', value);
+                                                            
                                                             // Clear value when operator changes to one that doesn't need it
                                                             const currentFieldType = getFieldType(condition.field || '');
                                                             if (!shouldShowValueField(value, currentFieldType)) {
                                                                 updateCondition('all', index, 'value', '');
                                                             }
+                                                            
                                                         }}
                                                     >
                                                         <SelectTrigger className="flex-1">
@@ -465,16 +617,32 @@ export default function DriversListsEdit({
                                         It is sufficient that any condition is met (logical OR). Example: Status = "New" OR Source = "Referral" OR Value &gt; 5000
                                     </p>
                                 </div>
-                                {data.any_conditions.map((condition, index) => {
+                                {anyConditions.map((condition, index) => {
                                     const fieldType = getFieldType(condition.field || '');
                                     const operators = getOperatorsForField(fieldType);
+                                    
+                                    // Use condition.operator directly - it's already saved in the form data
+                                    const operatorValue = condition.operator ? String(condition.operator).trim() : '';
+                                    
+                                    
                                     return (
                                         <div key={`any-condition-${index}-${condition.field}-${condition.operator}`} className="flex gap-2 items-end">
                                             <Select
                                                 value={condition.field || undefined}
-                                                onValueChange={(value) =>
-                                                    updateCondition('any', index, 'field', value)
-                                                }
+                                                onValueChange={(value) => {
+                                                    const newFieldType = getFieldType(value);
+                                                    const newOperators = getOperatorsForField(newFieldType);
+                                                    const currentOperator = condition.operator;
+                                                    
+                                                    // If current operator is not valid for new field type, clear it
+                                                    const isValidOperator = newOperators.some(op => String(op.value) === String(currentOperator));
+                                                    if (currentOperator && !isValidOperator) {
+                                                        updateCondition('any', index, 'operator', '');
+                                                        updateCondition('any', index, 'value', '');
+                                                    }
+                                                    
+                                                    updateCondition('any', index, 'field', value);
+                                                }}
                                             >
                                                 <SelectTrigger className="flex-1">
                                                     <SelectValue placeholder="Select Field" />
@@ -491,7 +659,7 @@ export default function DriversListsEdit({
                                                 <>
                                                     <Select
                                                         key={`any-operator-${index}-${condition.field}`}
-                                                        value={condition.operator ? String(condition.operator) : undefined}
+                                                        value={operatorValue || undefined}
                                                         onValueChange={(value) => {
                                                             updateCondition('any', index, 'operator', value);
                                                             // Clear value when operator changes to one that doesn't need it
@@ -589,12 +757,15 @@ export default function DriversListsEdit({
                                 <div className="ml-6 space-y-2">
                                     <Label>Select users to share with:</Label>
                                     <Select
+                                        value={selectedUserForShare}
                                         onValueChange={(value) => {
                                             if (value && !data.shared_with_users.includes(Number(value))) {
                                                 setData('shared_with_users', [
                                                     ...data.shared_with_users,
                                                     Number(value),
                                                 ]);
+                                                // Reset select to empty after selection
+                                                setSelectedUserForShare('');
                                             }
                                         }}
                                     >

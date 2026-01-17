@@ -172,8 +172,10 @@ class DriverUpdateRequest extends FormRequest
             'notes' => ['nullable', 'string'],
             'feedback_count' => ['nullable', 'integer', 'min:0'],
             'vehicle_type' => ['nullable', 'string', 'max:255'],
+            'car_or_scooter' => ['nullable', 'string', 'in:Car,Scooter'],
             'has_worked_before' => ['nullable', 'string', 'max:255'],
             'governorate' => ['nullable', 'string', 'max:255'],
+            'confirm_duplicate' => ['nullable', 'boolean'],
             'cancel_reason' => [
                 function ($attribute, $value, $fail) {
                     $leadStatusId = $this->input('lead_status_id');

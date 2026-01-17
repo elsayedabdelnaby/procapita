@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\RidingCarCompanies\app\Http\Controllers\FacebookIntegrationController;
+use App\Http\Controllers\CreateDriverFieldPermissionsController;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
@@ -24,5 +25,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return Inertia::render('dashboard');
     })->name('dashboard');
 });
+
+// Temporary route to create driver field permissions (only for super admin)
+Route::middleware(['auth', 'verified'])->get('/create-driver-field-permissions', CreateDriverFieldPermissionsController::class)
+    ->name('create.driver.field.permissions');
 
 require __DIR__.'/settings.php';

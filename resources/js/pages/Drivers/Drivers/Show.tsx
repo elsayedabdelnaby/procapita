@@ -155,6 +155,13 @@ interface Driver {
     worked_with_us_before?: string;
     vehicle_type_and_year?: string;
     city?: string;
+    governorate?: string;
+    vehicle_type?: string;
+    car_or_scooter?: string;
+    has_worked_before?: string;
+    feedback_count?: number;
+    duplicate?: number;
+    confirm_duplicate?: boolean;
     stages_progress?: {
         total: number;
         completed: number;
@@ -295,13 +302,29 @@ export default function DriversShow({
         return permissions.some((p: any) => p.name === permission);
     };
 
-    // Document permissions
+    // Document permissions - using drivers.drivers.* permissions
     const canUploadDocument = () => {
-        return hasPermission('drivers.driverdocuments.upload');
+        return hasPermission('drivers.drivers.upload-document') || hasPermission('drivers.driverdocuments.upload');
     };
 
     const canViewDocument = () => {
-        return hasPermission('drivers.driverdocuments.view');
+        return hasPermission('drivers.drivers.view-document') || hasPermission('drivers.driverdocuments.view');
+    };
+
+    const canDeleteDocument = () => {
+        return hasPermission('drivers.drivers.delete-document') || hasPermission('drivers.driverdocuments.delete-file');
+    };
+
+    const canRejectDocument = () => {
+        return hasPermission('drivers.drivers.reject-document') || hasPermission('drivers.driverdocuments.set-rejected');
+    };
+
+    const canApproveDocument = () => {
+        return hasPermission('drivers.drivers.approve-document') || hasPermission('drivers.driverdocuments.set-approved');
+    };
+
+    const canPendingDocument = () => {
+        return hasPermission('drivers.drivers.pending-document') || hasPermission('drivers.driverdocuments.set-pending');
     };
 
     const canReplaceDocument = () => {
@@ -309,15 +332,15 @@ export default function DriversShow({
     };
 
     const canSetPending = () => {
-        return hasPermission('drivers.driverdocuments.set-pending');
+        return hasPermission('drivers.drivers.pending-document') || hasPermission('drivers.driverdocuments.set-pending');
     };
 
     const canSetApproved = () => {
-        return hasPermission('drivers.driverdocuments.set-approved');
+        return hasPermission('drivers.drivers.approve-document') || hasPermission('drivers.driverdocuments.set-approved');
     };
 
     const canSetRejected = () => {
-        return hasPermission('drivers.driverdocuments.set-rejected');
+        return hasPermission('drivers.drivers.reject-document') || hasPermission('drivers.driverdocuments.set-rejected');
     };
 
     // Document upload states
@@ -399,7 +422,7 @@ export default function DriversShow({
     };
 
     const canDeleteFile = () => {
-        return hasPermission('drivers.driverdocuments.delete-file');
+        return hasPermission('drivers.drivers.delete-document') || hasPermission('drivers.driverdocuments.delete-file');
     };
 
     const getFileExtension = (filename?: string, path?: string): string | null => {
@@ -629,6 +652,42 @@ export default function DriversShow({
                                             </div>
                                         </div>
                                     )}
+                                    {canViewDriverField('governorate') && driver.governorate && (
+                                        <div className="flex items-start gap-2">
+                                            <MapPin className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                            <div className="flex-1">
+                                                <p className="text-sm text-neutral-500">Governorate</p>
+                                                <p className="font-medium">{driver.governorate}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('vehicle_type') && driver.vehicle_type && (
+                                        <div className="flex items-start gap-2">
+                                            <Car className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                            <div className="flex-1">
+                                                <p className="text-sm text-neutral-500">Vehicle Type</p>
+                                                <p className="font-medium">{driver.vehicle_type}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('car_or_scooter') && driver.car_or_scooter && (
+                                        <div className="flex items-start gap-2">
+                                            <Car className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                            <div className="flex-1">
+                                                <p className="text-sm text-neutral-500">Car or Scooter</p>
+                                                <p className="font-medium">{driver.car_or_scooter}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('has_worked_before') && driver.has_worked_before && (
+                                        <div className="flex items-start gap-2">
+                                            <User className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                            <div className="flex-1">
+                                                <p className="text-sm text-neutral-500">Has Worked Before</p>
+                                                <p className="font-medium">{driver.has_worked_before}</p>
+                                            </div>
+                                        </div>
+                                    )}
                                     {canViewDriverField('worked_with_us_before') && driver.worked_with_us_before && (
                                         <div className="flex items-start gap-2">
                                             <User className="mt-0.5 h-4 w-4 text-neutral-500" />
@@ -644,6 +703,42 @@ export default function DriversShow({
                                             <div className="flex-1">
                                                 <p className="text-sm text-neutral-500">Vehicle Type and Year</p>
                                                 <p className="text-sm whitespace-pre-wrap">{driver.vehicle_type_and_year}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('feedback_count') && driver.feedback_count !== undefined && (
+                                        <div className="flex items-start gap-2">
+                                            <MessageCircle className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                            <div className="flex-1">
+                                                <p className="text-sm text-neutral-500">Feedback Count</p>
+                                                <p className="font-medium">{driver.feedback_count}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('duplicate') && driver.duplicate !== undefined && (
+                                        <div className="flex items-start gap-2">
+                                            <User className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                            <div className="flex-1">
+                                                <p className="text-sm text-neutral-500">Duplicate Count</p>
+                                                <p className="font-medium">{driver.duplicate}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {canViewDriverField('confirm_duplicate') && (
+                                        <div className="flex items-start gap-2">
+                                            <CheckCircle2 className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                            <div className="flex-1">
+                                                <p className="text-sm text-neutral-500">Confirm Duplicate</p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <Checkbox
+                                                        checked={driver.confirm_duplicate || false}
+                                                        disabled
+                                                        className="pointer-events-none"
+                                                    />
+                                                    <span className="text-sm font-medium">
+                                                        {driver.confirm_duplicate ? 'Yes' : 'No'}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -957,8 +1052,20 @@ export default function DriversShow({
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2 flex-wrap">
-                                                {/* Status buttons - always show */}
-                                                {(canSetPending() || canSetApproved() || canSetRejected()) && (
+                                                {/* EMPTY status - show if file is NOT uploaded */}
+                                                {!doc.uploaded_path && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-7 px-3 text-xs bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+                                                        disabled
+                                                    >
+                                                        EMPTY
+                                                    </Button>
+                                                )}
+
+                                                {/* Status buttons - only show if file is uploaded */}
+                                                {doc.uploaded_path && (canSetPending() || canSetApproved() || canSetRejected()) && (
                                                     <div className="flex items-center gap-1 border rounded-md p-1">
                                                         {canSetPending() && (
                                                             <Button
@@ -1013,31 +1120,19 @@ export default function DriversShow({
                                                         )}
                                                     </div>
                                                 )}
-                                                
-                                                {/* EMPTY button - show if file is NOT uploaded (disabled) */}
-                                                {!doc.uploaded_path && (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-7 px-3 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                                                        disabled
-                                                    >
-                                                        EMPTY
-                                                    </Button>
-                                                )}
 
-                                                {/* EMPTY button - delete file (only show if file is uploaded) */}
+                                                {/* DELETE button - delete file (only show if file is uploaded) */}
                                                 {canDeleteFile() && doc.uploaded_path && (
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        className="h-7 px-3 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                                        className="h-7 px-3 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleDeleteFile(doc.id);
                                                         }}
                                                     >
-                                                        EMPTY
+                                                        DELETE
                                                     </Button>
                                                 )}
 

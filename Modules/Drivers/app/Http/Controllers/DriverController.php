@@ -119,6 +119,15 @@ class DriverController extends Controller
                 ['value' => 'vehicle_type_and_year', 'label' => 'Vehicle Type and Year', 'type' => 'textarea'],
                 ['value' => 'city', 'label' => 'City', 'type' => 'text'],
                 ['value' => 'vehicle_type', 'label' => 'Vehicle Type', 'type' => 'text'],
+                [
+                    'value' => 'car_or_scooter',
+                    'label' => 'Car or Scooter',
+                    'type' => 'picklist',
+                    'options' => [
+                        ['value' => 'Car', 'label' => 'Car'],
+                        ['value' => 'Scooter', 'label' => 'Scooter'],
+                    ],
+                ],
                 ['value' => 'has_worked_before', 'label' => 'Has the driver worked before?', 'type' => 'text'],
                 [
                     'value' => 'governorate',
@@ -176,19 +185,39 @@ class DriverController extends Controller
                 }
             } else {
                 // Fallback to old structure
-                $allDocuments = DriverDocument::with(['ridingCompany'])
-                    ->whereHas('driver', function ($q) use ($companyId) {
-                        $q->whereNull('deleted_at');
-                        if ($companyId) {
-                            $q->where('company_id', $companyId);
-                        }
-                    })
-                    ->whereNotNull('name')
-                    ->select('name', 'riding_company_id')
-                    ->groupBy('name', 'riding_company_id')
-                    ->orderBy('riding_company_id')
-                    ->orderBy('name')
-                    ->get();
+                $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
+
+                if ($hasNameColumn) {
+                    $allDocuments = DriverDocument::with(['ridingCompany'])
+                        ->whereHas('driver', function ($q) use ($companyId) {
+                            $q->whereNull('deleted_at');
+                            if ($companyId) {
+                                $q->where('company_id', $companyId);
+                            }
+                        })
+                        ->whereNotNull('name')
+                        ->select('name', 'riding_company_id')
+                        ->groupBy('name', 'riding_company_id')
+                        ->orderBy('riding_company_id')
+                        ->orderBy('name')
+                        ->get();
+                } else {
+                    // Use document_name relationship if name column doesn't exist
+                    $allDocuments = DriverDocument::with(['ridingCompany', 'documentName'])
+                        ->whereHas('driver', function ($q) use ($companyId) {
+                            $q->whereNull('deleted_at');
+                            if ($companyId) {
+                                $q->where('company_id', $companyId);
+                            }
+                        })
+                        ->whereNotNull('document_name_id')
+                        ->join('document_names', 'driver_documents.document_name_id', '=', 'document_names.id')
+                        ->select('document_names.name as name', 'driver_documents.riding_company_id')
+                        ->groupBy('document_names.name', 'driver_documents.riding_company_id')
+                        ->orderBy('driver_documents.riding_company_id')
+                        ->orderBy('document_names.name')
+                        ->get();
+                }
 
                 // Group documents by riding company
                 foreach ($allDocuments as $doc) {
@@ -225,20 +254,22 @@ class DriverController extends Controller
             $allUniqueDocumentNames = $allDocumentNames;
 
             // Load documents for each driver
-            $driversWithDocuments = $drivers->load('documents');
+            $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
+            $driversWithDocuments = $drivers->load('documents'.($hasNameColumn ? '' : '.documentName'));
 
             return Inertia::render('Drivers/Drivers/Index', [
-                'drivers' => $driversWithDocuments->map(function ($driver) {
+                'drivers' => $driversWithDocuments->map(function ($driver) use ($hasNameColumn) {
                     // Get documents for this driver, mapped by name
                     $driverDocuments = [];
                     foreach ($driver->documents as $doc) {
-                        if ($doc->name) {
-                            $driverDocuments[$doc->name] = [
+                        $docName = $hasNameColumn ? $doc->name : ($doc->documentName?->name ?? null);
+                        if ($docName) {
+                            $driverDocuments[$docName] = [
                                 'id' => $doc->id,
-                                'name' => $doc->name,
+                                'name' => $docName,
                                 'status' => $doc->status,
                                 'uploaded_path' => $doc->uploaded_path,
-                                'original_filename' => $doc->original_filename,
+                                'original_filename' => $doc->original_filename ?? null,
                             ];
                         }
                     }
@@ -306,8 +337,14 @@ class DriverController extends Controller
                         'notes' => $driver->notes,
                         'cancel_reason' => $driver->cancel_reason,
                         'worked_with_us_before' => $driver->worked_with_us_before,
+                        'vehicle_type' => $driver->vehicle_type,
+                        'car_or_scooter' => $driver->car_or_scooter,
                         'vehicle_type_and_year' => $driver->vehicle_type_and_year,
                         'city' => $driver->city,
+                        'governorate' => $driver->governorate,
+                        'has_worked_before' => $driver->has_worked_before,
+                        'feedback_count' => $driver->feedback_count ?? 0,
+                        'confirm_duplicate' => $driver->confirm_duplicate ?? false,
                         'created_at' => $driver->created_at ? $driver->created_at->format('Y-m-d H:i:s') : null,
                         'updated_at' => $driver->updated_at ? $driver->updated_at->format('Y-m-d H:i:s') : null,
                         'duplicate' => $driver->duplicate ?? 0,
@@ -546,7 +583,6 @@ class DriverController extends Controller
 
                     return redirect()
                         ->back()
-                        ->withInput()
                         ->with('duplicates_found', true)
                         ->with('duplicate_drivers', $duplicatesArray)
                         ->withErrors(['duplicate' => 'Duplicate phone or WhatsApp number found.']);
@@ -605,7 +641,6 @@ class DriverController extends Controller
 
             return redirect()
                 ->back()
-                ->withInput()
                 ->with('error', $e->getMessage());
         }
     }
@@ -785,6 +820,13 @@ class DriverController extends Controller
                     'worked_with_us_before' => $driverModel->worked_with_us_before,
                     'vehicle_type_and_year' => $driverModel->vehicle_type_and_year,
                     'city' => $driverModel->city,
+                    'governorate' => $driverModel->governorate,
+                    'vehicle_type' => $driverModel->vehicle_type,
+                    'car_or_scooter' => $driverModel->car_or_scooter,
+                    'has_worked_before' => $driverModel->has_worked_before,
+                    'feedback_count' => $driverModel->feedback_count ?? 0,
+                    'duplicate' => $driverModel->duplicate ?? 0,
+                    'confirm_duplicate' => $driverModel->confirm_duplicate ?? false,
                     'stages_progress' => $stagesProgress,
                     'stages_status' => $stagesStatus,
                     'next_stage' => $nextStage ? [
@@ -803,17 +845,21 @@ class DriverController extends Controller
                         'status' => $stage->status,
                         'completed_at' => $stage->completed_at,
                     ]),
-                    'documents' => $driverModel->documents->map(fn ($doc) => [
-                        'id' => $doc->id,
-                        'name' => $doc->name ?? null,
-                        'riding_company' => $doc->ridingCompany ? [
-                            'id' => $doc->ridingCompany->id,
-                            'name' => $doc->ridingCompany->name,
-                        ] : null,
-                        'status' => $doc->status,
-                        'uploaded_path' => $doc->uploaded_path,
-                        'original_filename' => Schema::hasColumn('driver_documents', 'original_filename') ? $doc->original_filename : null,
-                    ]),
+                    'documents' => $driverModel->documents->map(function ($doc) {
+                        $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
+                        $docName = $hasNameColumn ? ($doc->name ?? null) : ($doc->documentName?->name ?? null);
+                        return [
+                            'id' => $doc->id,
+                            'name' => $docName,
+                            'riding_company' => $doc->ridingCompany ? [
+                                'id' => $doc->ridingCompany->id,
+                                'name' => $doc->ridingCompany->name,
+                            ] : null,
+                            'status' => $doc->status,
+                            'uploaded_path' => $doc->uploaded_path,
+                            'original_filename' => Schema::hasColumn('driver_documents', 'original_filename') ? $doc->original_filename : null,
+                        ];
+                    }),
                     'created_at' => $driverModel->created_at,
                     'updated_at' => $driverModel->updated_at,
                     'duplicate' => $driverModel->duplicate ?? 0,
@@ -983,6 +1029,13 @@ class DriverController extends Controller
                 'worked_with_us_before' => $driverModel->worked_with_us_before,
                 'vehicle_type_and_year' => $driverModel->vehicle_type_and_year,
                 'city' => $driverModel->city,
+                'governorate' => $driverModel->governorate,
+                'vehicle_type' => $driverModel->vehicle_type,
+                'car_or_scooter' => $driverModel->car_or_scooter,
+                'has_worked_before' => $driverModel->has_worked_before,
+                'feedback_count' => $driverModel->feedback_count ?? 0,
+                'duplicate' => $driverModel->duplicate ?? 0,
+                'confirm_duplicate' => $driverModel->confirm_duplicate ?? false,
                 'stages_progress' => $stagesProgress,
                 'stages_status' => $stagesStatus,
                 'next_stage' => $nextStage ? [
@@ -1001,20 +1054,23 @@ class DriverController extends Controller
                     'status' => $stage->status,
                     'completed_at' => $stage->completed_at,
                 ]),
-                'documents' => $driverModel->documents->map(fn ($doc) => [
-                    'id' => $doc->id,
-                    'name' => $doc->name ?? null,
-                    'riding_company' => $doc->ridingCompany ? [
-                        'id' => $doc->ridingCompany->id,
-                        'name' => $doc->ridingCompany->name,
-                    ] : null,
-                    'status' => $doc->status,
-                    'uploaded_path' => $doc->uploaded_path,
-                    'original_filename' => Schema::hasColumn('driver_documents', 'original_filename') ? $doc->original_filename : null,
-                ]),
+                'documents' => $driverModel->documents->map(function ($doc) {
+                    $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
+                    $docName = $hasNameColumn ? ($doc->name ?? null) : ($doc->documentName?->name ?? null);
+                    return [
+                        'id' => $doc->id,
+                        'name' => $docName,
+                        'riding_company' => $doc->ridingCompany ? [
+                            'id' => $doc->ridingCompany->id,
+                            'name' => $doc->ridingCompany->name,
+                        ] : null,
+                        'status' => $doc->status,
+                        'uploaded_path' => $doc->uploaded_path,
+                        'original_filename' => Schema::hasColumn('driver_documents', 'original_filename') ? $doc->original_filename : null,
+                    ];
+                }),
                 'created_at' => $driverModel->created_at,
                 'updated_at' => $driverModel->updated_at,
-                'duplicate' => $driverModel->duplicate ?? 0,
             ],
             'activities' => $activities,
             'follow_ups' => $followUps->map(fn ($followUp) => [
@@ -1113,6 +1169,7 @@ class DriverController extends Controller
                 'cancel_reason' => $driverModel->cancel_reason,
                 'next_time' => $driverModel->next_time,
                 'resigned_leads' => $driverModel->resigned_leads,
+                'confirm_duplicate' => $driverModel->confirm_duplicate ?? false,
             ],
             'companies' => $companies,
             'ridingCompanies' => $ridingCompanies,
@@ -1130,6 +1187,27 @@ class DriverController extends Controller
             $user = Auth::user();
             $companyId = $this->getCompanyId();
 
+            // Filter data based on field-level permissions (except for super admin)
+            if (! $user->isSuperAdmin()) {
+                $fieldPermissionService = new \Modules\Drivers\app\Services\DriverFieldPermissionService();
+                
+                // Remove fields user cannot edit
+                foreach ($data as $fieldName => $value) {
+                    // Map field names (e.g., campaign_id -> campaign)
+                    $permissionFieldName = $this->mapFieldNameForPermission($fieldName);
+                    
+                    if ($permissionFieldName && ! $fieldPermissionService->canEditField($user, $permissionFieldName)) {
+                        // User cannot edit this field - remove it from data
+                        unset($data[$fieldName]);
+                        \Log::info('Removed field from update (no edit permission)', [
+                            'user_id' => $user->id,
+                            'field_name' => $fieldName,
+                            'permission_field_name' => $permissionFieldName,
+                        ]);
+                    }
+                }
+            }
+
             if (! $user->isSuperAdmin()) {
                 $data['company_id'] = $user->company_id;
             } else {
@@ -1137,6 +1215,11 @@ class DriverController extends Controller
                 if ($companyId) {
                     $data['company_id'] = $companyId;
                 }
+            }
+
+            // Get confirm_duplicate from request if not in validated data
+            if (!isset($data['confirm_duplicate']) && $request->has('confirm_duplicate')) {
+                $data['confirm_duplicate'] = (bool) $request->input('confirm_duplicate');
             }
 
             // Convert empty strings to null for nullable fields
@@ -1290,7 +1373,6 @@ class DriverController extends Controller
         } catch (\Exception $e) {
             return redirect()
                 ->back()
-                ->withInput()
                 ->with('error', $e->getMessage());
         }
     }
@@ -1349,35 +1431,77 @@ class DriverController extends Controller
             $drivers->load(['documents', 'assignedTo', 'teamLeader', 'accountManager', 'lastAssignedByUser', 'currentStage', 'leadStage']);
         }
 
-        // Get all document requirements to create columns
-        $documentRequirementsQuery = \Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement::with(['ridingCompany']);
-
-        if ($companyId) {
-            $documentRequirementsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
-                $q->where('company_id', $companyId);
-            });
-        }
-
-        $allDocumentRequirements = $documentRequirementsQuery
-            ->where('active', true)
-            ->orderBy('name')
-            ->get();
-
-        // Get unique document names (from both documents and requirements)
-        $documentNamesFromDocs = DriverDocument::whereHas('driver', function ($q) use ($companyId) {
-            $q->whereNull('deleted_at');
+        // Get ALL document names from document_names table (system-wide, regardless of company)
+        $allDocumentNames = [];
+        $allDocumentRequirements = collect();
+        
+        if (\Illuminate\Support\Facades\Schema::hasTable('document_names')) {
+            // Get all active document names from the system
+            $documentNames = \Modules\Drivers\app\Models\DocumentName::where('active', true)
+                ->orderBy('name')
+                ->get();
+            
+            $allDocumentNames = $documentNames->pluck('name')->unique()->sort()->values()->toArray();
+            
+            // Also get requirements for checking if document is required for specific riding company
+            $documentRequirementsQuery = \Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement::with(['ridingCompany']);
             if ($companyId) {
-                $q->where('company_id', $companyId);
+                $documentRequirementsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
+                    $q->where('company_id', $companyId);
+                });
             }
-        })
-            ->whereNotNull('name')
-            ->distinct()
-            ->pluck('name')
-            ->toArray();
+            $allDocumentRequirements = $documentRequirementsQuery
+                ->where('active', true)
+                ->orderBy('name')
+                ->get();
+        } else {
+            // Fallback to old method if document_names table doesn't exist
+            $documentRequirementsQuery = \Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement::with(['ridingCompany']);
+            if ($companyId) {
+                $documentRequirementsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
+                    $q->where('company_id', $companyId);
+                });
+            }
+            $allDocumentRequirements = $documentRequirementsQuery
+                ->where('active', true)
+                ->orderBy('name')
+                ->get();
 
-        $documentNamesFromRequirements = $allDocumentRequirements->pluck('name')->unique()->toArray();
-        $allDocumentNames = array_unique(array_merge($documentNamesFromDocs, $documentNamesFromRequirements));
-        sort($allDocumentNames);
+            // Get unique document names (from both documents and requirements)
+            $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
+            
+            if ($hasNameColumn) {
+                $documentNamesFromDocs = DriverDocument::whereHas('driver', function ($q) use ($companyId) {
+                    $q->whereNull('deleted_at');
+                    if ($companyId) {
+                        $q->where('company_id', $companyId);
+                    }
+                })
+                    ->whereNotNull('name')
+                    ->distinct()
+                    ->pluck('name')
+                    ->toArray();
+            } else {
+                $documentNamesFromDocs = DriverDocument::whereHas('driver', function ($q) use ($companyId) {
+                    $q->whereNull('deleted_at');
+                    if ($companyId) {
+                        $q->where('company_id', $companyId);
+                    }
+                })
+                    ->whereNotNull('document_name_id')
+                    ->with('documentName')
+                    ->get()
+                    ->pluck('documentName.name')
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->toArray();
+            }
+
+            $documentNamesFromRequirements = $allDocumentRequirements->pluck('name')->unique()->toArray();
+            $allDocumentNames = array_unique(array_merge($documentNamesFromDocs, $documentNamesFromRequirements));
+            sort($allDocumentNames);
+        }
 
         // Create CSV
         $filename = 'drivers_export_'.date('Y-m-d_His').'.csv';
@@ -1437,10 +1561,11 @@ class DriverController extends Controller
         fputcsv($output, $headers);
 
         // Data
+        $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
         foreach ($drivers as $driver) {
             // Load documents if not already loaded
             if (! $driver->relationLoaded('documents')) {
-                $driver->load('documents');
+                $driver->load('documents'.($hasNameColumn ? '' : '.documentName'));
             }
 
             // Ensure relationships are loaded
@@ -1464,10 +1589,15 @@ class DriverController extends Controller
             }
 
             // Map driver documents by name
+            $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
+            if (! $driver->relationLoaded('documents')) {
+                $driver->load('documents'.($hasNameColumn ? '' : '.documentName'));
+            }
             $driverDocuments = [];
             foreach ($driver->documents as $doc) {
-                if ($doc->name) {
-                    $driverDocuments[$doc->name] = $doc->status;
+                $docName = $hasNameColumn ? $doc->name : ($doc->documentName?->name ?? null);
+                if ($docName) {
+                    $driverDocuments[$docName] = $doc->status;
                 }
             }
 
@@ -1517,24 +1647,57 @@ class DriverController extends Controller
 
             // Add document status columns
             $driverRidingCompanyId = $driver->riding_company_id;
+            
+            // Get document names from document_names table for checking requirements
+            $documentNamesForCheck = collect();
+            if (\Illuminate\Support\Facades\Schema::hasTable('document_names')) {
+                $documentNamesForCheck = \Modules\Drivers\app\Models\DocumentName::where('active', true)
+                    ->get()
+                    ->keyBy('name');
+            }
+            
             foreach ($allDocumentNames as $docName) {
                 // Check if document is required for this driver's riding company
                 $isRequired = false;
+                
                 if ($driverRidingCompanyId) {
-                    // Check if there's an active requirement for this document name and riding company
-                    $isRequired = $allDocumentRequirements->contains(function ($req) use ($docName, $driverRidingCompanyId) {
-                        return $req->name === $docName &&
-                               $req->riding_company_id === $driverRidingCompanyId &&
-                               $req->active === true;
-                    });
+                    // First check document_names table
+                    if ($documentNamesForCheck->has($docName)) {
+                        $docNameModel = $documentNamesForCheck->get($docName);
+                        $ridingCompanyIds = $docNameModel->riding_company_ids ?? [];
+                        if (!empty($ridingCompanyIds)) {
+                            // Convert to integers for comparison
+                            $ridingCompanyIds = array_map('intval', $ridingCompanyIds);
+                            $isRequired = in_array((int)$driverRidingCompanyId, $ridingCompanyIds, true);
+                        }
+                    }
+                    
+                    // Also check riding_company_document_requirements (fallback)
+                    if (!$isRequired) {
+                        $isRequired = $allDocumentRequirements->contains(function ($req) use ($docName, $driverRidingCompanyId) {
+                            return $req->name === $docName &&
+                                   $req->riding_company_id === $driverRidingCompanyId &&
+                                   $req->active === true;
+                        });
+                    }
                 }
 
-                if (! $isRequired) {
-                    $row[] = 'Not Required';
-                } elseif (isset($driverDocuments[$docName])) {
-                    $row[] = ucfirst($driverDocuments[$docName]); // Pending, Approved, Rejected
+                // Check if driver has this document
+                if (isset($driverDocuments[$docName])) {
+                    // Driver has the document - show its status
+                    $status = strtolower($driverDocuments[$docName]);
+                    $statusMap = [
+                        'pending' => 'Pending',
+                        'approved' => 'Approve',
+                        'rejected' => 'Reject',
+                    ];
+                    $row[] = $statusMap[$status] ?? ucfirst($status);
+                } elseif ($isRequired) {
+                    // Document is required but driver doesn't have it
+                    $row[] = 'Empty';
                 } else {
-                    $row[] = 'Pending'; // Required but not created yet
+                    // Document is not required for this driver's riding company
+                    $row[] = 'Not Required';
                 }
             }
 
@@ -2726,5 +2889,46 @@ class DriverController extends Controller
         }
 
         return collect();
+    }
+
+    /**
+     * Map database field names to permission field names
+     */
+    protected function mapFieldNameForPermission(string $fieldName): ?string
+    {
+        $mapping = [
+            'full_name' => 'full_name',
+            'phone' => 'phone',
+            'whatsapp_phone' => 'whatsapp_phone',
+            'email' => 'email',
+            'campaign_id' => 'campaign',
+            'lead_source_id' => 'lead_source',
+            'lead_status_id' => 'lead_status',
+            'lead_status_comment' => 'lead_status_comment',
+            'next_follow_up' => 'next_follow_up',
+            'last_follow_up' => 'last_follow_up',
+            'assigned_to' => 'assigned_to',
+            'cancel_reason' => 'cancel_reason',
+            'current_stage_id' => 'current_stage',
+            'last_assigned_by' => 'last_assigned_by',
+            'notes' => 'notes',
+            'vehicle_type' => 'vehicle_type',
+            'car_or_scooter' => 'car_or_scooter',
+            'vehicle_type_and_year' => 'vehicle_type_and_year',
+            'has_worked_before' => 'has_worked_before',
+            'worked_with_us_before' => 'worked_with_us_before',
+            'city' => 'city',
+            'feedback_count' => 'feedback_count',
+            'driver_num' => 'driver_num',
+            'duplicate' => 'duplicate',
+            'confirm_duplicate' => 'confirm_duplicate',
+            'riding_company_id' => 'riding_company',
+            'lead_stage_id' => 'lead_stage',
+            'team_leader_id' => 'team_leader',
+            'account_manager_id' => 'account_manager',
+            'last_assigned_time' => 'last_assigned_time',
+        ];
+
+        return $mapping[$fieldName] ?? null;
     }
 }

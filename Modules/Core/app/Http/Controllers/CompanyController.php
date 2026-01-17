@@ -120,6 +120,42 @@ class CompanyController extends Controller
                 });
         }
 
+        // Load document names (document requirements) for this company
+        $documentRequirements = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('document_names')) {
+            $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
+            
+            if (!empty($ridingCompanyIds)) {
+                $documentNames = \Modules\Drivers\app\Models\DocumentName::query()
+                    ->where(function ($q) use ($ridingCompanyIds) {
+                        foreach ($ridingCompanyIds as $ridingCompanyId) {
+                            $q->orWhereJsonContains('riding_company_ids', $ridingCompanyId)
+                              ->orWhereJsonContains('riding_company_ids', (string) $ridingCompanyId);
+                        }
+                    })
+                    ->orderBy('name')
+                    ->get();
+
+                $documentRequirements = $documentNames->map(function ($docName) {
+                    $ridingCompanyIds = $docName->riding_company_ids ?? [];
+                    $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::whereIn('id', $ridingCompanyIds)
+                        ->get(['id', 'name'])
+                        ->map(fn($rc) => ['id' => $rc->id, 'name' => $rc->name])
+                        ->toArray();
+
+                    return [
+                        'id' => $docName->id,
+                        'name' => $docName->name,
+                        'type' => $docName->type,
+                        'required' => $docName->required,
+                        'active' => $docName->active,
+                        'status' => $docName->status,
+                        'riding_companies' => $ridingCompanies,
+                    ];
+                })->toArray();
+            }
+        }
+
         return Inertia::render('Core/Companies/Show', [
             'company' => $company->load('users', 'roles'),
             'statistics' => $statistics,
@@ -128,6 +164,7 @@ class CompanyController extends Controller
             'roleHierarchy' => $roleHierarchy,
             'activities' => $activities,
             'ridingCompanies' => $ridingCompanies,
+            'documentRequirements' => $documentRequirements,
         ]);
     }
 

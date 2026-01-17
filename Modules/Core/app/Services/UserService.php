@@ -42,8 +42,13 @@ class UserService
             setPermissionsTeamId($user->company_id);
         }
 
-        if (isset($data['roles'])) {
-            $this->syncRoles($user, $data['roles']);
+        // Handle role assignment - support both 'role_id' (single) and 'roles' (array for backward compatibility)
+        if (isset($data['role_id'])) {
+            $this->syncRoles($user, [$data['role_id']]);
+        } elseif (isset($data['roles'])) {
+            // Limit to one role only
+            $roleIds = is_array($data['roles']) ? array_slice($data['roles'], 0, 1) : [$data['roles']];
+            $this->syncRoles($user, $roleIds);
         }
 
         if (isset($data['permissions'])) {
@@ -70,8 +75,13 @@ class UserService
             setPermissionsTeamId($user->company_id);
         }
 
-        if (isset($data['roles'])) {
-            $this->syncRoles($user, $data['roles']);
+        // Handle role assignment - support both 'role_id' (single) and 'roles' (array for backward compatibility)
+        if (isset($data['role_id'])) {
+            $this->syncRoles($user, [$data['role_id']]);
+        } elseif (isset($data['roles'])) {
+            // Limit to one role only
+            $roleIds = is_array($data['roles']) ? array_slice($data['roles'], 0, 1) : [$data['roles']];
+            $this->syncRoles($user, $roleIds);
         }
 
         if (isset($data['permissions'])) {
@@ -197,6 +207,8 @@ class UserService
 
     public function syncRoles(User $user, array $roleIds): void
     {
+        // Ensure only one role is assigned
+        $roleIds = array_slice($roleIds, 0, 1);
         $user->syncRoles($roleIds);
     }
 

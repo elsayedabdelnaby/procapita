@@ -203,7 +203,8 @@ class User extends Authenticatable
 
     /**
      * Get all users that are below the current user in the role hierarchy
-     * This includes the current user and all users in subordinate roles
+     * Excludes users in the same roles, higher roles, and the current user
+     * Only includes users in subordinate (descendant) roles
      */
     public function getSubordinateUserIds(): array
     {
@@ -217,33 +218,123 @@ class User extends Authenticatable
         $userRoleIds = $this->roles()->pluck('id')->toArray();
 
         if (empty($userRoleIds)) {
-            // If user has no roles, they can only see themselves
-            return [$this->id];
+            // If user has no roles, they can't see any other users
+            return [];
+        }
+
+        // Get all user's roles with hierarchy information
+        $userRoles = \Modules\Core\app\Models\Role::whereIn('id', $userRoleIds)
+            ->where('team_id', $this->company_id)
+            ->get();
+
+        if ($userRoles->isEmpty()) {
+            return [];
         }
 
         // Get all subordinate roles (roles below user's roles in hierarchy)
-        $subordinateRoleIds = \Modules\Core\app\Models\Role::whereIn('id', $userRoleIds)
-            ->get()
-            ->flatMap(function ($role) {
-                return $this->getDescendantRoleIds($role);
+        // Only descendant roles, NOT same level or higher
+        $subordinateRoleIds = [];
+        foreach ($userRoles as $role) {
+            if ($role->hierarchy_path) {
+                // Get all roles that are descendants (using hierarchy_path)
+                // Roles with hierarchy_path that starts with user's hierarchy_path + ':'
+                $descendants = \Modules\Core\app\Models\Role::where('hierarchy_path', 'like', $role->hierarchy_path . ':%')
+                    ->where('team_id', $role->team_id)
+                    ->pluck('id')
+                    ->toArray();
+                $subordinateRoleIds = array_merge($subordinateRoleIds, $descendants);
+            }
+        }
+
+        // Remove duplicates
+        $subordinateRoleIds = array_unique($subordinateRoleIds);
+
+        // If no subordinate roles, return empty array
+        if (empty($subordinateRoleIds)) {
+            return [];
+        }
+
+        // Get user's minimum hierarchy level (to exclude same or higher levels)
+        $minHierarchyLevel = $userRoles->min('hierarchy_level');
+
+        // First, explicitly exclude users who have the same role(s) as current user
+        // This is critical: users in the same role should NOT see each other's data
+        $excludedUserIds = User::where('company_id', $this->company_id)
+            ->where('id', '!=', $this->id)
+            ->whereHas('roles', function ($query) use ($userRoleIds) {
+                $query->whereIn('roles.id', $userRoleIds);
             })
-            ->unique()
-            ->toArray();
-
-        // Include user's own roles
-        $allRoleIds = array_unique(array_merge($userRoleIds, $subordinateRoleIds));
-
-        // Get all users with these roles (including current user)
-        $subordinateUserIds = User::whereHas('roles', function ($query) use ($allRoleIds) {
-            $query->whereIn('roles.id', $allRoleIds);
-        })
-            ->where('company_id', $this->company_id)
             ->pluck('id')
             ->toArray();
 
-        // Always include current user
-        if (! in_array($this->id, $subordinateUserIds)) {
-            $subordinateUserIds[] = $this->id;
+        // Also exclude users who have roles at same or higher hierarchy level
+        $userHierarchyLevels = $userRoles->pluck('hierarchy_level')->toArray();
+        $minUserHierarchyLevel = !empty($userHierarchyLevels) ? min($userHierarchyLevels) : null;
+        
+        $excludedByLevelUserIds = [];
+        if ($minUserHierarchyLevel !== null) {
+            $excludedByLevelUserIds = User::where('company_id', $this->company_id)
+                ->where('id', '!=', $this->id)
+                ->whereHas('roles', function ($query) use ($minUserHierarchyLevel) {
+                    $query->where('roles.hierarchy_level', '<=', $minUserHierarchyLevel);
+                })
+                ->pluck('id')
+                ->toArray();
+        }
+
+        // Combine all excluded user IDs
+        $allExcludedUserIds = array_unique(array_merge($excludedUserIds, $excludedByLevelUserIds));
+
+        // Get all users who have ONLY subordinate roles (below current user's roles)
+        // Exclude users who have same role, same level, or higher level
+        $candidateUsers = User::where('company_id', $this->company_id)
+            ->where('id', '!=', $this->id)
+            ->whereNotIn('id', $allExcludedUserIds) // Explicitly exclude same role users
+            ->whereHas('roles', function ($query) use ($subordinateRoleIds) {
+                // User must have at least one subordinate role
+                $query->whereIn('roles.id', $subordinateRoleIds);
+            })
+            ->with(['roles' => function ($query) {
+                $query->where('roles.team_id', $this->company_id);
+            }])
+            ->get();
+
+        // Final filter: exclude users who have ANY role at same level or higher, or same role
+        $subordinateUserIds = [];
+        foreach ($candidateUsers as $candidateUser) {
+            $hasSameOrHigherRole = false;
+
+            foreach ($candidateUser->roles as $candidateRole) {
+                // Check against all current user's roles
+                foreach ($userRoles as $userRole) {
+                    // Same role - CRITICAL: users in same role should NOT see each other
+                    if ($candidateRole->id === $userRole->id) {
+                        $hasSameOrHigherRole = true;
+                        break 2;
+                    }
+
+                    // Same or higher hierarchy level
+                    if ($candidateRole->hierarchy_level <= $userRole->hierarchy_level) {
+                        $hasSameOrHigherRole = true;
+                        break 2;
+                    }
+
+                    // Ancestor role (higher in hierarchy)
+                    // If candidate's hierarchy_path is a prefix of user's hierarchy_path, it's an ancestor
+                    if ($candidateRole->hierarchy_path && $userRole->hierarchy_path) {
+                        if ($candidateRole->hierarchy_path !== $userRole->hierarchy_path &&
+                            str_contains($userRole->hierarchy_path, $candidateRole->hierarchy_path)) {
+                            $hasSameOrHigherRole = true;
+                            break 2;
+                        }
+                    }
+                }
+            }
+
+            // Only include if user has NO same or higher roles
+            if (!$hasSameOrHigherRole) {
+                $subordinateUserIds[] = $candidateUser->id;
+            }
         }
 
         return $subordinateUserIds;

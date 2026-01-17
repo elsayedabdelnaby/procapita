@@ -108,6 +108,39 @@ class RoleService
 
     public function syncPermissions(Role $role, array $permissionIds): void
     {
+        // Check if new driverfield permissions (invisible/read/write) are being set
+        $newDriverFieldPerms = Permission::whereIn('id', $permissionIds)
+            ->where('module_name', 'drivers')
+            ->where('entity_name', 'driverfields')
+            ->where(function ($query) {
+                $query->where('action', 'like', 'invisible-%')
+                      ->orWhere('action', 'like', 'read-%')
+                      ->orWhere('action', 'like', 'write-%')
+                      ->orWhere('name', 'like', 'drivers.driverfields.invisible-%')
+                      ->orWhere('name', 'like', 'drivers.driverfields.read-%')
+                      ->orWhere('name', 'like', 'drivers.driverfields.write-%');
+            })
+            ->pluck('id')
+            ->toArray();
+
+        // If new permissions exist, remove old view- permissions for driverfields
+        if (!empty($newDriverFieldPerms)) {
+            $oldViewPerms = Permission::where('module_name', 'drivers')
+                ->where('entity_name', 'driverfields')
+                ->where(function ($query) {
+                    $query->where('action', 'like', 'view-%')
+                          ->orWhere('name', 'like', 'drivers.driverfields.view-%');
+                })
+                ->pluck('id')
+                ->toArray();
+
+            // Remove old view- permissions from the role
+            if (!empty($oldViewPerms)) {
+                $role->permissions()->detach($oldViewPerms);
+            }
+        }
+
+        // Sync the new permissions
         $role->syncPermissions($permissionIds);
     }
 

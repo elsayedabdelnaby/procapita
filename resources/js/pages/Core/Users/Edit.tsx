@@ -60,7 +60,8 @@ export default function UserEdit({ user, companies, roles, userRoles, company, r
         riding_company_id: user.riding_company_id || '',
         team_leader_id: user.team_leader_id || '',
         account_manager_id: user.account_manager_id || '',
-        roles: userRoles || [],
+        role_id: userRoles && userRoles.length > 0 ? userRoles[0] : null,
+        roles: userRoles || [], // Keep for backward compatibility
         permissions: userPermissions,
         is_company_admin: user.is_company_admin || false,
         is_active: user.is_active ?? true,
@@ -206,14 +207,11 @@ export default function UserEdit({ user, companies, roles, userRoles, company, r
         submitForm();
     };
 
-    const handleRoleToggle = (roleId: number, checked: boolean) => {
-        if (checked) {
-            // If selecting a role, clear all direct permissions
-            setData('permissions', []);
-            setData('roles', [...data.roles, roleId]);
-        } else {
-            setData('roles', data.roles.filter((id) => id !== roleId));
-        }
+    const handleRoleChange = (roleId: number) => {
+        // If selecting a role, clear all direct permissions
+        setData('permissions', []);
+        setData('role_id', roleId);
+        setData('roles', [roleId]); // Keep for backward compatibility
     };
 
     const handlePermissionToggle = (permissionId: number, checked: boolean) => {
@@ -488,16 +486,18 @@ export default function UserEdit({ user, companies, roles, userRoles, company, r
                                     <div className="space-y-2 rounded-md border p-4">
                                         {roles.map((role) => (
                                             <div key={role.id} className="flex items-center space-x-2">
-                                                <Checkbox
+                                                <input
+                                                    type="radio"
                                                     id={`role-${role.id}`}
-                                                    checked={data.roles.includes(role.id)}
-                                                    onCheckedChange={(checked) =>
-                                                        handleRoleToggle(role.id, checked as boolean)
-                                                    }
+                                                    name="role_id"
+                                                    value={role.id}
+                                                    checked={data.role_id === role.id || data.roles.includes(role.id)}
+                                                    onChange={() => handleRoleChange(role.id)}
+                                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                                                 />
                                                 <Label
                                                     htmlFor={`role-${role.id}`}
-                                                    className="font-normal"
+                                                    className="font-normal cursor-pointer"
                                                 >
                                                     {role.name}
                                                     {role.hierarchy_path && (
@@ -509,8 +509,8 @@ export default function UserEdit({ user, companies, roles, userRoles, company, r
                                             </div>
                                         ))}
                                     </div>
-                                    {errors.roles && (
-                                        <p className="text-sm text-red-500">{errors.roles}</p>
+                                    {(errors.role_id || errors.roles) && (
+                                        <p className="text-sm text-red-500">{errors.role_id || errors.roles}</p>
                                     )}
                                 </div>
                             ) : (
