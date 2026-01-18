@@ -240,6 +240,127 @@ class FacebookService
     }
 
     /**
+     * Get ad account for a page
+     * Gets ad accounts associated with the page
+     */
+    public function getAdAccount(string $pageId, string $pageAccessToken): array
+    {
+        try {
+            // First, try to get ad accounts from the page
+            $response = Http::get("https://graph.facebook.com/v18.0/{$pageId}", [
+                'access_token' => $pageAccessToken,
+                'fields' => 'ad_accounts{id,name,account_id}',
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                $adAccounts = $data['ad_accounts']['data'] ?? [];
+                
+                if (!empty($adAccounts)) {
+                    // Return the first ad account
+                    $adAccount = $adAccounts[0];
+                    return [
+                        'success' => true,
+                        'ad_account_id' => $adAccount['id'] ?? null,
+                        'ad_account_name' => $adAccount['name'] ?? null,
+                    ];
+                }
+            }
+
+            // If no ad accounts from page, try to get from user's ad accounts
+            // This requires the user access token, not page token
+            // For now, return error - we'll need to pass user token separately if needed
+            return [
+                'success' => false,
+                'error' => 'No ad accounts found for this page. Please ensure the page has an associated ad account.',
+            ];
+        } catch (\Exception $e) {
+            Log::error('Facebook get ad account error', [
+                'error' => $e->getMessage(),
+                'page_id' => $pageId,
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Get campaigns for an ad account
+     */
+    public function getCampaigns(string $adAccountId, string $pageAccessToken): array
+    {
+        try {
+            $response = Http::get("https://graph.facebook.com/v18.0/{$adAccountId}/campaigns", [
+                'access_token' => $pageAccessToken,
+                'fields' => 'id,name,status,objective,created_time',
+                'effective_status' => ['ACTIVE', 'PAUSED'],
+            ]);
+
+            if ($response->successful()) {
+                $campaigns = $response->json('data', []);
+                return [
+                    'success' => true,
+                    'campaigns' => $campaigns,
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $response->json()['error']['message'] ?? 'Failed to get campaigns',
+            ];
+        } catch (\Exception $e) {
+            Log::error('Facebook get campaigns error', [
+                'error' => $e->getMessage(),
+                'ad_account_id' => $adAccountId,
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Get lead forms for a campaign
+     */
+    public function getLeadFormsByCampaign(string $campaignId, string $pageAccessToken): array
+    {
+        try {
+            $response = Http::get("https://graph.facebook.com/v18.0/{$campaignId}/leadgen_forms", [
+                'access_token' => $pageAccessToken,
+                'fields' => 'id,name,status,leads_count,created_time',
+            ]);
+
+            if ($response->successful()) {
+                $forms = $response->json('data', []);
+                return [
+                    'success' => true,
+                    'forms' => $forms,
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $response->json()['error']['message'] ?? 'Failed to get lead forms for campaign',
+            ];
+        } catch (\Exception $e) {
+            Log::error('Facebook get lead forms by campaign error', [
+                'error' => $e->getMessage(),
+                'campaign_id' => $campaignId,
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
      * Get form fields
      */
     public function getFormFields(string $formId, string $pageAccessToken): array

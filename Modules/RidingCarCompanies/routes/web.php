@@ -68,9 +68,12 @@ Route::middleware(['auth', 'verified'])->prefix('ridingcarcompanies')->name('rid
     Route::get('riding-companies/{ridingCompanyId}/facebook', [FacebookIntegrationController::class, 'show'])->name('facebook.show');
     Route::post('riding-companies/{ridingCompanyId}/facebook/oauth-url', [FacebookIntegrationController::class, 'getOAuthUrl'])->name('facebook.oauth-url');
     Route::post('riding-companies/{ridingCompanyId}/facebook/pages', [FacebookIntegrationController::class, 'getPages'])->name('facebook.pages');
+    Route::post('riding-companies/{ridingCompanyId}/facebook/campaigns', [FacebookIntegrationController::class, 'getCampaigns'])->name('facebook.campaigns');
     Route::post('riding-companies/{ridingCompanyId}/facebook/forms', [FacebookIntegrationController::class, 'getForms'])->name('facebook.forms');
+    Route::post('riding-companies/{ridingCompanyId}/facebook/forms-by-campaign', [FacebookIntegrationController::class, 'getFormsByCampaign'])->name('facebook.forms-by-campaign');
     Route::post('riding-companies/{ridingCompanyId}/facebook/form-fields', [FacebookIntegrationController::class, 'getFormFields'])->name('facebook.form-fields');
     Route::post('riding-companies/{ridingCompanyId}/facebook/configuration', [FacebookIntegrationController::class, 'saveConfiguration'])->name('facebook.save-configuration');
+    Route::post('riding-companies/{ridingCompanyId}/facebook/remove-form', [FacebookIntegrationController::class, 'removeForm'])->name('facebook.remove-form');
     Route::post('riding-companies/{ridingCompanyId}/facebook/field-mapping', [FacebookIntegrationController::class, 'saveFieldMapping'])->name('facebook.save-field-mapping');
     Route::post('riding-companies/{ridingCompanyId}/facebook/sync-leads', [FacebookIntegrationController::class, 'syncLeads'])->name('facebook.sync-leads');
 });

@@ -56,6 +56,23 @@ class FacebookIntegrationController extends Controller
         $integration->save();
         $integration->load('ridingCompany');
 
+        // Get forms data (support both old single form and new multiple forms)
+        $forms = $integration->facebook_forms ?? [];
+        
+        // If no forms in new format but has old form_id, include it for backward compatibility
+        if (empty($forms) && $integration->facebook_form_id) {
+            $config = $integration->config ?? [];
+            $forms = [
+                [
+                    'form_id' => $integration->facebook_form_id,
+                    'campaign_id' => $config['facebook_campaign_id'] ?? null,
+                    'field_mapping' => $integration->facebook_field_mapping ?? [],
+                    'name' => null,
+                    'status' => null,
+                ]
+            ];
+        }
+
         return Inertia::render('RidingCarCompanies/FacebookIntegration/Show', [
             'ridingCompany' => [
                 'id' => $ridingCompany->id,
@@ -68,8 +85,9 @@ class FacebookIntegrationController extends Controller
                 'facebook_user_id' => $integration->facebook_user_id,
                 'facebook_user_name' => $integration->facebook_user_name,
                 'facebook_page_id' => $integration->facebook_page_id,
-                'facebook_form_id' => $integration->facebook_form_id,
-                'facebook_field_mapping' => $integration->facebook_field_mapping ?? [],
+                'facebook_form_id' => $integration->facebook_form_id, // Keep for backward compatibility
+                'facebook_field_mapping' => $integration->facebook_field_mapping ?? [], // Keep for backward compatibility
+                'facebook_forms' => $forms,
                 'has_access_token' => !empty($integration->facebook_access_token),
             ],
         ]);
@@ -282,7 +300,63 @@ class FacebookIntegrationController extends Controller
     }
 
     /**
-     * Get lead forms for a page
+     * Get campaigns for a page
+     */
+    public function getCampaigns(Request $request, int $ridingCompanyId): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'page_id' => 'required|string',
+        ]);
+
+        $integration = RidingCompanyIntegrationSetting::where('riding_company_id', $ridingCompanyId)
+            ->where('type', 'facebook')
+            ->first();
+
+        if (!$integration || !$integration->facebook_access_token) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Facebook not connected',
+            ], 400);
+        }
+
+        // Get page access token
+        $pagesResult = $this->facebookService->getPages($integration->facebook_access_token);
+        
+        if (!$pagesResult['success']) {
+            return response()->json($pagesResult, 400);
+        }
+
+        $page = collect($pagesResult['pages'])->firstWhere('id', $request->page_id);
+        
+        if (!$page || !isset($page['access_token'])) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Page not found or no access token',
+            ], 400);
+        }
+
+        // Get ad account for the page
+        // Try with page token first, if that fails, try with user token
+        $adAccountResult = $this->facebookService->getAdAccount($request->page_id, $page['access_token']);
+        
+        if (!$adAccountResult['success']) {
+            // Try with user access token as fallback
+            $adAccountResult = $this->facebookService->getAdAccount($request->page_id, $integration->facebook_access_token);
+        }
+        
+        if (!$adAccountResult['success']) {
+            return response()->json($adAccountResult, 400);
+        }
+
+        // Get campaigns for the ad account
+        // Use page access token for campaigns API (campaigns are associated with ad accounts)
+        $result = $this->facebookService->getCampaigns($adAccountResult['ad_account_id'], $page['access_token']);
+
+        return response()->json($result);
+    }
+
+    /**
+     * Get lead forms for a page (legacy - kept for backward compatibility)
      */
     public function getForms(Request $request, int $ridingCompanyId): \Illuminate\Http\JsonResponse
     {
@@ -318,6 +392,48 @@ class FacebookIntegrationController extends Controller
         }
 
         $result = $this->facebookService->getLeadForms($request->page_id, $page['access_token']);
+
+        return response()->json($result);
+    }
+
+    /**
+     * Get lead forms for a campaign
+     */
+    public function getFormsByCampaign(Request $request, int $ridingCompanyId): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'campaign_id' => 'required|string',
+            'page_id' => 'required|string',
+        ]);
+
+        $integration = RidingCompanyIntegrationSetting::where('riding_company_id', $ridingCompanyId)
+            ->where('type', 'facebook')
+            ->first();
+
+        if (!$integration || !$integration->facebook_access_token) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Facebook not connected',
+            ], 400);
+        }
+
+        // Get page access token
+        $pagesResult = $this->facebookService->getPages($integration->facebook_access_token);
+        
+        if (!$pagesResult['success']) {
+            return response()->json($pagesResult, 400);
+        }
+
+        $page = collect($pagesResult['pages'])->firstWhere('id', $request->page_id);
+        
+        if (!$page || !isset($page['access_token'])) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Page not found or no access token',
+            ], 400);
+        }
+
+        $result = $this->facebookService->getLeadFormsByCampaign($request->campaign_id, $page['access_token']);
 
         return response()->json($result);
     }
@@ -365,12 +481,63 @@ class FacebookIntegrationController extends Controller
     }
 
     /**
-     * Save configuration (page and form)
+     * Save configuration (page, campaign, and form)
+     * Now supports adding multiple forms
      */
     public function saveConfiguration(Request $request, int $ridingCompanyId): \Illuminate\Http\RedirectResponse
     {
         $request->validate([
             'page_id' => 'required|string',
+            'campaign_id' => 'required|string',
+            'form_id' => 'required|string',
+            'form_name' => 'nullable|string',
+            'form_status' => 'nullable|string',
+        ]);
+
+        $integration = RidingCompanyIntegrationSetting::where('riding_company_id', $ridingCompanyId)
+            ->where('type', 'facebook')
+            ->first();
+
+        if (!$integration) {
+            return redirect()->back()->with('error', 'Facebook integration not found');
+        }
+
+        $updateData = [
+            'facebook_page_id' => $request->page_id,
+        ];
+
+        // Store campaign_id in config
+        $config = $integration->config ?? [];
+        $config['facebook_campaign_id'] = $request->campaign_id;
+        $updateData['config'] = $config;
+
+        // Add or update form in facebook_forms array
+        $integration->addOrUpdateForm([
+            'form_id' => $request->form_id,
+            'campaign_id' => $request->campaign_id,
+            'field_mapping' => [],
+            'name' => $request->form_name,
+            'status' => $request->form_status,
+        ]);
+
+        // Also keep facebook_form_id for backward compatibility (set to first form)
+        $forms = $integration->facebook_forms;
+        if (!empty($forms)) {
+            $updateData['facebook_form_id'] = $forms[0]['form_id'] ?? null;
+        }
+
+        $updateData['facebook_forms'] = $integration->facebook_forms;
+        $integration->update($updateData);
+
+        return redirect()->back()->with('success', 'Form added successfully');
+    }
+
+    /**
+     * Remove a form from the integration
+     */
+    public function removeForm(Request $request, int $ridingCompanyId): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
             'form_id' => 'required|string',
         ]);
 
@@ -382,23 +549,31 @@ class FacebookIntegrationController extends Controller
             return redirect()->back()->with('error', 'Facebook integration not found');
         }
 
-        $integration->update([
-            'facebook_page_id' => $request->page_id,
-            'facebook_form_id' => $request->form_id,
-        ]);
+        $removed = $integration->removeForm($request->form_id);
 
-        return redirect()->back()->with('success', 'Configuration saved successfully');
+        if ($removed) {
+            // Update facebook_form_id to first remaining form or null
+            $forms = $integration->facebook_forms;
+            $updateData = [
+                'facebook_forms' => $integration->facebook_forms,
+                'facebook_form_id' => !empty($forms) ? ($forms[0]['form_id'] ?? null) : null,
+            ];
+            $integration->update($updateData);
+            return redirect()->back()->with('success', 'Form removed successfully');
+        }
+
+        return redirect()->back()->with('error', 'Form not found');
     }
 
     /**
-     * Save field mapping
+     * Save field mapping for a specific form
      */
     public function saveFieldMapping(Request $request, int $ridingCompanyId): \Illuminate\Http\RedirectResponse
     {
         $request->validate([
             'field_mapping' => 'required|array',
+            'form_id' => 'required|string',
             'page_id' => 'sometimes|string',
-            'form_id' => 'sometimes|string',
         ]);
 
         $integration = RidingCompanyIntegrationSetting::where('riding_company_id', $ridingCompanyId)
@@ -409,27 +584,37 @@ class FacebookIntegrationController extends Controller
             return redirect()->back()->with('error', 'Facebook integration not found');
         }
 
-        // Prepare update data
+        // Update field mapping for the specific form
+        $integration->addOrUpdateForm([
+            'form_id' => $request->form_id,
+            'field_mapping' => $request->field_mapping,
+        ]);
+
+        // Check if configuration is complete
+        $hasPageId = $integration->facebook_page_id || ($request->has('page_id') && $request->page_id);
+        $forms = $integration->facebook_forms ?? [];
+        $hasForms = !empty($forms);
+
+        if (!$hasPageId || !$hasForms) {
+            return redirect()->back()->with('error', 'Please select page and at least one form before saving field mapping.');
+        }
+
+        // Activate integration when mapping is saved
         $updateData = [
-            'facebook_field_mapping' => $request->field_mapping,
-            'active' => true, // Activate integration when mapping is saved
+            'facebook_forms' => $integration->facebook_forms,
+            'active' => true,
         ];
 
-        // If page_id and form_id are provided but not saved yet, save them too
+        // If page_id is provided but not saved yet, save it
         if ($request->has('page_id') && $request->page_id && !$integration->facebook_page_id) {
             $updateData['facebook_page_id'] = $request->page_id;
         }
 
-        if ($request->has('form_id') && $request->form_id && !$integration->facebook_form_id) {
-            $updateData['facebook_form_id'] = $request->form_id;
-        }
-
-        // Check if configuration is complete (either already saved or provided in request)
-        $hasPageId = $integration->facebook_page_id || ($request->has('page_id') && $request->page_id);
-        $hasFormId = $integration->facebook_form_id || ($request->has('form_id') && $request->form_id);
-
-        if (!$hasPageId || !$hasFormId) {
-            return redirect()->back()->with('error', 'Please select both page and form before saving field mapping.');
+        // Keep facebook_form_id and facebook_field_mapping for backward compatibility
+        if (!empty($forms)) {
+            $firstForm = $forms[0];
+            $updateData['facebook_form_id'] = $firstForm['form_id'] ?? null;
+            $updateData['facebook_field_mapping'] = $firstForm['field_mapping'] ?? [];
         }
 
         $integration->update($updateData);
