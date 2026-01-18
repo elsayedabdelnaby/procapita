@@ -52,7 +52,8 @@ class FacebookService
             // User Delegated Access - المستخدم يوافق على إعطاء صلاحيات لصفحاته
             // Updated to use valid Facebook permissions (manage_pages and read_insights are deprecated)
             // Note: Some permissions may require App Review for production use
-            'scope' => 'pages_show_list,pages_read_engagement,leads_retrieval',
+            // ads_read is needed to access ad accounts and campaigns, but requires App Review
+            'scope' => 'pages_show_list,pages_read_engagement,leads_retrieval,ads_read',
             'response_type' => 'code',
             'auth_type' => 'rerequest', // لإعادة طلب الصلاحيات إذا لزم الأمر
         ];
@@ -241,43 +242,107 @@ class FacebookService
 
     /**
      * Get ad account for a page
-     * Gets ad accounts associated with the page
+     * Gets ad accounts associated with the page using user access token
      */
-    public function getAdAccount(string $pageId, string $pageAccessToken): array
+    public function getAdAccount(string $pageId, string $userAccessToken, ?string $pageAccessToken = null): array
     {
         try {
-            // First, try to get ad accounts from the page
-            $response = Http::get("https://graph.facebook.com/v18.0/{$pageId}", [
-                'access_token' => $pageAccessToken,
-                'fields' => 'ad_accounts{id,name,account_id}',
+            // Method 1: Try to get ad accounts directly from the page (using page token if available)
+            if ($pageAccessToken) {
+                $response = Http::get("https://graph.facebook.com/v18.0/{$pageId}", [
+                    'access_token' => $pageAccessToken,
+                    'fields' => 'ad_accounts{id,name,account_id}',
+                ]);
+
+                if ($response->successful()) {
+                    $data = $response->json();
+                    $adAccounts = $data['ad_accounts']['data'] ?? [];
+                    
+                    if (!empty($adAccounts)) {
+                        // Return the first ad account
+                        $adAccount = $adAccounts[0];
+                        return [
+                            'success' => true,
+                            'ad_account_id' => $adAccount['id'] ?? null,
+                            'ad_account_name' => $adAccount['name'] ?? null,
+                        ];
+                    }
+                }
+            }
+
+            // Method 2: Get all user's ad accounts using user access token
+            $response = Http::get('https://graph.facebook.com/v18.0/me/adaccounts', [
+                'access_token' => $userAccessToken,
+                'fields' => 'id,name,account_id',
             ]);
 
             if ($response->successful()) {
-                $data = $response->json();
-                $adAccounts = $data['ad_accounts']['data'] ?? [];
+                $adAccounts = $response->json('data', []);
                 
                 if (!empty($adAccounts)) {
-                    // Return the first ad account
-                    $adAccount = $adAccounts[0];
+                    // Try to find ad account that has the page
+                    foreach ($adAccounts as $adAccount) {
+                        $adAccountId = $adAccount['id'] ?? null;
+                        if ($adAccountId) {
+                            // Check if this ad account has the page
+                            try {
+                                $pagesResponse = Http::get("https://graph.facebook.com/v18.0/{$adAccountId}/pages", [
+                                    'access_token' => $userAccessToken,
+                                    'fields' => 'id',
+                                ]);
+
+                                if ($pagesResponse->successful()) {
+                                    $pages = $pagesResponse->json('data', []);
+                                    $hasPage = collect($pages)->contains('id', $pageId);
+                                    
+                                    if ($hasPage) {
+                                        return [
+                                            'success' => true,
+                                            'ad_account_id' => $adAccountId,
+                                            'ad_account_name' => $adAccount['name'] ?? null,
+                                        ];
+                                    }
+                                }
+                            } catch (\Exception $e) {
+                                // Continue to next ad account if this one fails
+                                continue;
+                            }
+                        }
+                    }
+
+                    // If no ad account has the page, return the first ad account anyway
+                    // (user might want to use it for campaigns)
+                    $firstAccount = $adAccounts[0];
                     return [
                         'success' => true,
-                        'ad_account_id' => $adAccount['id'] ?? null,
-                        'ad_account_name' => $adAccount['name'] ?? null,
+                        'ad_account_id' => $firstAccount['id'] ?? null,
+                        'ad_account_name' => $firstAccount['name'] ?? null,
+                    ];
+                }
+            } else {
+                // Check if it's a permission error
+                $errorData = $response->json();
+                $errorMessage = $errorData['error']['message'] ?? 'Unknown error';
+                $errorCode = $errorData['error']['code'] ?? null;
+                
+                // If it's a permission error, provide helpful message
+                if (str_contains($errorMessage, 'permission') || str_contains($errorMessage, 'access') || $errorCode == 200) {
+                    return [
+                        'success' => false,
+                        'error' => 'Unable to access ad accounts. The "ads_read" permission may require Facebook App Review. Please ensure your Facebook App has the necessary permissions approved, or contact your administrator.',
                     ];
                 }
             }
 
-            // If no ad accounts from page, try to get from user's ad accounts
-            // This requires the user access token, not page token
-            // For now, return error - we'll need to pass user token separately if needed
             return [
                 'success' => false,
-                'error' => 'No ad accounts found for this page. Please ensure the page has an associated ad account.',
+                'error' => 'No ad accounts found. Please ensure your Facebook account has ad accounts and the necessary permissions (ads_read). Note: This permission may require Facebook App Review.',
             ];
         } catch (\Exception $e) {
             Log::error('Facebook get ad account error', [
                 'error' => $e->getMessage(),
                 'page_id' => $pageId,
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return [
@@ -290,11 +355,11 @@ class FacebookService
     /**
      * Get campaigns for an ad account
      */
-    public function getCampaigns(string $adAccountId, string $pageAccessToken): array
+    public function getCampaigns(string $adAccountId, string $accessToken): array
     {
         try {
             $response = Http::get("https://graph.facebook.com/v18.0/{$adAccountId}/campaigns", [
-                'access_token' => $pageAccessToken,
+                'access_token' => $accessToken,
                 'fields' => 'id,name,status,objective,created_time',
                 'effective_status' => ['ACTIVE', 'PAUSED'],
             ]);

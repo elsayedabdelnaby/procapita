@@ -335,22 +335,23 @@ class FacebookIntegrationController extends Controller
             ], 400);
         }
 
-        // Get ad account for the page
-        // Try with page token first, if that fails, try with user token
-        $adAccountResult = $this->facebookService->getAdAccount($request->page_id, $page['access_token']);
-        
-        if (!$adAccountResult['success']) {
-            // Try with user access token as fallback
-            $adAccountResult = $this->facebookService->getAdAccount($request->page_id, $integration->facebook_access_token);
-        }
+        // Get ad account for the page using user access token
+        // Ad accounts are typically accessed via user token, not page token
+        $adAccountResult = $this->facebookService->getAdAccount(
+            $request->page_id, 
+            $integration->facebook_access_token,
+            $page['access_token'] // Pass page token as optional fallback
+        );
         
         if (!$adAccountResult['success']) {
             return response()->json($adAccountResult, 400);
         }
 
-        // Get campaigns for the ad account
-        // Use page access token for campaigns API (campaigns are associated with ad accounts)
-        $result = $this->facebookService->getCampaigns($adAccountResult['ad_account_id'], $page['access_token']);
+        // Get campaigns for the ad account using user access token
+        $result = $this->facebookService->getCampaigns(
+            $adAccountResult['ad_account_id'], 
+            $integration->facebook_access_token
+        );
 
         return response()->json($result);
     }
