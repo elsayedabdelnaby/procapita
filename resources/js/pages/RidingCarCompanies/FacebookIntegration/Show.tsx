@@ -635,7 +635,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                                             </SelectTrigger>
                                                             <SelectContent>
                                                                 <SelectItem value="__none__">-- Don't map --</SelectItem>
-                                                                {driverFields.map((driverField) => (
+                                                                {driverFields.filter((driverField) => driverField.value && driverField.value !== '').map((driverField) => (
                                                                     <SelectItem key={driverField.value} value={driverField.value}>
                                                                         {driverField.label}
                                                                         {driverField.required && (

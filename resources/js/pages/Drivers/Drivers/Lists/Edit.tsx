@@ -502,7 +502,7 @@ export default function DriversListsEdit({
                                                     <SelectValue placeholder="Select Field" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {availableFields.map((field) => (
+                                                    {availableFields.filter((field) => field.value && field.value !== '').map((field) => (
                                                         <SelectItem key={field.value} value={field.value}>
                                                             {field.label}
                                                         </SelectItem>
@@ -648,7 +648,7 @@ export default function DriversListsEdit({
                                                     <SelectValue placeholder="Select Field" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {availableFields.map((field) => (
+                                                    {availableFields.filter((field) => field.value && field.value !== '').map((field) => (
                                                         <SelectItem key={field.value} value={field.value}>
                                                             {field.label}
                                                         </SelectItem>
