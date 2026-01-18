@@ -335,7 +335,7 @@ class FacebookIntegrationController extends Controller
             ], 400);
         }
 
-        // Get ad account for the page using user access token
+        // Try to get ad account for the page using user access token
         // Ad accounts are typically accessed via user token, not page token
         $adAccountResult = $this->facebookService->getAdAccount(
             $request->page_id, 
@@ -343,8 +343,13 @@ class FacebookIntegrationController extends Controller
             $page['access_token'] // Pass page token as optional fallback
         );
         
+        // If we can't get ad account, return empty campaigns (user can still select forms directly)
         if (!$adAccountResult['success']) {
-            return response()->json($adAccountResult, 400);
+            return response()->json([
+                'success' => true,
+                'campaigns' => [],
+                'message' => 'No ad accounts found. You can still select forms directly from the page.',
+            ]);
         }
 
         // Get campaigns for the ad account using user access token
@@ -352,6 +357,20 @@ class FacebookIntegrationController extends Controller
             $adAccountResult['ad_account_id'], 
             $integration->facebook_access_token
         );
+
+        // If no campaigns found, return empty array (not an error)
+        if (!$result['success']) {
+            return response()->json([
+                'success' => true,
+                'campaigns' => [],
+                'message' => 'No campaigns found. You can still select forms directly from the page.',
+            ]);
+        }
+
+        // If campaigns array is empty, add a helpful message
+        if (empty($result['campaigns'])) {
+            $result['message'] = 'No campaigns found. You can still select forms directly from the page.';
+        }
 
         return response()->json($result);
     }
@@ -484,12 +503,13 @@ class FacebookIntegrationController extends Controller
     /**
      * Save configuration (page, campaign, and form)
      * Now supports adding multiple forms
+     * Campaign is optional - if not provided, form is associated directly with page
      */
     public function saveConfiguration(Request $request, int $ridingCompanyId): \Illuminate\Http\RedirectResponse
     {
         $request->validate([
             'page_id' => 'required|string',
-            'campaign_id' => 'required|string',
+            'campaign_id' => 'nullable|string', // Campaign is now optional
             'form_id' => 'required|string',
             'form_name' => 'nullable|string',
             'form_status' => 'nullable|string',

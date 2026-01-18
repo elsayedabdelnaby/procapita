@@ -123,6 +123,18 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         }
     }, [selectedCampaignId]);
 
+    // Auto-load forms from page if no campaigns are available after campaigns finish loading
+    useEffect(() => {
+        if (selectedPageId && !loadingCampaigns && campaigns.length === 0 && availableForms.length === 0 && !selectedCampaignId) {
+            // Wait a bit to ensure campaigns have finished loading
+            const timer = setTimeout(() => {
+                loadFormsFromPage();
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [selectedPageId, campaigns.length, loadingCampaigns, selectedCampaignId]);
+
     // Load form fields when current form is selected for mapping
     useEffect(() => {
         if (currentFormId && formFields.length === 0) {
@@ -273,17 +285,20 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
             });
 
             const data = await response.json();
-            if (data.success && data.campaigns) {
-                setCampaigns(data.campaigns);
-                if (data.campaigns.length === 0) {
-                    alert('No campaigns found for this page. Make sure you have created ad campaigns in Facebook Ads Manager.');
-                }
+            if (data.success) {
+                setCampaigns(data.campaigns || []);
+                // Don't show alert if campaigns are empty - user can still select forms directly
             } else {
-                alert(data.error || 'Failed to load campaigns. Please try selecting a different page.');
+                // Only show error if it's a real error, not just empty campaigns
+                if (data.error && !data.error.includes('No campaigns found') && !data.error.includes('No ad accounts')) {
+                    alert(data.error || 'Failed to load campaigns. You can still select forms directly from the page.');
+                }
+                setCampaigns([]);
             }
         } catch (error: any) {
             console.error('Error loading campaigns:', error);
-            alert('Error loading campaigns: ' + (error.message || 'Unknown error'));
+            // Don't show alert on error - user can still proceed without campaigns
+            setCampaigns([]);
         } finally {
             setLoadingCampaigns(false);
         }
@@ -305,7 +320,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
 
             const data = await response.json();
             if (data.success && data.forms) {
-                setForms(data.forms);
+                setAvailableForms(data.forms);
                 if (data.forms.length === 0) {
                     alert('No lead forms found for this campaign. Make sure you have created Lead Ads forms in Facebook Ads Manager.');
                 }
@@ -315,6 +330,38 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         } catch (error: any) {
             console.error('Error loading forms:', error);
             alert('Error loading forms: ' + (error.message || 'Unknown error'));
+        } finally {
+            setLoadingForms(false);
+        }
+    };
+
+    const loadFormsFromPage = async () => {
+        if (!selectedPageId) return;
+        
+        setLoadingForms(true);
+        try {
+            const response = await fetch(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/forms`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({ page_id: selectedPageId }),
+            });
+
+            const data = await response.json();
+            if (data.success && data.forms) {
+                setAvailableForms(data.forms);
+                if (data.forms.length === 0) {
+                    alert('No lead forms found for this page. Make sure you have created Lead Ads forms in Facebook Ads Manager.');
+                }
+            } else {
+                // Don't show error alert - just log it
+                console.warn('Failed to load forms from page:', data.error);
+            }
+        } catch (error: any) {
+            console.error('Error loading forms from page:', error);
+            // Don't show alert - user can still proceed
         } finally {
             setLoadingForms(false);
         }
@@ -356,8 +403,14 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
     };
 
     const handleAddForm = async () => {
-        if (!selectedPageId || !selectedCampaignId || !selectedFormId) {
-            alert('Please select page, campaign, and form');
+        if (!selectedPageId || !selectedFormId) {
+            alert('Please select page and form');
+            return;
+        }
+
+        // Campaign is optional - use empty string if not selected
+        if (!selectedCampaignId && campaigns.length > 0) {
+            alert('Please select a campaign, or wait for forms to load directly from the page');
             return;
         }
 
@@ -373,7 +426,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
             const selectedForm = availableForms.find(f => f.id === selectedFormId);
             await router.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/configuration`, {
                 page_id: selectedPageId,
-                campaign_id: selectedCampaignId,
+                campaign_id: selectedCampaignId || '', // Campaign is optional
                 form_id: selectedFormId,
                 form_name: selectedForm?.name || null,
                 form_status: selectedForm?.status || null,
@@ -657,29 +710,43 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                 </Select>
                             </div>
 
-                            <div>
-                                <Label className="text-base font-medium mb-2 block">Campaign</Label>
-                                <Select
-                                    value={selectedCampaignId}
-                                    onValueChange={(value) => {
-                                        setSelectedCampaignId(value);
-                                        setSelectedFormId('');
-                                        setAvailableForms([]);
-                                    }}
-                                    disabled={!selectedPageId || loadingCampaigns}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={loadingCampaigns ? "Loading campaigns..." : selectedPageId ? "Select a campaign" : "Select a page first"} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {campaigns.map((campaign) => (
-                                            <SelectItem key={campaign.id} value={campaign.id}>
-                                                {campaign.name} ({campaign.status})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            {campaigns.length > 0 && (
+                                <div>
+                                    <Label className="text-base font-medium mb-2 block">Campaign (Optional)</Label>
+                                    <Select
+                                        value={selectedCampaignId}
+                                        onValueChange={(value) => {
+                                            setSelectedCampaignId(value);
+                                            setSelectedFormId('');
+                                            setAvailableForms([]);
+                                        }}
+                                        disabled={!selectedPageId || loadingCampaigns}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={loadingCampaigns ? "Loading campaigns..." : selectedPageId ? "Select a campaign (optional)" : "Select a page first"} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="">-- All Forms (No Campaign Filter) --</SelectItem>
+                                            {campaigns.map((campaign) => (
+                                                <SelectItem key={campaign.id} value={campaign.id}>
+                                                    {campaign.name} ({campaign.status})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-neutral-500 mt-1">
+                                        Select a campaign to filter forms, or leave empty to see all forms from the page.
+                                    </p>
+                                </div>
+                            )}
+
+                            {campaigns.length === 0 && selectedPageId && !loadingCampaigns && (
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                                    <p className="text-xs text-blue-800 dark:text-blue-200">
+                                        No campaigns found. Forms will be loaded directly from the page below.
+                                    </p>
+                                </div>
+                            )}
 
                             <div>
                                 <Label className="text-base font-medium mb-2 block">Form</Label>
@@ -688,10 +755,18 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                     onValueChange={(value) => {
                                         setSelectedFormId(value);
                                     }}
-                                    disabled={!selectedCampaignId || loadingForms}
+                                    disabled={!selectedPageId || loadingForms}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder={loadingForms ? "Loading forms..." : selectedCampaignId ? "Select a form" : "Select a campaign first"} />
+                                        <SelectValue placeholder={
+                                            loadingForms 
+                                                ? "Loading forms..." 
+                                                : !selectedPageId 
+                                                    ? "Select a page first" 
+                                                    : campaigns.length > 0 && !selectedCampaignId
+                                                        ? "Select a campaign or wait for forms to load"
+                                                        : "Select a form"
+                                        } />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {availableForms.filter((form) => form.id && form.id !== '').map((form) => (
@@ -701,11 +776,16 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {campaigns.length === 0 && selectedPageId && (
+                                    <p className="text-xs text-neutral-500 mt-1">
+                                        Forms are loaded directly from the page.
+                                    </p>
+                                )}
                             </div>
 
                             <Button
                                 onClick={handleAddForm}
-                                disabled={!selectedPageId || !selectedCampaignId || !selectedFormId || loading}
+                                disabled={!selectedPageId || !selectedFormId || loading}
                                 className="w-full"
                             >
                                 {loading ? (
