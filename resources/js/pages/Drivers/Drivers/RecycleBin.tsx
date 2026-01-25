@@ -3844,104 +3844,144 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                 {doc.uploaded_path ? (
                                                                     <>
-                                                                {/* Status buttons - only show if file is uploaded */}
-                                                                {(canSetPending() || canSetApproved() || canSetRejected()) && (
-                                                                    <div className="flex items-center gap-1 border rounded-md p-1">
-                                                                        {canSetPending() && (
+                                                                        {/* Status buttons - only show if file is uploaded */}
+                                                                        {(canSetPending() || canSetApproved() || canSetRejected()) && (
+                                                                            <div className="flex items-center gap-1 border rounded-md p-1">
+                                                                                {canSetPending() && (
+                                                                                    <Button
+                                                                                        variant={doc.status === 'pending' ? 'default' : 'ghost'}
+                                                                                        size="sm"
+                                                                                        className={`h-7 px-3 text-xs ${
+                                                                                            doc.status === 'pending'
+                                                                                                ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                        }`}
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleUpdateStatus(doc.id, 'pending');
+                                                                                        }}
+                                                                                    >
+                                                                                        PENDING
+                                                                                    </Button>
+                                                                                )}
+                                                                                {canSetApproved() && (
+                                                                                    <Button
+                                                                                        variant={doc.status === 'approved' ? 'default' : 'ghost'}
+                                                                                        size="sm"
+                                                                                        className={`h-7 px-3 text-xs ${
+                                                                                            doc.status === 'approved'
+                                                                                                ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                        }`}
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleUpdateStatus(doc.id, 'approved');
+                                                                                        }}
+                                                                                    >
+                                                                                        APPROVED
+                                                                                    </Button>
+                                                                                )}
+                                                                                {canSetRejected() && (
+                                                                                    <Button
+                                                                                        variant={doc.status === 'rejected' ? 'default' : 'ghost'}
+                                                                                        size="sm"
+                                                                                        className={`h-7 px-3 text-xs ${
+                                                                                            doc.status === 'rejected'
+                                                                                                ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                                                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                                        }`}
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleUpdateStatus(doc.id, 'rejected');
+                                                                                        }}
+                                                                                    >
+                                                                                        REJECT
+                                                                                    </Button>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                        {canViewDocument() && (
                                                                             <Button
-                                                                                variant={doc.status === 'pending' ? 'default' : 'ghost'}
+                                                                                variant="outline"
                                                                                 size="sm"
-                                                                                className={`h-7 px-3 text-xs ${
-                                                                                    doc.status === 'pending'
-                                                                                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                                                                }`}
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
-                                                                                    handleUpdateStatus(doc.id, 'pending');
+                                                                                    handleViewFile(doc.id);
                                                                                 }}
                                                                             >
-                                                                                PENDING
+                                                                                <Eye className="h-4 w-4 mr-1" />
+                                                                                View
+                                                                                {getFileExtension(doc.original_filename, doc.uploaded_path) && (
+                                                                                    <span className="ml-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                                                                        .{getFileExtension(doc.original_filename, doc.uploaded_path)}
+                                                                                    </span>
+                                                                                )}
                                                                             </Button>
                                                                         )}
-                                                                        {canSetApproved() && (
-                                                                            <Button
-                                                                                variant={doc.status === 'approved' ? 'default' : 'ghost'}
-                                                                                size="sm"
-                                                                                className={`h-7 px-3 text-xs ${
-                                                                                    doc.status === 'approved'
-                                                                                        ? 'bg-green-500 hover:bg-green-600 text-white'
-                                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                                                                }`}
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    handleUpdateStatus(doc.id, 'approved');
-                                                                                }}
-                                                                            >
-                                                                                APPROVED
-                                                                            </Button>
+                                                                        {canReplaceDocument() && (
+                                                                            <>
+                                                                                <input
+                                                                                    ref={(el) => {
+                                                                                        if (el) {
+                                                                                            fileInputRefs.current[doc.id] = el;
+                                                                                        }
+                                                                                    }}
+                                                                                    type="file"
+                                                                                    accept="image/jpeg,image/jpg,image/png,application/pdf"
+                                                                                    className="hidden"
+                                                                                    onChange={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleFileSelect(doc.id, e);
+                                                                                    }}
+                                                                                />
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        fileInputRefs.current[doc.id]?.click();
+                                                                                    }}
+                                                                                    disabled={uploadingDocId === doc.id}
+                                                                                >
+                                                                                    <Edit className="h-4 w-4 mr-1" />
+                                                                                    {uploadingDocId === doc.id ? 'Uploading...' : 'Replace'}
+                                                                                </Button>
+                                                                            </>
                                                                         )}
-                                                                        {canSetRejected() && (
-                                                                            <Button
-                                                                                variant={doc.status === 'rejected' ? 'default' : 'ghost'}
-                                                                                size="sm"
-                                                                                className={`h-7 px-3 text-xs ${
-                                                                                    doc.status === 'rejected'
-                                                                                        ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                                                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                                                                }`}
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    handleUpdateStatus(doc.id, 'rejected');
-                                                                                }}
-                                                                            >
-                                                                                REJECT
-                                                                            </Button>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                                {canViewDocument() && (
-                                                                    <Button
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleViewFile(doc.id);
-                                                                        }}
-                                                                    >
-                                                                        <Eye className="h-4 w-4 mr-1" />
-                                                                        View
-                                                                        {getFileExtension(doc.original_filename, doc.uploaded_path) && (
-                                                                            <span className="ml-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
-                                                                                .{getFileExtension(doc.original_filename, doc.uploaded_path)}
-                                                                            </span>
-                                                                        )}
-                                                                    </Button>
-                                                                )}
-                                                                {canReplaceDocument() && (
+                                                                    </>
+                                                                ) : (
                                                                     <>
-                                                                        <input
-                                                                            ref={(el) => (fileInputRefs.current[doc.id] = el)}
-                                                                            type="file"
-                                                                            accept="image/jpeg,image/jpg,image/png,application/pdf"
-                                                                            className="hidden"
-                                                                            onChange={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleFileSelect(doc.id, e);
-                                                                            }}
-                                                                        />
-                                                                        <Button
-                                                                            variant="outline"
-                                                                            size="sm"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                fileInputRefs.current[doc.id]?.click();
-                                                                            }}
-                                                                            disabled={uploadingDocId === doc.id}
-                                                                        >
-                                                                            <Edit className="h-4 w-4 mr-1" />
-                                                                            {uploadingDocId === doc.id ? 'Uploading...' : 'Replace'}
-                                                                        </Button>
+                                                                        {canUploadDocument() && (
+                                                                            <>
+                                                                                <input
+                                                                                    ref={(el) => {
+                                                                                        if (el) {
+                                                                                            fileInputRefs.current[doc.id] = el;
+                                                                                        }
+                                                                                    }}
+                                                                                    type="file"
+                                                                                    accept="image/jpeg,image/jpg,image/png,application/pdf"
+                                                                                    className="hidden"
+                                                                                    onChange={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleFileSelect(doc.id, e);
+                                                                                    }}
+                                                                                />
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        fileInputRefs.current[doc.id]?.click();
+                                                                                    }}
+                                                                                    disabled={uploadingDocId === doc.id}
+                                                                                >
+                                                                                    <Upload className="h-4 w-4 mr-1" />
+                                                                                    {uploadingDocId === doc.id ? 'Uploading...' : 'Upload'}
+                                                                                </Button>
+                                                                            </>
+                                                                        )}
+                                                                        {getStatusBadge(doc.status)}
                                                                     </>
                                                                 )}
                                                             </div>
