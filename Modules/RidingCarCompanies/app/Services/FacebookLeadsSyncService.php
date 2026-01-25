@@ -44,10 +44,25 @@ class FacebookLeadsSyncService
             ];
         }
 
-        if (!$integration->facebook_form_id) {
+        // Get all configured forms
+        $forms = $integration->facebook_forms ?? [];
+        
+        // Backward compatibility: if no forms in new format, check old format
+        if (empty($forms) && $integration->facebook_form_id) {
+            $config = $integration->config ?? [];
+            $forms = [
+                [
+                    'form_id' => $integration->facebook_form_id,
+                    'campaign_id' => $config['facebook_campaign_id'] ?? null,
+                    'field_mapping' => $integration->facebook_field_mapping ?? [],
+                ]
+            ];
+        }
+
+        if (empty($forms)) {
             return [
                 'success' => false,
-                'error' => 'Facebook form not selected',
+                'error' => 'No Facebook forms configured',
             ];
         }
 
@@ -78,78 +93,107 @@ class FacebookLeadsSyncService
                 ];
             }
 
-            // Get leads
-            $leadsResult = $this->facebookService->getLeads($integration->facebook_form_id, $page['access_token']);
-
-            if (!$leadsResult['success']) {
-                return [
-                    'success' => false,
-                    'error' => $leadsResult['error'] ?? 'Failed to get leads',
-                ];
-            }
-
-            $leads = $leadsResult['leads'] ?? [];
-            $fieldMapping = $integration->facebook_field_mapping ?? [];
             $ridingCompany = $integration->ridingCompany;
-            $createdCount = 0;
-            $skippedCount = 0;
+            $totalCreatedCount = 0;
+            $totalSkippedCount = 0;
+            $formResults = [];
 
-            foreach ($leads as $lead) {
-                $fieldData = [];
-                foreach ($lead['field_data'] ?? [] as $field) {
-                    $fieldData[$field['name'] ?? ''] = $field['values'][0] ?? null;
-                }
+            // Sync leads from each configured form
+            foreach ($forms as $form) {
+                $formId = $form['form_id'] ?? null;
+                $fieldMapping = $form['field_mapping'] ?? [];
 
-                // Map fields
-                $driverData = [];
-                foreach ($fieldMapping as $fbField => $driverField) {
-                    if (isset($fieldData[$fbField]) && !empty($fieldData[$fbField])) {
-                        $driverData[$driverField] = $fieldData[$fbField];
-                    }
-                }
-
-                if (empty($driverData)) {
+                if (!$formId) {
                     continue;
                 }
 
-                // Check if driver exists by phone and riding company
-                $phone = $driverData['phone'] ?? $driverData['whatsapp_phone'] ?? null;
-                if ($phone) {
-                    $phone = $this->driverService->reformatPhoneNumber($phone);
-                    $existingDriver = Driver::where('riding_company_id', $ridingCompanyId)
-                        ->where(function ($query) use ($phone) {
-                            $query->where('phone', $phone)
-                                ->orWhere('whatsapp_phone', $phone);
-                        })
-                        ->first();
+                // Get leads for this form
+                $leadsResult = $this->facebookService->getLeads($formId, $page['access_token']);
 
-                    // Skip if driver already exists with same phone and riding company
-                    if ($existingDriver) {
-                        $skippedCount++;
+                if (!$leadsResult['success']) {
+                    $formResults[] = [
+                        'form_id' => $formId,
+                        'success' => false,
+                        'error' => $leadsResult['error'] ?? 'Failed to get leads',
+                    ];
+                    continue;
+                }
+
+                $leads = $leadsResult['leads'] ?? [];
+                $formCreatedCount = 0;
+                $formSkippedCount = 0;
+
+                foreach ($leads as $lead) {
+                    $fieldData = [];
+                    foreach ($lead['field_data'] ?? [] as $field) {
+                        $fieldData[$field['name'] ?? ''] = $field['values'][0] ?? null;
+                    }
+
+                    // Map fields using this form's field mapping
+                    $driverData = [];
+                    foreach ($fieldMapping as $fbField => $driverField) {
+                        if (isset($fieldData[$fbField]) && !empty($fieldData[$fbField])) {
+                            $driverData[$driverField] = $fieldData[$fbField];
+                        }
+                    }
+
+                    if (empty($driverData)) {
                         continue;
                     }
+
+                    // Check if driver exists by phone and riding company
+                    $phone = $driverData['phone'] ?? $driverData['whatsapp_phone'] ?? null;
+                    if ($phone) {
+                        $phone = $this->driverService->reformatPhoneNumber($phone);
+                        $existingDriver = Driver::where('riding_company_id', $ridingCompanyId)
+                            ->where(function ($query) use ($phone) {
+                                $query->where('phone', $phone)
+                                    ->orWhere('whatsapp_phone', $phone);
+                            })
+                            ->first();
+
+                        // Skip if driver already exists with same phone and riding company
+                        if ($existingDriver) {
+                            $formSkippedCount++;
+                            continue;
+                        }
+                    }
+
+                    // Create new driver
+                    $driverData['riding_company_id'] = $ridingCompanyId;
+                    $driverData['company_id'] = $ridingCompany->company_id;
+                    $driverData['lead_source_id'] = $this->getOrCreateLeadSource('Facebook', $ridingCompany->company_id);
+                    $driverData['lead_status_id'] = $this->getOrCreateLeadStatus('New', $ridingCompany->company_id);
+
+                    // Assign to default user if exists
+                    if ($ridingCompany->default_driver_user_id) {
+                        $driverData['assigned_to'] = $ridingCompany->default_driver_user_id;
+                    }
+
+                    Driver::create($driverData);
+                    $formCreatedCount++;
                 }
 
-                // Create new driver
-                $driverData['riding_company_id'] = $ridingCompanyId;
-                $driverData['company_id'] = $ridingCompany->company_id;
-                $driverData['lead_source_id'] = $this->getOrCreateLeadSource('Facebook', $ridingCompany->company_id);
-                $driverData['lead_status_id'] = $this->getOrCreateLeadStatus('New', $ridingCompany->company_id);
+                $totalCreatedCount += $formCreatedCount;
+                $totalSkippedCount += $formSkippedCount;
 
-                // Assign to default user if exists
-                if ($ridingCompany->default_driver_user_id) {
-                    $driverData['assigned_to'] = $ridingCompany->default_driver_user_id;
-                }
-
-                Driver::create($driverData);
-                $createdCount++;
+                $formResults[] = [
+                    'form_id' => $formId,
+                    'form_name' => $form['name'] ?? null,
+                    'success' => true,
+                    'created' => $formCreatedCount,
+                    'skipped' => $formSkippedCount,
+                ];
             }
 
+            $message = "Synced {$totalCreatedCount} new leads from " . count($forms) . " form(s). Skipped {$totalSkippedCount} duplicate leads.";
+            
             return [
                 'success' => true,
-                'message' => "Synced {$createdCount} new leads. Skipped {$skippedCount} duplicate leads.",
-                'created' => $createdCount,
-                'skipped' => $skippedCount,
+                'message' => $message,
+                'created' => $totalCreatedCount,
+                'skipped' => $totalSkippedCount,
+                'form_results' => $formResults,
             ];
         } catch (\Exception $e) {
             Log::error('Error syncing Facebook leads', [
@@ -174,8 +218,16 @@ class FacebookLeadsSyncService
             ->where('active', true)
             ->whereNotNull('facebook_access_token')
             ->whereNotNull('facebook_page_id')
-            ->whereNotNull('facebook_form_id')
-            ->get();
+            ->get()
+            ->filter(function ($integration) {
+                // Check if has forms (either new format or old format)
+                $forms = $integration->facebook_forms ?? [];
+                if (!empty($forms)) {
+                    return true;
+                }
+                // Backward compatibility: check old format
+                return !empty($integration->facebook_form_id);
+            });
 
         $totalCreated = 0;
         $totalSkipped = 0;

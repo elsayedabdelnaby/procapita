@@ -25,6 +25,7 @@ class RidingCompanyIntegrationSetting extends Model
         'facebook_page_id',
         'facebook_form_id',
         'facebook_field_mapping',
+        'facebook_forms',
         'facebook_token_expires_at',
     ];
 
@@ -34,8 +35,113 @@ class RidingCompanyIntegrationSetting extends Model
             'config' => 'array',
             'active' => 'boolean',
             'facebook_field_mapping' => 'array',
+            'facebook_forms' => 'array',
             'facebook_token_expires_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Get all configured Facebook forms
+     */
+    public function getFacebookFormsAttribute($value): array
+    {
+        if (empty($value)) {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return is_array($value) ? $value : [];
+    }
+
+    /**
+     * Get form IDs from facebook_forms array
+     */
+    public function getFacebookFormIds(): array
+    {
+        $forms = $this->facebook_forms ?? [];
+        return array_column($forms, 'form_id');
+    }
+
+    /**
+     * Get field mapping for a specific form
+     */
+    public function getFieldMappingForForm(string $formId): array
+    {
+        $forms = $this->facebook_forms ?? [];
+        foreach ($forms as $form) {
+            if (isset($form['form_id']) && $form['form_id'] === $formId) {
+                return $form['field_mapping'] ?? [];
+            }
+        }
+        return [];
+    }
+
+    /**
+     * Add or update a form in the facebook_forms array
+     */
+    public function addOrUpdateForm(array $formData): void
+    {
+        $forms = $this->facebook_forms ?? [];
+        $formId = $formData['form_id'] ?? null;
+
+        if (!$formId) {
+            return;
+        }
+
+        // Find existing form index
+        $existingIndex = null;
+        foreach ($forms as $index => $form) {
+            if (isset($form['form_id']) && $form['form_id'] === $formId) {
+                $existingIndex = $index;
+                break;
+            }
+        }
+
+        // Prepare form data
+        $form = [
+            'form_id' => $formId,
+            'campaign_id' => $formData['campaign_id'] ?? null,
+            'field_mapping' => $formData['field_mapping'] ?? [],
+            'name' => $formData['name'] ?? null,
+            'status' => $formData['status'] ?? null,
+        ];
+
+        if ($existingIndex !== null) {
+            // Update existing form
+            $forms[$existingIndex] = array_merge($forms[$existingIndex], $form);
+        } else {
+            // Add new form
+            $forms[] = $form;
+        }
+
+        $this->facebook_forms = $forms;
+    }
+
+    /**
+     * Remove a form from the facebook_forms array
+     */
+    public function removeForm(string $formId): bool
+    {
+        $forms = $this->facebook_forms ?? [];
+        $updated = false;
+
+        foreach ($forms as $index => $form) {
+            if (isset($form['form_id']) && $form['form_id'] === $formId) {
+                unset($forms[$index]);
+                $updated = true;
+                break;
+            }
+        }
+
+        if ($updated) {
+            $this->facebook_forms = array_values($forms); // Re-index array
+        }
+
+        return $updated;
     }
 
     protected static function boot(): void

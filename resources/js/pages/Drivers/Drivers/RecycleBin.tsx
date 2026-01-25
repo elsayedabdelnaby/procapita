@@ -3842,20 +3842,10 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-2 flex-wrap">
-                                                                {/* EMPTY status - show if file is NOT uploaded */}
-                                                                {!doc.uploaded_path && (
-                                                                    <Button
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        className="h-7 px-3 text-xs bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
-                                                                        disabled
-                                                                    >
-                                                                        EMPTY
-                                                                    </Button>
-                                                                )}
-
+                                                                {doc.uploaded_path ? (
+                                                                    <>
                                                                 {/* Status buttons - only show if file is uploaded */}
-                                                                {doc.uploaded_path && (canSetPending() || canSetApproved() || canSetRejected()) && (
+                                                                {(canSetPending() || canSetApproved() || canSetRejected()) && (
                                                                     <div className="flex items-center gap-1 border rounded-md p-1">
                                                                         {canSetPending() && (
                                                                             <Button

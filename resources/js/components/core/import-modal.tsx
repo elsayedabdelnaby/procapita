@@ -584,7 +584,7 @@ export function ImportModal({
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             <SelectItem value="__skip__">-- Skip --</SelectItem>
-                                                            {availableFields.map((field) => (
+                                                            {availableFields.filter((field) => field.value && field.value !== '').map((field) => (
                                                                 <SelectItem key={field.value} value={field.value}>
                                                                     {field.label}
                                                                 </SelectItem>

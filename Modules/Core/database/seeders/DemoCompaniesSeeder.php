@@ -19,9 +19,6 @@ class DemoCompaniesSeeder extends Seeder
      */
     public function run(): void
     {
-        // Company 1: Tech Corp
-        $this->seedCompany1();
-        
         // Company 2: Retail Solutions
         $this->seedCompany2();
         

@@ -6,9 +6,17 @@ import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { Head, router } from '@inertiajs/react';
 import axios from 'axios';
-import { Facebook, CheckCircle2, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Facebook, CheckCircle2, AlertCircle, Loader2, RefreshCw, Plus, Pencil, Trash } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
+
+interface FacebookForm {
+    form_id: string;
+    campaign_id: string | null;
+    field_mapping: Record<string, string>;
+    name: string | null;
+    status: string | null;
+}
 
 interface FacebookIntegrationProps {
     ridingCompany: {
@@ -21,8 +29,9 @@ interface FacebookIntegrationProps {
         active: boolean;
         facebook_user_id: string | null;
         facebook_page_id: string | null;
-        facebook_form_id: string | null;
-        facebook_field_mapping: Record<string, string> | null;
+        facebook_form_id: string | null; // Backward compatibility
+        facebook_field_mapping: Record<string, string> | null; // Backward compatibility
+        facebook_forms?: FacebookForm[];
         has_access_token: boolean;
         facebook_user_name?: string | null;
     };
@@ -40,28 +49,58 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
     
     // Configure state
     const [pages, setPages] = useState<Array<{ id: string; name: string; access_token?: string }>>([]);
-    const [forms, setForms] = useState<Array<{ id: string; name: string; status: string }>>([]);
+    const [campaigns, setCampaigns] = useState<Array<{ id: string; name: string; status: string }>>([]);
+    const [availableForms, setAvailableForms] = useState<Array<{ id: string; name: string; status: string }>>([]);
+    const [configuredForms, setConfiguredForms] = useState<FacebookForm[]>(integration.facebook_forms || []);
     const [selectedPageId, setSelectedPageId] = useState<string>(integration.facebook_page_id || '');
-    const [selectedFormId, setSelectedFormId] = useState<string>(integration.facebook_form_id || '');
+    const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+    const [selectedFormId, setSelectedFormId] = useState<string>('');
     const [loadingPages, setLoadingPages] = useState(false);
+    const [loadingCampaigns, setLoadingCampaigns] = useState(false);
     const [loadingForms, setLoadingForms] = useState(false);
     
     // Field mapping state
+    const [currentFormId, setCurrentFormId] = useState<string>('');
     const [formFields, setFormFields] = useState<Array<{ key: string; label: string; type: string }>>([]);
-    const [fieldMapping, setFieldMapping] = useState<Record<string, string>>(integration.facebook_field_mapping || {});
+    const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
     const [loadingFields, setLoadingFields] = useState(false);
     const [syncing, setSyncing] = useState(false);
+
+    // Initialize configured forms from integration
+    useEffect(() => {
+        if (integration.facebook_forms && integration.facebook_forms.length > 0) {
+            setConfiguredForms(integration.facebook_forms);
+            // Set current form to first form if not set
+            if (!currentFormId && integration.facebook_forms.length > 0) {
+                setCurrentFormId(integration.facebook_forms[0].form_id);
+                setFieldMapping(integration.facebook_forms[0].field_mapping || {});
+            }
+        } else if (integration.facebook_form_id) {
+            // Backward compatibility: convert old single form to new format
+            const config = (integration as any).config || {};
+            const form = {
+                form_id: integration.facebook_form_id,
+                campaign_id: config.facebook_campaign_id || null,
+                field_mapping: integration.facebook_field_mapping || {},
+                name: null,
+                status: null,
+            };
+            setConfiguredForms([form]);
+            setCurrentFormId(integration.facebook_form_id);
+            setFieldMapping(integration.facebook_field_mapping || {});
+        }
+    }, [integration]);
 
     // Determine current step based on integration state
     useEffect(() => {
         if (!hasToken) {
             setCurrentStep('setup');
-        } else if (!selectedPageId || !selectedFormId) {
+        } else if (!selectedPageId || configuredForms.length === 0) {
             setCurrentStep('configure');
         } else {
             setCurrentStep('field-mapping');
         }
-    }, [hasToken, selectedPageId, selectedFormId]);
+    }, [hasToken, selectedPageId, configuredForms.length]);
 
     // Load pages when token is available
     useEffect(() => {
@@ -70,19 +109,38 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         }
     }, [hasToken]);
 
-    // Load forms when page is selected
+    // Load campaigns when page is selected
     useEffect(() => {
-        if (selectedPageId && forms.length === 0) {
-            loadForms();
+        if (selectedPageId && campaigns.length === 0) {
+            loadCampaigns();
         }
     }, [selectedPageId]);
 
-    // Load form fields when form is selected
+    // Load forms when campaign is selected
     useEffect(() => {
-        if (selectedFormId && formFields.length === 0) {
+        if (selectedCampaignId && availableForms.length === 0) {
+            loadForms();
+        }
+    }, [selectedCampaignId]);
+
+    // Auto-load forms from page if no campaigns are available after campaigns finish loading
+    useEffect(() => {
+        if (selectedPageId && !loadingCampaigns && campaigns.length === 0 && availableForms.length === 0 && !selectedCampaignId) {
+            // Wait a bit to ensure campaigns have finished loading
+            const timer = setTimeout(() => {
+                loadFormsFromPage();
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [selectedPageId, campaigns.length, loadingCampaigns, selectedCampaignId]);
+
+    // Load form fields when current form is selected for mapping
+    useEffect(() => {
+        if (currentFormId && formFields.length === 0) {
             loadFormFields();
         }
-    }, [selectedFormId]);
+    }, [currentFormId]);
 
     const handleConnectFacebook = async () => {
         setConnecting(true);
@@ -212,7 +270,72 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         }
     };
 
+    const loadCampaigns = async () => {
+        if (!selectedPageId) return;
+        
+        setLoadingCampaigns(true);
+        try {
+            const response = await fetch(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/campaigns`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({ page_id: selectedPageId }),
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                setCampaigns(data.campaigns || []);
+                // Don't show alert if campaigns are empty - user can still select forms directly
+            } else {
+                // Only show error if it's a real error, not just empty campaigns
+                if (data.error && !data.error.includes('No campaigns found') && !data.error.includes('No ad accounts')) {
+                    alert(data.error || 'Failed to load campaigns. You can still select forms directly from the page.');
+                }
+                setCampaigns([]);
+            }
+        } catch (error: any) {
+            console.error('Error loading campaigns:', error);
+            // Don't show alert on error - user can still proceed without campaigns
+            setCampaigns([]);
+        } finally {
+            setLoadingCampaigns(false);
+        }
+    };
+
     const loadForms = async () => {
+        if (!selectedCampaignId || !selectedPageId) return;
+        
+        setLoadingForms(true);
+        try {
+            const response = await fetch(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/forms-by-campaign`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({ campaign_id: selectedCampaignId, page_id: selectedPageId }),
+            });
+
+            const data = await response.json();
+            if (data.success && data.forms) {
+                setAvailableForms(data.forms);
+                if (data.forms.length === 0) {
+                    alert('No lead forms found for this campaign. Make sure you have created Lead Ads forms in Facebook Ads Manager.');
+                }
+            } else {
+                alert(data.error || 'Failed to load forms. Please try selecting a different campaign.');
+            }
+        } catch (error: any) {
+            console.error('Error loading forms:', error);
+            alert('Error loading forms: ' + (error.message || 'Unknown error'));
+        } finally {
+            setLoadingForms(false);
+        }
+    };
+
+    const loadFormsFromPage = async () => {
         if (!selectedPageId) return;
         
         setLoadingForms(true);
@@ -228,23 +351,24 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
 
             const data = await response.json();
             if (data.success && data.forms) {
-                setForms(data.forms);
+                setAvailableForms(data.forms);
                 if (data.forms.length === 0) {
                     alert('No lead forms found for this page. Make sure you have created Lead Ads forms in Facebook Ads Manager.');
                 }
             } else {
-                alert(data.error || 'Failed to load forms. Please try selecting a different page.');
+                // Don't show error alert - just log it
+                console.warn('Failed to load forms from page:', data.error);
             }
         } catch (error: any) {
-            console.error('Error loading forms:', error);
-            alert('Error loading forms: ' + (error.message || 'Unknown error'));
+            console.error('Error loading forms from page:', error);
+            // Don't show alert - user can still proceed
         } finally {
             setLoadingForms(false);
         }
     };
 
     const loadFormFields = async () => {
-        if (!selectedFormId || !selectedPageId) return;
+        if (!currentFormId || !selectedPageId) return;
         
         setLoadingFields(true);
         try {
@@ -254,7 +378,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
-                body: JSON.stringify({ form_id: selectedFormId, page_id: selectedPageId }),
+                body: JSON.stringify({ form_id: currentFormId, page_id: selectedPageId }),
             });
 
             const data = await response.json();
@@ -278,47 +402,106 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
         }
     };
 
-    const handleSaveConfiguration = async () => {
+    const handleAddForm = async () => {
         if (!selectedPageId || !selectedFormId) {
-            alert('Please select both page and form');
+            alert('Please select page and form');
+            return;
+        }
+
+        // Campaign is optional - use empty string if not selected
+        if (!selectedCampaignId && campaigns.length > 0) {
+            alert('Please select a campaign, or wait for forms to load directly from the page');
+            return;
+        }
+
+        // Check if form is already added
+        const existingForm = configuredForms.find(f => f.form_id === selectedFormId);
+        if (existingForm) {
+            alert('This form is already added');
             return;
         }
 
         setLoading(true);
         try {
+            const selectedForm = availableForms.find(f => f.id === selectedFormId);
             await router.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/configuration`, {
                 page_id: selectedPageId,
+                campaign_id: selectedCampaignId || '', // Campaign is optional
                 form_id: selectedFormId,
+                form_name: selectedForm?.name || null,
+                form_status: selectedForm?.status || null,
             }, {
                 preserveScroll: true,
-                onSuccess: () => {
-                    setCurrentStep('field-mapping');
+                onSuccess: (page) => {
+                    // Reload to get updated forms
+                    router.reload({ only: ['integration'] });
+                    // Reset selections
+                    setSelectedCampaignId('');
+                    setSelectedFormId('');
+                    setAvailableForms([]);
                 },
             });
         } catch (error) {
-            console.error('Error saving configuration:', error);
+            console.error('Error adding form:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRemoveForm = async (formId: string) => {
+        if (!confirm('Are you sure you want to remove this form?')) {
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await router.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/remove-form`, {
+                form_id: formId,
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    router.reload({ only: ['integration'] });
+                },
+            });
+        } catch (error) {
+            console.error('Error removing form:', error);
         } finally {
             setLoading(false);
         }
     };
 
     const handleSaveFieldMapping = async () => {
+        if (!currentFormId) {
+            alert('Please select a form to map fields');
+            return;
+        }
+
         setLoading(true);
         try {
             await router.post(`/ridingcarcompanies/riding-companies/${ridingCompany.id}/facebook/field-mapping`, {
                 field_mapping: fieldMapping,
-                page_id: selectedPageId, // Include page_id if not saved yet
-                form_id: selectedFormId, // Include form_id if not saved yet
+                form_id: currentFormId,
+                page_id: selectedPageId,
             }, {
                 preserveScroll: true,
                 onSuccess: () => {
                     alert('Field mapping saved successfully!');
+                    router.reload({ only: ['integration'] });
                 },
             });
         } catch (error) {
             console.error('Error saving field mapping:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSelectFormForMapping = (formId: string) => {
+        setCurrentFormId(formId);
+        const form = configuredForms.find(f => f.form_id === formId);
+        if (form) {
+            setFieldMapping(form.field_mapping || {});
+            setFormFields([]); // Reset to load new form fields
         }
     };
 
@@ -507,8 +690,10 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                     value={selectedPageId}
                                     onValueChange={(value) => {
                                         setSelectedPageId(value);
+                                        setSelectedCampaignId('');
                                         setSelectedFormId('');
-                                        setForms([]);
+                                        setCampaigns([]);
+                                        setAvailableForms([]);
                                     }}
                                     disabled={loadingPages}
                                 >
@@ -525,43 +710,148 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                 </Select>
                             </div>
 
+                            {campaigns.length > 0 && (
+                                <div>
+                                    <Label className="text-base font-medium mb-2 block">Campaign (Optional)</Label>
+                                    <Select
+                                        value={selectedCampaignId}
+                                        onValueChange={(value) => {
+                                            setSelectedCampaignId(value);
+                                            setSelectedFormId('');
+                                            setAvailableForms([]);
+                                        }}
+                                        disabled={!selectedPageId || loadingCampaigns}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={loadingCampaigns ? "Loading campaigns..." : selectedPageId ? "Select a campaign (optional)" : "Select a page first"} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="">-- All Forms (No Campaign Filter) --</SelectItem>
+                                            {campaigns.map((campaign) => (
+                                                <SelectItem key={campaign.id} value={campaign.id}>
+                                                    {campaign.name} ({campaign.status})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-neutral-500 mt-1">
+                                        Select a campaign to filter forms, or leave empty to see all forms from the page.
+                                    </p>
+                                </div>
+                            )}
+
+                            {campaigns.length === 0 && selectedPageId && !loadingCampaigns && (
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                                    <p className="text-xs text-blue-800 dark:text-blue-200">
+                                        No campaigns found. Forms will be loaded directly from the page below.
+                                    </p>
+                                </div>
+                            )}
+
                             <div>
                                 <Label className="text-base font-medium mb-2 block">Form</Label>
                                 <Select
                                     value={selectedFormId}
                                     onValueChange={(value) => {
                                         setSelectedFormId(value);
-                                        setFormFields([]);
                                     }}
                                     disabled={!selectedPageId || loadingForms}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder={loadingForms ? "Loading forms..." : selectedPageId ? "Select a form" : "Select a page first"} />
+                                        <SelectValue placeholder={
+                                            loadingForms 
+                                                ? "Loading forms..." 
+                                                : !selectedPageId 
+                                                    ? "Select a page first" 
+                                                    : campaigns.length > 0 && !selectedCampaignId
+                                                        ? "Select a campaign or wait for forms to load"
+                                                        : "Select a form"
+                                        } />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {forms.map((form) => (
+                                        {availableForms.filter((form) => form.id && form.id !== '').map((form) => (
                                             <SelectItem key={form.id} value={form.id}>
                                                 {form.name} ({form.status})
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {campaigns.length === 0 && selectedPageId && (
+                                    <p className="text-xs text-neutral-500 mt-1">
+                                        Forms are loaded directly from the page.
+                                    </p>
+                                )}
                             </div>
 
                             <Button
-                                onClick={handleSaveConfiguration}
+                                onClick={handleAddForm}
                                 disabled={!selectedPageId || !selectedFormId || loading}
                                 className="w-full"
                             >
                                 {loading ? (
                                     <>
                                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                        Saving...
+                                        Adding...
                                     </>
                                 ) : (
-                                    'Continue'
+                                    <>
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Add Form
+                                    </>
                                 )}
                             </Button>
+
+                            {/* Configured Forms List */}
+                            {configuredForms.length > 0 && (
+                                <div className="mt-6">
+                                    <Label className="text-base font-medium mb-3 block">Configured Forms ({configuredForms.length})</Label>
+                                    <div className="space-y-2">
+                                        {configuredForms.map((form) => (
+                                            <div key={form.form_id} className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-md border">
+                                                <div className="flex-1">
+                                                    <p className="font-medium">{form.name || `Form ${form.form_id}`}</p>
+                                                    <p className="text-xs text-neutral-500">ID: {form.form_id}</p>
+                                                    {form.status && (
+                                                        <Badge variant="outline" className="mt-1 text-xs">
+                                                            {form.status}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setCurrentFormId(form.form_id);
+                                                            setFieldMapping(form.field_mapping || {});
+                                                            setFormFields([]);
+                                                            setCurrentStep('field-mapping');
+                                                        }}
+                                                    >
+                                                        <Pencil className="h-4 w-4 mr-1" />
+                                                        Map Fields
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleRemoveForm(form.form_id)}
+                                                        disabled={loading}
+                                                    >
+                                                        <Trash className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <Button
+                                        onClick={() => setCurrentStep('field-mapping')}
+                                        disabled={configuredForms.length === 0}
+                                        className="w-full mt-4"
+                                    >
+                                        Continue to Field Mapping
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </Card>
                 )}
@@ -570,12 +860,56 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                 {currentStep === 'field-mapping' && (
                     <Card className="p-6">
                         <div className="space-y-6">
+                            {/* Form Selector */}
+                            {configuredForms.length > 1 && (
+                                <div>
+                                    <Label className="text-base font-medium mb-2 block">Select Form to Map</Label>
+                                    <Select
+                                        value={currentFormId}
+                                        onValueChange={handleSelectFormForMapping}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a form to map fields" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {configuredForms.map((form) => (
+                                                <SelectItem key={form.form_id} value={form.form_id}>
+                                                    {form.name || `Form ${form.form_id}`} {form.status && `(${form.status})`}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {!currentFormId && configuredForms.length > 0 && (
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                        {configuredForms.length === 1 
+                                            ? 'Please wait while form fields are loaded...'
+                                            : 'Please select a form above to map its fields.'}
+                                    </p>
+                                </div>
+                            )}
+
+                            {currentFormId && (
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                                        Mapping fields for: <strong>{configuredForms.find(f => f.form_id === currentFormId)?.name || currentFormId}</strong>
+                                    </p>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-6">
                                 {/* Facebook Form Fields */}
                                 <div>
                                     <Label className="text-base font-medium mb-3 block">Facebook Form Fields</Label>
                                     <div className="space-y-3">
-                                        {loadingFields ? (
+                                        {!currentFormId ? (
+                                            <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 text-center">
+                                                <p className="text-sm text-neutral-500">Select a form to see its fields.</p>
+                                            </div>
+                                        ) : loadingFields ? (
                                             <div className="flex items-center justify-center py-8">
                                                 <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
                                             </div>
@@ -607,7 +941,11 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                 <div>
                                     <Label className="text-base font-medium mb-3 block">Map to CRM Driver Fields</Label>
                                     <div className="space-y-3">
-                                        {formFields.length > 0 ? (
+                                        {!currentFormId ? (
+                                            <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 text-center">
+                                                <p className="text-sm text-neutral-500">Select a form to see mapping options.</p>
+                                            </div>
+                                        ) : formFields.length > 0 ? (
                                             formFields.map((field, index) => {
                                                 const mappedField = fieldMapping[field.key];
                                                 const driverField = driverFields.find(f => f.value === mappedField);
@@ -635,7 +973,7 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                                             </SelectTrigger>
                                                             <SelectContent>
                                                                 <SelectItem value="__none__">-- Don't map --</SelectItem>
-                                                                {driverFields.map((driverField) => (
+                                                                {driverFields.filter((driverField) => driverField.value && driverField.value !== '').map((driverField) => (
                                                                     <SelectItem key={driverField.value} value={driverField.value}>
                                                                         {driverField.label}
                                                                         {driverField.required && (
