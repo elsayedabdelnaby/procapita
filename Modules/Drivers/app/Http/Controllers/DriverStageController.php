@@ -24,8 +24,85 @@ class DriverStageController extends Controller
         $companyId = $this->getCompanyId();
         $driverStages = $this->driverStageService->getAllDriverStages(null, $companyId);
 
+        // Map driver stages to include riding companies
+        $driverStagesData = $driverStages->map(function ($stage) {
+            $stageData = $stage->toArray();
+            
+            // Get riding companies from riding_company_ids or riding_company_id
+            $ridingCompanyIds = $stage->riding_company_ids ?? [];
+            if (empty($ridingCompanyIds) && $stage->riding_company_id) {
+                $ridingCompanyIds = [$stage->riding_company_id];
+            }
+            
+            if (!empty($ridingCompanyIds)) {
+                $ridingCompanies = RidingCompany::whereIn('id', $ridingCompanyIds)->get(['id', 'name']);
+                $stageData['riding_companies'] = $ridingCompanies->toArray();
+            } else {
+                $stageData['riding_companies'] = [];
+            }
+            
+            return $stageData;
+        });
+
         return Inertia::render('Drivers/DriverStages/Index', [
-            'driverStages' => $driverStages,
+            'driverStages' => $driverStagesData,
+        ]);
+    }
+
+    public function recycleBin(): Response
+    {
+        $companyId = $this->getCompanyId();
+        
+        $query = \Modules\Drivers\app\Models\DriverStage::onlyTrashed()->whereNull('driver_id');
+
+        // Filter by company if applicable
+        if ($companyId) {
+            // Get riding company IDs for this company
+            $ridingCompanyIds = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $companyId)->pluck('id')->toArray();
+            
+            if (!empty($ridingCompanyIds)) {
+                $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('driver_stages', 'riding_company_ids');
+                $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('driver_stages', 'riding_company_id');
+                
+                $query->where(function ($q) use ($ridingCompanyIds, $hasRidingCompanyIds, $hasRidingCompanyId) {
+                    if ($hasRidingCompanyIds) {
+                        foreach ($ridingCompanyIds as $rcId) {
+                            $q->orWhereJsonContains('riding_company_ids', $rcId);
+                        }
+                    }
+                    if ($hasRidingCompanyId) {
+                        $q->orWhereIn('riding_company_id', $ridingCompanyIds);
+                    }
+                });
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        $driverStages = $query->orderBy('deleted_at', 'desc')->get();
+
+        // Map driver stages to include riding companies
+        $driverStagesData = $driverStages->map(function ($stage) {
+            $stageData = $stage->toArray();
+            
+            // Get riding companies from riding_company_ids or riding_company_id
+            $ridingCompanyIds = $stage->riding_company_ids ?? [];
+            if (empty($ridingCompanyIds) && $stage->riding_company_id) {
+                $ridingCompanyIds = [$stage->riding_company_id];
+            }
+            
+            if (!empty($ridingCompanyIds)) {
+                $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::whereIn('id', $ridingCompanyIds)->get(['id', 'name']);
+                $stageData['riding_companies'] = $ridingCompanies->toArray();
+            } else {
+                $stageData['riding_companies'] = [];
+            }
+            
+            return $stageData;
+        });
+
+        return Inertia::render('Drivers/DriverStages/RecycleBin', [
+            'driverStages' => $driverStagesData,
         ]);
     }
 
@@ -34,11 +111,11 @@ class DriverStageController extends Controller
         $user = Auth::user();
         $companyId = $this->getCompanyId();
 
-        $drivers = Driver::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('full_name')->get();
-        $ridingCompanies = RidingCompany::orderBy('name')->get();
+        $ridingCompanies = RidingCompany::when($companyId, function ($q) use ($companyId) {
+            $q->where('company_id', $companyId);
+        })->orderBy('name')->get();
 
         return Inertia::render('Drivers/DriverStages/Create', [
-            'drivers' => $drivers,
             'ridingCompanies' => $ridingCompanies,
         ]);
     }
@@ -48,10 +125,6 @@ class DriverStageController extends Controller
         try {
             $data = $request->validated();
             $data['status'] = $data['status'] ?? 'pending';
-
-            // Get company_id from driver
-            $driver = \Modules\Drivers\app\Models\Driver::findOrFail($data['driver_id']);
-            $data['company_id'] = $driver->company_id;
 
             $this->driverStageService->createDriverStage($data);
 
@@ -111,12 +184,18 @@ class DriverStageController extends Controller
         $user = Auth::user();
         $companyId = $this->getCompanyId();
 
-        $drivers = Driver::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('full_name')->get();
-        $ridingCompanies = RidingCompany::orderBy('name')->get();
+        $ridingCompanies = RidingCompany::when($companyId, function ($q) use ($companyId) {
+            $q->where('company_id', $companyId);
+        })->orderBy('name')->get();
+
+        // Prepare driver stage data with riding_company_ids
+        $driverStageData = $driverStageModel->toArray();
+        if ($driverStageModel->riding_company_id) {
+            $driverStageData['riding_company_ids'] = [$driverStageModel->riding_company_id];
+        }
 
         return Inertia::render('Drivers/DriverStages/Edit', [
-            'driverStage' => $driverStageModel,
-            'drivers' => $drivers,
+            'driverStage' => $driverStageData,
             'ridingCompanies' => $ridingCompanies,
         ]);
     }
@@ -232,5 +311,14 @@ class DriverStageController extends Controller
         $response->headers->set('Expires', '0');
 
         return $response;
+    }
+
+    protected function getCompanyId(): ?int
+    {
+        $user = Auth::user();
+        if ($user && $user->is_super_admin) {
+            return null; // Super admin can see all
+        }
+        return $user?->company_id;
     }
 }

@@ -8,7 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('campaign_channels', function (Blueprint $table) {
+        if (!Schema::hasTable('campaign_channels')) {
+            Schema::create('campaign_channels', function (Blueprint $table) {
             $table->id();
             $table->foreignId('company_id')->constrained()->onDelete('cascade');
             $table->foreignId('campaign_type_id')->constrained()->onDelete('cascade');
@@ -25,7 +26,8 @@ return new class extends Migration
             $table->index('campaign_type_id');
             $table->index('is_active');
             $table->unique(['company_id', 'campaign_type_id', 'slug']);
-        });
+            });
+        }
     }
 
     public function down(): void

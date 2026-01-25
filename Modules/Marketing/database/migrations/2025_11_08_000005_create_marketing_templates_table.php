@@ -8,7 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('marketing_templates', function (Blueprint $table) {
+        if (!Schema::hasTable('marketing_templates')) {
+            Schema::create('marketing_templates', function (Blueprint $table) {
             $table->id();
             $table->foreignId('company_id')->constrained()->onDelete('cascade');
             $table->string('name');
@@ -21,7 +22,8 @@ return new class extends Migration
 
             $table->index('company_id');
             $table->index('type');
-        });
+            });
+        }
     }
 
     public function down(): void

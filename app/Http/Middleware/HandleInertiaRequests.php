@@ -137,11 +137,21 @@ class HandleInertiaRequests extends Middleware
         $selectedRidingCompany = null;
 
         if ($user && $user->isSuperAdmin()) {
+            $companies = \Modules\Core\app\Models\Company::active()->orderBy('name')->get(['id', 'name', 'logo']);
+            
             $selectedCompanyId = $request->session()->get('selected_company_id');
             if ($selectedCompanyId) {
                 $selectedCompany = \Modules\Core\app\Models\Company::find($selectedCompanyId);
-            } else {
-                // If no company is selected, default to Tradeway
+                // If selected company doesn't exist or is not active, clear it
+                if (! $selectedCompany || ! $selectedCompany->is_active) {
+                    $selectedCompany = null;
+                    $request->session()->forget('selected_company_id');
+                }
+            }
+            
+            // If no company is selected, try to select one
+            if (! $selectedCompany) {
+                // First, try to default to Tradeway
                 $tradewayCompany = \Modules\Core\app\Models\Company::where(function ($query) {
                     $query->where('name', 'Tradeway')
                         ->orWhere('slug', 'tradeway');
@@ -153,16 +163,12 @@ class HandleInertiaRequests extends Middleware
                     $selectedCompany = $tradewayCompany;
                     // Set it in session so it persists
                     $request->session()->put('selected_company_id', $tradewayCompany->id);
-                } else {
+                } elseif ($companies->isNotEmpty()) {
                     // If Tradeway doesn't exist, select the first active company
-                    $firstCompany = \Modules\Core\app\Models\Company::active()->orderBy('name')->first();
-                    if ($firstCompany) {
-                        $selectedCompany = $firstCompany;
-                        $request->session()->put('selected_company_id', $firstCompany->id);
-                    }
+                    $selectedCompany = $companies->first();
+                    $request->session()->put('selected_company_id', $selectedCompany->id);
                 }
             }
-            $companies = \Modules\Core\app\Models\Company::active()->orderBy('name')->get(['id', 'name', 'logo']);
 
             // Load riding companies for the selected company
             if ($selectedCompany) {

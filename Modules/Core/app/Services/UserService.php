@@ -23,6 +23,17 @@ class UserService
         return $query->orderBy('name')->get();
     }
 
+    public function getDeletedUsers(?int $companyId = null): Collection
+    {
+        $query = User::onlyTrashed()->with(['company', 'roles.permissions']);
+
+        if ($companyId) {
+            $query->forCompany($companyId);
+        }
+
+        return $query->orderBy('deleted_at', 'desc')->get();
+    }
+
     public function getUserById(int $id): ?User
     {
         // Don't eager-load roles here - let controllers load them with proper team context
@@ -51,9 +62,8 @@ class UserService
             $this->syncRoles($user, $roleIds);
         }
 
-        if (isset($data['permissions'])) {
-            $this->syncPermissions($user, $data['permissions']);
-        }
+        // Clear all direct permissions - user will get permissions from role only
+        $user->permissions()->detach();
 
         return $user->fresh(['company', 'roles', 'permissions']);
     }
@@ -84,9 +94,8 @@ class UserService
             $this->syncRoles($user, $roleIds);
         }
 
-        if (isset($data['permissions'])) {
-            $this->syncPermissions($user, $data['permissions']);
-        }
+        // Clear all direct permissions - user will get permissions from role only
+        $user->permissions()->detach();
 
         return $user->fresh(['company', 'roles', 'permissions']);
     }

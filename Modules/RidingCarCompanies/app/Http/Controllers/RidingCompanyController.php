@@ -49,6 +49,25 @@ class RidingCompanyController extends Controller
             $ridingCompanies = collect();
         }
 
+        // Get all riding companies for the same company (for transfer dropdown)
+        $availableRidingCompanies = collect();
+        if ($companyId) {
+            $availableRidingCompanies = $this->ridingCompanyService->getAllRidingCompanies($companyId);
+        } elseif ($user->isSuperAdmin()) {
+            $availableRidingCompanies = $this->ridingCompanyService->getAllRidingCompanies();
+        }
+        
+        // Ensure it's always a collection (not null)
+        if (!$availableRidingCompanies) {
+            $availableRidingCompanies = collect();
+        }
+
+        // Get users count for each riding company
+        $usersCounts = [];
+        foreach ($ridingCompanies as $rc) {
+            $usersCounts[$rc->id] = \App\Models\User::where('riding_company_id', $rc->id)->count();
+        }
+
         return Inertia::render('RidingCarCompanies/RidingCompanies/Index', [
             'ridingCompanies' => $ridingCompanies->map(fn ($company) => [
                 'id' => $company->id,
@@ -71,6 +90,62 @@ class RidingCompanyController extends Controller
                 'created_at' => $company->created_at,
                 'updated_at' => $company->updated_at,
             ]),
+            'availableRidingCompanies' => ($availableRidingCompanies ?: collect())->map(fn ($rc) => [
+                'id' => $rc->id,
+                'name' => $rc->name,
+                'company_id' => $rc->company_id,
+            ])->toArray(),
+            'usersCounts' => $usersCounts,
+        ]);
+    }
+
+    public function recycleBin(): Response
+    {
+        $user = Auth::user();
+        $companyId = $this->getCompanyId();
+
+        $query = \Modules\RidingCarCompanies\app\Models\RidingCompany::onlyTrashed();
+
+        // Filter by company if applicable
+        if ($companyId) {
+            $query->where('company_id', $companyId);
+        } elseif (!$user->isSuperAdmin()) {
+            // Non-super admin without company_id sees nothing
+            $query->whereRaw('1 = 0');
+        }
+
+        $ridingCompanies = $query->orderBy('deleted_at', 'desc')->get();
+
+        // Get users count for each riding company
+        $usersCounts = [];
+        foreach ($ridingCompanies as $rc) {
+            $usersCounts[$rc->id] = \App\Models\User::where('riding_company_id', $rc->id)->count();
+        }
+
+        return Inertia::render('RidingCarCompanies/RidingCompanies/RecycleBin', [
+            'ridingCompanies' => $ridingCompanies->map(fn ($company) => [
+                'id' => $company->id,
+                'uuid' => $company->uuid,
+                'company_id' => $company->company_id,
+                'company' => $company->company ? [
+                    'id' => $company->company->id,
+                    'name' => $company->company->name,
+                ] : null,
+                'name' => $company->name,
+                'slug' => $company->slug,
+                'description' => $company->description,
+                'country' => $company->country,
+                'city' => $company->city,
+                'logo_path' => $company->logo_path,
+                'logo_url' => $company->logo_url,
+                'contact_email' => $company->contact_email,
+                'contact_phone' => $company->contact_phone,
+                'active' => $company->active,
+                'created_at' => $company->created_at?->toISOString(),
+                'updated_at' => $company->updated_at?->toISOString(),
+                'deleted_at' => $company->deleted_at?->toISOString(),
+            ]),
+            'usersCounts' => $usersCounts,
         ]);
     }
 
@@ -225,25 +300,28 @@ class RidingCompanyController extends Controller
         // Load users from the same company for availableUsers (for distribution scenarios)
         // Show all users in the same company, but exclude users from other riding companies
         // Include: users with no riding_company_id (company-level users), users from this riding company, and fresh-Leads for this riding company
-        $availableUsers = \App\Models\User::query()
-            ->where('company_id', $ridingCompany->company_id)
-            ->where('is_active', true)
-            ->where(function ($query) use ($ridingCompany) {
-                // Include users with no riding_company_id (company-level users)
-                $query->whereNull('riding_company_id')
-                    // Include users from this specific riding company
-                    ->orWhere('riding_company_id', $ridingCompany->id);
-            })
-            ->with('roles', 'company', 'ridingCompany')
-            ->orderBy('name')
-            ->get()
-            ->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                ];
-            });
+        $availableUsers = collect();
+        if ($ridingCompany->company_id) {
+            $availableUsers = \App\Models\User::query()
+                ->where('company_id', $ridingCompany->company_id)
+                ->where('is_active', true)
+                ->where(function ($query) use ($ridingCompany) {
+                    // Include users with no riding_company_id (company-level users)
+                    $query->whereNull('riding_company_id')
+                        // Include users from this specific riding company
+                        ->orWhere('riding_company_id', $ridingCompany->id);
+                })
+                ->with('roles', 'company', 'ridingCompany')
+                ->orderBy('name')
+                ->get()
+                ->map(function ($user) {
+                    return [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                    ];
+                });
+        }
 
         // Load activity logs
         $activities = \Spatie\Activitylog\Models\Activity::forSubject($ridingCompany)
@@ -264,6 +342,21 @@ class RidingCompanyController extends Controller
                     'created_at' => $activity->created_at->toISOString(),
                 ];
             });
+
+        // Get all riding companies for the same company (for transfer dropdown)
+        $availableRidingCompanies = collect();
+        if ($ridingCompany->company_id) {
+            $availableRidingCompanies = $this->ridingCompanyService->getAllRidingCompanies($ridingCompany->company_id)
+                ->filter(fn ($rc) => $rc->id !== $ridingCompany->id);
+        }
+        
+        // Ensure it's always a collection (not null)
+        if (!$availableRidingCompanies) {
+            $availableRidingCompanies = collect();
+        }
+
+        // Get users count for this riding company
+        $usersCount = \App\Models\User::where('riding_company_id', $ridingCompany->id)->count();
 
         return Inertia::render('RidingCarCompanies/RidingCompanies/Show', [
             'ridingCompany' => [
@@ -332,29 +425,34 @@ class RidingCompanyController extends Controller
             ],
             'users' => $users,
             'availableUsers' => $availableUsers->toArray(),
-            'leadSources' => LeadSource::where('company_id', $ridingCompany->company_id)
-                ->active()
+            'leadSources' => LeadSource::active()
                 ->orderBy('name')
                 ->get(['id', 'name'])
                 ->map(fn ($source) => [
                     'id' => $source->id,
                     'name' => $source->name,
                 ])->toArray(),
-            'campaigns' => Campaign::where('company_id', $ridingCompany->company_id)
+            'campaigns' => $ridingCompany->company_id ? Campaign::where('company_id', $ridingCompany->company_id)
                 ->orderBy('name')
                 ->get(['id', 'name'])
                 ->map(fn ($campaign) => [
                     'id' => $campaign->id,
                     'name' => $campaign->name,
-                ])->toArray(),
-            'roles' => Role::where('team_id', $ridingCompany->company_id)
+                ])->toArray() : [],
+            'roles' => $ridingCompany->company_id ? Role::where('team_id', $ridingCompany->company_id)
                 ->orderBy('name')
                 ->get(['id', 'name'])
                 ->map(fn ($role) => [
                     'id' => $role->id,
                     'name' => $role->name,
-                ])->toArray(),
+                ])->toArray() : [],
             'activities' => $activities,
+            'availableRidingCompanies' => ($availableRidingCompanies ?: collect())->map(fn ($rc) => [
+                'id' => $rc->id,
+                'name' => $rc->name,
+                'company_id' => $rc->company_id,
+            ])->toArray(),
+            'usersCount' => $usersCount,
         ]);
     }
 
@@ -446,10 +544,50 @@ class RidingCompanyController extends Controller
         ]);
     }
 
-    public function destroy(int $id): RedirectResponse
+    public function destroy(Request $request, int $id): RedirectResponse
     {
         try {
-            $this->ridingCompanyService->deleteRidingCompany($id);
+            $ridingCompany = $this->ridingCompanyService->getRidingCompanyById($id);
+
+            if (! $ridingCompany) {
+                abort(404, 'Riding company not found.');
+            }
+
+            // Check if riding company has users
+            $usersCount = \App\Models\User::where('riding_company_id', $id)->count();
+
+            $transferRidingCompanyId = $request->input('transfer_riding_company_id') ? (int) $request->input('transfer_riding_company_id') : null;
+
+            // If riding company has users, transfer riding company is required
+            if ($usersCount > 0 && $transferRidingCompanyId === null) {
+                return redirect()
+                    ->back()
+                    ->with('error', 'Cannot delete riding company with users. Please select a riding company to transfer them to.');
+            }
+
+            // Validate transfer riding company if provided
+            if ($transferRidingCompanyId !== null) {
+                $request->validate([
+                    'transfer_riding_company_id' => ['required', 'integer', 'exists:riding_companies,id'],
+                ]);
+
+                // Ensure transfer riding company is not the same as the riding company being deleted
+                if ($transferRidingCompanyId === $id) {
+                    return redirect()
+                        ->back()
+                        ->with('error', 'Cannot transfer to the same riding company.');
+                }
+
+                // Ensure transfer riding company is in the same company
+                $transferRidingCompany = \Modules\RidingCarCompanies\app\Models\RidingCompany::findOrFail($transferRidingCompanyId);
+                if ($transferRidingCompany->company_id !== $ridingCompany->company_id) {
+                    return redirect()
+                        ->back()
+                        ->with('error', 'Cannot transfer to a riding company from a different company.');
+                }
+            }
+
+            $this->ridingCompanyService->deleteRidingCompany($id, $transferRidingCompanyId);
 
             return redirect()
                 ->route('ridingcarcompanies.ridingcompanies.index')
@@ -604,5 +742,14 @@ class RidingCompanyController extends Controller
                 'message' => 'Failed to distribute drivers: '.$e->getMessage(),
             ], 500);
         }
+    }
+
+    protected function getCompanyId(): ?int
+    {
+        $user = Auth::user();
+        if ($user && $user->is_super_admin) {
+            return session('selected_company_id');
+        }
+        return $user?->company_id;
     }
 }

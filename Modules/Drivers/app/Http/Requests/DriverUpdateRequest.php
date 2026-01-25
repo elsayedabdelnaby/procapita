@@ -8,7 +8,9 @@ class DriverUpdateRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->isSuperAdmin() || $this->user()->can('drivers.drivers.update');
+        return $this->user()->isSuperAdmin() || 
+               $this->user()->can('drivers.drivers.update') || 
+               $this->user()->can('drivers.drivers.edit');
     }
 
     public function rules(): array
@@ -52,14 +54,6 @@ class DriverUpdateRequest extends FormRequest
             'lead_source_id' => [
                 'nullable',
                 'exists:lead_sources,id',
-                function ($attribute, $value, $fail) use ($companyId) {
-                    if ($value && $companyId) {
-                        $leadSource = \Modules\Drivers\app\Models\LeadSource::find($value);
-                        if ($leadSource && $leadSource->company_id != $companyId) {
-                            $fail('The selected lead source does not belong to this company.');
-                        }
-                    }
-                },
             ],
             'assigned_users' => [
                 'nullable',
@@ -85,14 +79,6 @@ class DriverUpdateRequest extends FormRequest
             'lead_status_id' => [
                 'nullable',
                 'exists:lead_statuses,id',
-                function ($attribute, $value, $fail) use ($companyId) {
-                    if ($value && $companyId) {
-                        $leadStatus = \Modules\Drivers\app\Models\LeadStatus::find($value);
-                        if ($leadStatus && $leadStatus->company_id != $companyId) {
-                            $fail('The selected lead status does not belong to this company.');
-                        }
-                    }
-                },
             ],
             'lead_stage_id' => [
                 'nullable',
@@ -112,11 +98,33 @@ class DriverUpdateRequest extends FormRequest
                     $ridingCompanyId = $this->input('riding_company_id');
                     if ($value && $ridingCompanyId) {
                         $leadStage = \Modules\Drivers\app\Models\LeadStage::find($value);
-                        if ($leadStage && $leadStage->riding_company_id != $ridingCompanyId) {
-                            $fail('The selected lead stage does not belong to the selected riding company.');
+                        if ($leadStage) {
+                            // Check if riding_company_ids column exists and use it, otherwise fallback to riding_company_id
+                            $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_ids');
+                            $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_id');
+                            
+                            $isValid = false;
+                            $ridingCompanyIdInt = (int) $ridingCompanyId;
+                            
+                            if ($hasRidingCompanyIds && !empty($leadStage->riding_company_ids)) {
+                                // Check if riding company is in the array (convert to integers for comparison)
+                                $ridingCompanyIds = array_map('intval', $leadStage->riding_company_ids);
+                                $isValid = in_array($ridingCompanyIdInt, $ridingCompanyIds);
+                            } elseif ($hasRidingCompanyId && $leadStage->riding_company_id) {
+                                // Fallback to single riding_company_id
+                                $isValid = (int) $leadStage->riding_company_id == $ridingCompanyIdInt;
+                            }
+                            
+                            if (!$isValid) {
+                                $fail('The selected lead stage does not belong to the selected riding company.');
+                            }
                         }
                     }
                 },
+            ],
+            'driver_stage_id' => [
+                'nullable',
+                'exists:driver_stages,id',
             ],
             'current_stage_id' => ['nullable', 'exists:riding_company_stage_templates,id'],
             'lead_status_comment' => [

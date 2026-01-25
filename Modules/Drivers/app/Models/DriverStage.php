@@ -15,7 +15,9 @@ class DriverStage extends Model
 
     protected $fillable = [
         'driver_id',
+        'name',
         'riding_company_id',
+        'riding_company_ids',
         'stage_order',
         'status',
         'completed_at',
@@ -27,6 +29,7 @@ class DriverStage extends Model
         return [
             'stage_order' => 'integer',
             'completed_at' => 'datetime',
+            'riding_company_ids' => 'array',
         ];
     }
 
@@ -52,6 +55,20 @@ class DriverStage extends Model
     public function ridingCompany(): BelongsTo
     {
         return $this->belongsTo(RidingCompany::class);
+    }
+
+    // Helper methods
+    public function getRidingCompaniesAttribute()
+    {
+        if (empty($this->riding_company_ids)) {
+            // Fallback to single riding_company_id if riding_company_ids is empty
+            if ($this->riding_company_id) {
+                return collect([$this->ridingCompany]);
+            }
+            return collect();
+        }
+
+        return \Modules\RidingCarCompanies\app\Models\RidingCompany::whereIn('id', $this->riding_company_ids)->get();
     }
 
     // Scopes

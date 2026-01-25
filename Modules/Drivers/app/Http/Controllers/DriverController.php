@@ -19,6 +19,7 @@ use Modules\Drivers\app\Models\DriverDocument;
 use Modules\Drivers\app\Models\DriverFollowUp;
 use Modules\Drivers\app\Models\DriverStage;
 use Modules\Drivers\app\Models\LeadSource;
+use Modules\Drivers\app\Models\LeadStage;
 use Modules\Drivers\app\Models\LeadStatus;
 use Modules\Drivers\app\Services\DriverListService;
 use Modules\Drivers\app\Services\DriverService;
@@ -53,8 +54,8 @@ class DriverController extends Controller
             $ridingCompanies = $this->getRidingCompaniesForUser($user, $companyId);
 
             $campaigns = Campaign::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get(['id', 'name']);
-            $leadSources = LeadSource::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get(['id', 'name']);
-            $leadStatuses = LeadStatus::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->ordered()->get(['id', 'name']);
+            $leadSources = LeadSource::active()->orderBy('name')->get(['id', 'name']);
+            $leadStatuses = LeadStatus::active()->ordered()->get(['id', 'name']);
             // Get users - for non-super admin, only show subordinate users
             if ($user->isSuperAdmin()) {
                 $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
@@ -325,6 +326,10 @@ class DriverController extends Controller
                             'name' => $driver->leadStage->name,
                             'color' => $driver->leadStage->color,
                         ] : null,
+                        'driver_stage' => $driver->driverStage ? [
+                            'id' => $driver->driverStage->id,
+                            'name' => $driver->driverStage->name,
+                        ] : null,
                         'current_stage' => $driver->currentStage ? [
                             'id' => $driver->currentStage->id,
                             'name' => $driver->currentStage->name,
@@ -437,8 +442,8 @@ class DriverController extends Controller
         $ridingCompanies = $this->getRidingCompaniesForUser($user, $companyId);
 
         $campaigns = Campaign::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get(['id', 'name']);
-        $leadSources = LeadSource::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get(['id', 'name']);
-        $leadStatuses = LeadStatus::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->ordered()->get(['id', 'name']);
+        $leadSources = LeadSource::active()->orderBy('name')->get(['id', 'name']);
+        $leadStatuses = LeadStatus::active()->ordered()->get(['id', 'name']);
         // Get users - for non-super admin, only show subordinate users
         if ($user->isSuperAdmin()) {
             $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
@@ -535,9 +540,70 @@ class DriverController extends Controller
         // Filter riding companies based on user access
         $ridingCompanies = $this->getRidingCompaniesForUser($user, $companyId);
         $campaigns = Campaign::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
-        $leadSources = LeadSource::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get();
-        $leadStatuses = LeadStatus::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->ordered()->get();
+        $leadSources = LeadSource::active()->orderBy('name')->get();
+        $leadStatuses = LeadStatus::active()->ordered()->get();
         $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
+        
+        // Get driver stages (templates) - filter by company's riding companies
+        $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
+        
+        // Check if columns exist
+        $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('driver_stages', 'riding_company_id');
+        $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('driver_stages', 'riding_company_ids');
+        
+        // Build select columns based on what exists
+        $driverSelectColumns = ['id', 'name', 'stage_order', 'status', 'notes'];
+        if ($hasRidingCompanyId) {
+            $driverSelectColumns[] = 'riding_company_id';
+        }
+        if ($hasRidingCompanyIds) {
+            $driverSelectColumns[] = 'riding_company_ids';
+        }
+        
+        $driverStages = DriverStage::whereNull('driver_id')
+            ->where(function ($q) use ($ridingCompanyIds, $hasRidingCompanyId, $hasRidingCompanyIds) {
+                if ($hasRidingCompanyId) {
+                    $q->whereIn('riding_company_id', $ridingCompanyIds);
+                }
+                if ($hasRidingCompanyIds) {
+                    $q->orWhere(function ($q2) use ($ridingCompanyIds) {
+                        foreach ($ridingCompanyIds as $rcId) {
+                            $q2->orWhereJsonContains('riding_company_ids', $rcId);
+                        }
+                    });
+                }
+            })
+            ->orderBy('stage_order')
+            ->get($driverSelectColumns);
+
+        // Get lead stages - filter by company's riding companies
+        $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_id');
+        $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_ids');
+        
+        // Build select columns based on what exists
+        $selectColumns = ['id', 'name', 'order', 'color'];
+        if ($hasRidingCompanyId) {
+            $selectColumns[] = 'riding_company_id';
+        }
+        if ($hasRidingCompanyIds) {
+            $selectColumns[] = 'riding_company_ids';
+        }
+        
+        $leadStages = LeadStage::active()
+            ->where(function ($q) use ($ridingCompanyIds, $hasRidingCompanyId, $hasRidingCompanyIds) {
+                if ($hasRidingCompanyId) {
+                    $q->whereIn('riding_company_id', $ridingCompanyIds);
+                }
+                if ($hasRidingCompanyIds) {
+                    $q->orWhere(function ($q2) use ($ridingCompanyIds) {
+                        foreach ($ridingCompanyIds as $rcId) {
+                            $q2->orWhereJsonContains('riding_company_ids', $rcId);
+                        }
+                    });
+                }
+            })
+            ->ordered()
+            ->get($selectColumns);
 
         return Inertia::render('Drivers/Drivers/Create', [
             'companies' => $companies,
@@ -547,6 +613,8 @@ class DriverController extends Controller
             'leadSources' => $leadSources,
             'leadStatuses' => $leadStatuses,
             'users' => $users,
+            'driverStages' => $driverStages,
+            'leadStages' => $leadStages,
         ]);
     }
 
@@ -1140,9 +1208,70 @@ class DriverController extends Controller
         $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get() : null;
         $ridingCompanies = RidingCompany::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get();
         $campaigns = Campaign::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
-        $leadSources = LeadSource::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get();
-        $leadStatuses = LeadStatus::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->ordered()->get();
+        $leadSources = LeadSource::active()->orderBy('name')->get();
+        $leadStatuses = LeadStatus::active()->ordered()->get();
         $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
+        
+        // Get driver stages (templates) - filter by company's riding companies
+        $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
+        
+        // Check if columns exist
+        $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('driver_stages', 'riding_company_id');
+        $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('driver_stages', 'riding_company_ids');
+        
+        // Build select columns based on what exists
+        $driverSelectColumns = ['id', 'name', 'stage_order', 'status', 'notes'];
+        if ($hasRidingCompanyId) {
+            $driverSelectColumns[] = 'riding_company_id';
+        }
+        if ($hasRidingCompanyIds) {
+            $driverSelectColumns[] = 'riding_company_ids';
+        }
+        
+        $driverStages = DriverStage::whereNull('driver_id')
+            ->where(function ($q) use ($ridingCompanyIds, $hasRidingCompanyId, $hasRidingCompanyIds) {
+                if ($hasRidingCompanyId) {
+                    $q->whereIn('riding_company_id', $ridingCompanyIds);
+                }
+                if ($hasRidingCompanyIds) {
+                    $q->orWhere(function ($q2) use ($ridingCompanyIds) {
+                        foreach ($ridingCompanyIds as $rcId) {
+                            $q2->orWhereJsonContains('riding_company_ids', $rcId);
+                        }
+                    });
+                }
+            })
+            ->orderBy('stage_order')
+            ->get($driverSelectColumns);
+
+        // Get lead stages - filter by company's riding companies
+        $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_id');
+        $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_ids');
+        
+        // Build select columns based on what exists
+        $selectColumns = ['id', 'name', 'order', 'color'];
+        if ($hasRidingCompanyId) {
+            $selectColumns[] = 'riding_company_id';
+        }
+        if ($hasRidingCompanyIds) {
+            $selectColumns[] = 'riding_company_ids';
+        }
+        
+        $leadStages = LeadStage::active()
+            ->where(function ($q) use ($ridingCompanyIds, $hasRidingCompanyId, $hasRidingCompanyIds) {
+                if ($hasRidingCompanyId) {
+                    $q->whereIn('riding_company_id', $ridingCompanyIds);
+                }
+                if ($hasRidingCompanyIds) {
+                    $q->orWhere(function ($q2) use ($ridingCompanyIds) {
+                        foreach ($ridingCompanyIds as $rcId) {
+                            $q2->orWhereJsonContains('riding_company_ids', $rcId);
+                        }
+                    });
+                }
+            })
+            ->ordered()
+            ->get($selectColumns);
 
         return Inertia::render('Drivers/Drivers/Edit', [
             'driver' => [
@@ -1164,6 +1293,7 @@ class DriverController extends Controller
                 'next_follow_up' => $driverModel->next_follow_up ? $driverModel->next_follow_up->format('Y-m-d H:i:s') : null,
                 'last_follow_up' => $driverModel->last_follow_up ? $driverModel->last_follow_up->format('Y-m-d H:i:s') : null,
                 'lead_stage_id' => $driverModel->lead_stage_id,
+                'driver_stage_id' => $driverModel->driver_stage_id,
                 'current_stage_id' => $driverModel->current_stage_id,
                 'notes' => $driverModel->notes,
                 'cancel_reason' => $driverModel->cancel_reason,
@@ -1177,6 +1307,8 @@ class DriverController extends Controller
             'leadSources' => $leadSources,
             'leadStatuses' => $leadStatuses,
             'users' => $users,
+            'driverStages' => $driverStages,
+            'leadStages' => $leadStages,
         ]);
     }
 
@@ -2087,15 +2219,11 @@ class DriverController extends Controller
 
                 case 'lead_source_id':
                     $query = LeadSource::where('name', $value);
-                    if ($companyId) {
-                        $query->where('company_id', $companyId);
-                    }
                     $model = $query->first();
-                    if (! $model && $companyId) {
+                    if (! $model) {
                         // Create new lead source if not found
                         $model = LeadSource::create([
                             'name' => $value,
-                            'company_id' => $companyId,
                         ]);
                     }
 
@@ -2103,15 +2231,11 @@ class DriverController extends Controller
 
                 case 'lead_status_id':
                     $query = LeadStatus::where('name', $value);
-                    if ($companyId) {
-                        $query->where('company_id', $companyId);
-                    }
                     $model = $query->first();
-                    if (! $model && $companyId) {
+                    if (! $model) {
                         // Create new lead status if not found
                         $model = LeadStatus::create([
                             'name' => $value,
-                            'company_id' => $companyId,
                         ]);
                     }
 
@@ -2545,13 +2669,9 @@ class DriverController extends Controller
             ? Campaign::orderBy('name')->get(['id', 'name'])
             : Campaign::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get(['id', 'name']);
 
-        $leadSources = $user->isSuperAdmin()
-            ? LeadSource::active()->orderBy('name')->get(['id', 'name'])
-            : LeadSource::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get(['id', 'name']);
+        $leadSources = LeadSource::active()->orderBy('name')->get(['id', 'name']);
 
-        $leadStatuses = $user->isSuperAdmin()
-            ? LeadStatus::active()->ordered()->get(['id', 'name', 'color'])
-            : LeadStatus::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->ordered()->get(['id', 'name', 'color']);
+        $leadStatuses = LeadStatus::active()->ordered()->get(['id', 'name', 'color']);
 
         $users = $user->isSuperAdmin()
             ? User::where('is_active', true)->orderBy('name')->get(['id', 'name'])

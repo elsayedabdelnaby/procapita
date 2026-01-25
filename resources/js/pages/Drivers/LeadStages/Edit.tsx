@@ -2,6 +2,7 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
 
@@ -13,6 +14,7 @@ interface RidingCompany {
 interface LeadStage {
     id: number;
     riding_company_id?: number;
+    riding_company_ids?: number[];
     name: string;
     slug: string;
     description?: string;
@@ -28,8 +30,13 @@ interface LeadStagesEditProps {
 }
 
 export default function LeadStagesEdit({ leadStage, ridingCompanies = [] }: LeadStagesEditProps) {
+    // Prepare riding_company_ids from leadStage
+    const initialRidingCompanyIds = leadStage.riding_company_ids && leadStage.riding_company_ids.length > 0
+        ? leadStage.riding_company_ids.map(id => id.toString())
+        : (leadStage.riding_company_id ? [leadStage.riding_company_id.toString()] : []);
+
     const { data, setData, put, processing, errors } = useForm({
-        riding_company_id: leadStage.riding_company_id?.toString() || '',
+        riding_company_ids: initialRidingCompanyIds,
         name: leadStage.name || '',
         slug: leadStage.slug || '',
         description: leadStage.description || '',
@@ -92,31 +99,41 @@ export default function LeadStagesEdit({ leadStage, ridingCompanies = [] }: Lead
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {ridingCompanies && ridingCompanies.length > 0 && (
-                                <div className="md:col-span-2">
-                                    <Label htmlFor="riding_company_id">
-                                        Riding Company <span className="text-red-500">*</span>
-                                    </Label>
-                                    <select
-                                        id="riding_company_id"
-                                        name="riding_company_id"
-                                        value={data.riding_company_id}
-                                        onChange={(e) => setData('riding_company_id', e.target.value)}
-                                        className="w-full rounded-md border px-3 py-2"
-                                        required
-                                    >
-                                        <option value="">Select a riding company</option>
-                                        {ridingCompanies.map((company) => (
-                                            <option key={company.id} value={company.id}>
-                                                {company.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {errors.riding_company_id && (
-                                        <p className="text-sm text-red-500">{errors.riding_company_id}</p>
-                                    )}
-                                </div>
-                            )}
+                            <div className="md:col-span-2">
+                                <FormField
+                                    label="Lead Stage Name"
+                                    name="name"
+                                    type="text"
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    error={errors.name}
+                                    required
+                                    placeholder="Enter lead stage name"
+                                />
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <Label htmlFor="riding_company_ids">
+                                    Riding Companies <span className="text-red-500">*</span>
+                                </Label>
+                                <MultiSelect
+                                    options={ridingCompanies.map((company) => ({
+                                        value: company.id.toString(),
+                                        label: company.name,
+                                    }))}
+                                    value={data.riding_company_ids}
+                                    onChange={(value) => setData('riding_company_ids', value)}
+                                    placeholder="Select riding companies..."
+                                    className="w-full"
+                                    searchable={true}
+                                />
+                                {errors.riding_company_ids && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.riding_company_ids}</p>
+                                )}
+                                <p className="mt-1 text-xs text-neutral-500">
+                                    Select one or more riding companies. This stage will be available for all drivers in the selected companies.
+                                </p>
+                            </div>
 
                             <div className="md:col-span-2">
                                 <FormField

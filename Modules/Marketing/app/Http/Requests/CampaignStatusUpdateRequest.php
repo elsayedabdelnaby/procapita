@@ -13,8 +13,27 @@ class CampaignStatusUpdateRequest extends FormRequest
 
     public function rules(): array
     {
+        $campaignStatusId = $this->route('campaignStatus');
+        $campaignStatus = \Modules\Marketing\app\Models\CampaignStatus::find($campaignStatusId);
+        
+        // Check if riding_company_id column exists
+        $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('campaign_statuses', 'riding_company_id');
+        
+        $nameRule = ['required', 'string', 'max:255'];
+        if ($hasRidingCompanyId && ($this->input('riding_company_id') || $campaignStatus?->riding_company_id)) {
+            $ridingCompanyId = $this->input('riding_company_id') ?? $campaignStatus?->riding_company_id;
+            $nameRule[] = \Illuminate\Validation\Rule::unique('campaign_statuses', 'name')
+                ->where('riding_company_id', $ridingCompanyId)
+                ->ignore($campaignStatusId);
+        } elseif ($this->input('company_id') || $campaignStatus?->company_id) {
+            $companyId = $this->input('company_id') ?? $campaignStatus?->company_id;
+            $nameRule[] = \Illuminate\Validation\Rule::unique('campaign_statuses', 'name')
+                ->where('company_id', $companyId)
+                ->ignore($campaignStatusId);
+        }
+        
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => $nameRule,
             'slug' => ['nullable', 'string', 'max:255'], // Auto-generated if empty
             'description' => ['nullable', 'string'],
             'color' => ['nullable', 'string', 'max:50'],
@@ -28,6 +47,7 @@ class CampaignStatusUpdateRequest extends FormRequest
     {
         return [
             'name.required' => 'Status name is required.',
+            'name.unique' => 'This campaign status name is already taken for this company.',
             'slug.required' => 'Slug is required.',
         ];
     }

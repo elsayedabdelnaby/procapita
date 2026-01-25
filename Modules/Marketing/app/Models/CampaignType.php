@@ -15,6 +15,7 @@ class CampaignType extends Model
 
     protected $fillable = [
         'company_id',
+        'riding_company_id',
         'name',
         'slug',
         'description',
@@ -49,6 +50,11 @@ class CampaignType extends Model
         return $this->belongsTo(Company::class);
     }
 
+    public function ridingCompany(): BelongsTo
+    {
+        return $this->belongsTo(\Modules\RidingCarCompanies\app\Models\RidingCompany::class);
+    }
+
     public function channels(): HasMany
     {
         return $this->hasMany(CampaignChannel::class);
@@ -67,6 +73,11 @@ class CampaignType extends Model
     public function scopeForCompany($query, int $companyId)
     {
         return $query->where('company_id', $companyId);
+    }
+
+    public function scopeForRidingCompany($query, int $ridingCompanyId)
+    {
+        return $query->where('riding_company_id', $ridingCompanyId);
     }
 }
 

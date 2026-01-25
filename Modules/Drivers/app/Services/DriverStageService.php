@@ -9,19 +9,30 @@ class DriverStageService
 {
     public function getAllDriverStages(?int $driverId = null, ?int $companyId = null): Collection
     {
-        $query = DriverStage::with(['driver', 'ridingCompany'])
-            ->whereHas('driver', function ($q) use ($companyId) {
-                // Only show stages for non-deleted drivers
-                $q->whereNull('deleted_at');
+        // Driver Stages are now templates (without driver_id)
+        // Only show templates, not individual driver stages
+        $query = DriverStage::with(['ridingCompany'])
+            ->whereNull('driver_id');
 
-                // Filter by company_id if provided
-                if ($companyId) {
-                    $q->where('company_id', $companyId);
-                }
-            });
+        // Filter by company's riding companies if companyId is provided
+        if ($companyId) {
+            $ridingCompanyIds = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $companyId)
+                ->pluck('id')
+                ->toArray();
 
-        if ($driverId) {
-            $query->where('driver_id', $driverId);
+            if (!empty($ridingCompanyIds)) {
+                $query->where(function ($q) use ($ridingCompanyIds) {
+                    $q->whereIn('riding_company_id', $ridingCompanyIds)
+                        ->orWhere(function ($q2) use ($ridingCompanyIds) {
+                            foreach ($ridingCompanyIds as $rcId) {
+                                $q2->orWhereJsonContains('riding_company_ids', $rcId);
+                            }
+                        });
+                });
+            } else {
+                // No riding companies for this company, return empty
+                return collect();
+            }
         }
 
         return $query->ordered()->get();
@@ -34,12 +45,39 @@ class DriverStageService
 
     public function createDriverStage(array $data): DriverStage
     {
+        // Remove driver_id if present (Driver Stages are now templates, not tied to specific drivers)
+        unset($data['driver_id']);
+        
+        // Handle riding_company_ids array
+        if (isset($data['riding_company_ids']) && is_array($data['riding_company_ids'])) {
+            // Convert to integers
+            $data['riding_company_ids'] = array_map('intval', $data['riding_company_ids']);
+            // Set first one as riding_company_id for backward compatibility
+            if (!empty($data['riding_company_ids'])) {
+                $data['riding_company_id'] = $data['riding_company_ids'][0];
+            }
+        }
+
         return DriverStage::create($data);
     }
 
     public function updateDriverStage(int $id, array $data): DriverStage
     {
         $driverStage = DriverStage::findOrFail($id);
+
+        // Remove driver_id if present (Driver Stages are now templates, not tied to specific drivers)
+        unset($data['driver_id']);
+
+        // Handle riding_company_ids array
+        if (isset($data['riding_company_ids']) && is_array($data['riding_company_ids'])) {
+            // Convert to integers
+            $data['riding_company_ids'] = array_map('intval', $data['riding_company_ids']);
+            // Set first one as riding_company_id for backward compatibility
+            if (!empty($data['riding_company_ids'])) {
+                $data['riding_company_id'] = $data['riding_company_ids'][0];
+            }
+        }
+
         $driverStage->update($data);
 
         return $driverStage->fresh();

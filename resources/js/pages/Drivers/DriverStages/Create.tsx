@@ -2,13 +2,9 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
-
-interface Driver {
-    id: number;
-    full_name: string;
-}
 
 interface RidingCompany {
     id: number;
@@ -16,14 +12,13 @@ interface RidingCompany {
 }
 
 interface DriverStagesCreateProps {
-    drivers: Driver[];
     ridingCompanies: RidingCompany[];
 }
 
-export default function DriverStagesCreate({ drivers, ridingCompanies }: DriverStagesCreateProps) {
+export default function DriverStagesCreate({ ridingCompanies }: DriverStagesCreateProps) {
     const { data, setData, post, processing, errors } = useForm({
-        driver_id: '',
-        riding_company_id: '',
+        name: '',
+        riding_company_ids: [] as string[],
         stage_order: '',
         status: 'pending',
         notes: '',
@@ -82,52 +77,40 @@ export default function DriverStagesCreate({ drivers, ridingCompanies }: DriverS
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Stage Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <Label htmlFor="driver_id">
-                                    Driver <span className="text-red-500">*</span>
-                                </Label>
-                                <select
-                                    id="driver_id"
-                                    name="driver_id"
-                                    value={data.driver_id}
-                                    onChange={(e) => setData('driver_id', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
+                            <div className="md:col-span-2">
+                                <FormField
+                                    label="Driver Stage Name"
+                                    name="name"
+                                    type="text"
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    error={errors.name}
                                     required
-                                >
-                                    <option value="">Select a driver</option>
-                                    {drivers.map((driver) => (
-                                        <option key={driver.id} value={driver.id}>
-                                            {driver.full_name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.driver_id && (
-                                    <p className="text-sm text-red-500">{errors.driver_id}</p>
-                                )}
+                                    placeholder="Enter driver stage name"
+                                />
                             </div>
 
-                            <div>
-                                <Label htmlFor="riding_company_id">
-                                    Riding Company <span className="text-red-500">*</span>
+                            <div className="md:col-span-2">
+                                <Label htmlFor="riding_company_ids">
+                                    Riding Companies <span className="text-red-500">*</span>
                                 </Label>
-                                <select
-                                    id="riding_company_id"
-                                    name="riding_company_id"
-                                    value={data.riding_company_id}
-                                    onChange={(e) => setData('riding_company_id', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                    required
-                                >
-                                    <option value="">Select a riding company</option>
-                                    {ridingCompanies.map((company) => (
-                                        <option key={company.id} value={company.id}>
-                                            {company.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.riding_company_id && (
-                                    <p className="text-sm text-red-500">{errors.riding_company_id}</p>
+                                <MultiSelect
+                                    options={ridingCompanies.map((company) => ({
+                                        value: company.id.toString(),
+                                        label: company.name,
+                                    }))}
+                                    value={data.riding_company_ids}
+                                    onChange={(value) => setData('riding_company_ids', value)}
+                                    placeholder="Select riding companies..."
+                                    className="w-full"
+                                    searchable={true}
+                                />
+                                {errors.riding_company_ids && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.riding_company_ids}</p>
                                 )}
+                                <p className="mt-1 text-xs text-neutral-500">
+                                    Select one or more riding companies. This stage will be available for all drivers in the selected companies.
+                                </p>
                             </div>
 
                             <div>

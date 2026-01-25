@@ -14,7 +14,7 @@ class CompanyStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('companies', 'name')->whereNull('deleted_at')],
             'slug' => ['nullable', 'string', 'max:255', 'unique:companies,slug'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
@@ -32,6 +32,7 @@ class CompanyStoreRequest extends FormRequest
     {
         return [
             'name.required' => 'Company name is required.',
+            'name.unique' => 'This company name is already taken.',
             'slug.unique' => 'This company slug is already taken.',
             'admin_user.email.unique' => 'This email is already registered.',
             'admin_user.password.min' => 'Password must be at least 8 characters.',

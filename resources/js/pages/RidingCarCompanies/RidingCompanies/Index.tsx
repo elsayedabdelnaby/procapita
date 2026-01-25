@@ -1,11 +1,11 @@
 import { DataTable } from '@/components/core/data-table';
-import { DeleteDialog } from '@/components/core/delete-dialog';
+import { RidingCompanyDeleteDialog } from '@/components/core/riding-company-delete-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 interface Company {
     id: number;
@@ -33,9 +33,11 @@ interface RidingCompany {
 
 interface RidingCompaniesIndexProps {
     ridingCompanies: RidingCompany[];
+    availableRidingCompanies?: RidingCompany[];
+    usersCounts?: Record<number, number>;
 }
 
-export default function RidingCompaniesIndex({ ridingCompanies }: RidingCompaniesIndexProps) {
+export default function RidingCompaniesIndex({ ridingCompanies, availableRidingCompanies = [], usersCounts = {} }: RidingCompaniesIndexProps) {
     const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; company: RidingCompany | null }>({
         open: false,
         company: null,
@@ -45,11 +47,13 @@ export default function RidingCompaniesIndex({ ridingCompanies }: RidingCompanie
         setDeleteDialog({ open: true, company });
     };
 
-    const confirmDelete = () => {
-        if (deleteDialog.company) {
-            router.delete(`/ridingcarcompanies/riding-companies/${deleteDialog.company.id}`);
+    // Get available riding companies for transfer (same company_id, exclude the one being deleted)
+    const availableForTransfer = useMemo(() => {
+        if (!deleteDialog.company) {
+            return [];
         }
-    };
+        return availableRidingCompanies.filter((rc) => rc.id !== deleteDialog.company?.id && rc.company_id === deleteDialog.company?.company_id);
+    }, [availableRidingCompanies, deleteDialog.company]);
 
     const handleToggleStatus = (id: number) => {
         router.post(`/ridingcarcompanies/riding-companies/${id}/toggle-active`);
@@ -183,12 +187,12 @@ export default function RidingCompaniesIndex({ ridingCompanies }: RidingCompanie
                     )}
                 </Card>
 
-                <DeleteDialog
+                <RidingCompanyDeleteDialog
                     open={deleteDialog.open}
                     onOpenChange={(open) => setDeleteDialog({ open, company: null })}
-                    onConfirm={confirmDelete}
-                    title="Delete Riding Company"
-                    description={`Are you sure you want to delete "${deleteDialog.company?.name}"? This action cannot be undone and will remove all associated data including stage templates, document requirements, and integrations.`}
+                    ridingCompany={deleteDialog.company}
+                    availableRidingCompanies={availableForTransfer}
+                    usersCount={deleteDialog.company ? (usersCounts[deleteDialog.company.id] || 0) : 0}
                 />
             </div>
         </AppLayout>

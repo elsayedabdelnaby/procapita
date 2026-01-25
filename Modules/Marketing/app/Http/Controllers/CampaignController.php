@@ -54,6 +54,50 @@ class CampaignController extends Controller
         ]);
     }
 
+    public function recycleBin(): Response
+    {
+        $user = Auth::user();
+        $companyId = $this->getCompanyId();
+        
+        $query = \Modules\Marketing\app\Models\Campaign::onlyTrashed();
+
+        // Filter by company if applicable
+        if ($companyId) {
+            $query->where('company_id', $companyId);
+        } elseif (!$user->isSuperAdmin()) {
+            // Non-super admin without company_id sees nothing
+            $query->whereRaw('1 = 0');
+        }
+
+        $campaigns = $query->orderBy('deleted_at', 'desc')->get();
+
+        return Inertia::render('Marketing/Campaigns/RecycleBin', [
+            'campaigns' => $campaigns->map(fn($campaign) => [
+                'id' => $campaign->id,
+                'name' => $campaign->name,
+                'slug' => $campaign->slug,
+                'description' => $campaign->description,
+                'company_id' => $campaign->company_id,
+                'campaign_type_id' => $campaign->campaign_type_id,
+                'campaign_status_id' => $campaign->campaign_status_id,
+                'campaign_channel_id' => $campaign->campaign_channel_id,
+                'start_date' => $campaign->start_date,
+                'end_date' => $campaign->end_date,
+                'expected_budget' => $campaign->expected_budget,
+                'expected_roi' => $campaign->expected_roi,
+                'expected_leads' => $campaign->expected_leads,
+                'expected_conversions' => $campaign->expected_conversions,
+                'expected_revenue' => $campaign->expected_revenue,
+                'type' => $campaign->type,
+                'status' => $campaign->status,
+                'channel' => $campaign->channel,
+                'created_at' => $campaign->created_at?->toISOString(),
+                'updated_at' => $campaign->updated_at?->toISOString(),
+                'deleted_at' => $campaign->deleted_at?->toISOString(),
+            ]),
+        ]);
+    }
+
     public function create(): Response
     {
         $user = Auth::user();
@@ -309,6 +353,15 @@ class CampaignController extends Controller
                 ->back()
                 ->with('error', $e->getMessage());
         }
+    }
+
+    protected function getCompanyId(): ?int
+    {
+        $user = Auth::user();
+        if ($user && $user->is_super_admin) {
+            return null; // Super admin can see all
+        }
+        return $user?->company_id;
     }
 }
 

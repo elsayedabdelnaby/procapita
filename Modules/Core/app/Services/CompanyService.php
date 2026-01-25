@@ -29,13 +29,17 @@ class CompanyService
         return Company::with(['users', 'modules', 'roles'])->find($id);
     }
 
-    public function createCompany(array $data): Company
+    public function createCompany(array $data): array
     {
-        if (! isset($data['slug'])) {
-            $data['slug'] = Str::slug($data['name']);
-        }
-
+        // Reset slug change info before creation
+        Company::$slugChangeInfo = null;
+        
+        // Slug will be generated automatically in Model boot if not provided
+        // Model will ensure uniqueness automatically
         $company = Company::create($data);
+
+        // Get slug change info from Model static property
+        $slugChangeInfo = Company::$slugChangeInfo ?? null;
 
         // Create default CEO role (root role) for the company
         $this->roleService->createRootRole($company);
@@ -43,12 +47,23 @@ class CompanyService
         // Seed default data for the company
         $this->seedDefaultDataForCompany($company);
 
-        // If admin user data is provided, create the admin user
-        if (isset($data['admin_user'])) {
-            $this->createCompanyAdmin($company, $data['admin_user']);
+        // If admin user data is provided and has required fields, create the admin user
+        if (isset($data['admin_user']) && is_array($data['admin_user'])) {
+            // Only create admin user if name and email are provided and not empty
+            $adminName = trim($data['admin_user']['name'] ?? '');
+            $adminEmail = trim($data['admin_user']['email'] ?? '');
+            
+            if (!empty($adminName) && !empty($adminEmail)) {
+                $this->createCompanyAdmin($company, $data['admin_user']);
+            }
         }
 
-        return $company->fresh(['users', 'roles', 'modules']);
+        return [
+            'company' => $company->fresh(['users', 'roles', 'modules']),
+            'slug_was_duplicate' => $slugChangeInfo['was_duplicate'] ?? false,
+            'original_slug' => $slugChangeInfo['original_slug'] ?? null,
+            'new_slug' => $slugChangeInfo['new_slug'] ?? null,
+        ];
     }
 
     public function updateCompany(int $id, array $data): Company
@@ -76,9 +91,44 @@ class CompanyService
         return $company->fresh(['users', 'modules']);
     }
 
-    public function deleteCompany(int $id): bool
+    public function deleteCompany(int $id, ?int $transferCompanyId = null): bool
     {
         $company = Company::findOrFail($id);
+
+        // If transfer company is provided, transfer all riding companies and related data
+        if ($transferCompanyId !== null) {
+            $transferCompany = Company::findOrFail($transferCompanyId);
+
+            // Get all user IDs that belong to this company BEFORE updating them
+            // (needed for transferring drivers assigned to these users)
+            $companyUserIds = \App\Models\User::where('company_id', $id)->pluck('id')->toArray();
+
+            // Step 1: Transfer all riding companies
+            if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+                \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $id)
+                    ->update(['company_id' => $transferCompanyId]);
+            }
+
+            // Step 2: Transfer all users in the company (including those not in riding companies)
+            \App\Models\User::where('company_id', $id)
+                ->update(['company_id' => $transferCompanyId]);
+
+            // Step 3: Transfer all drivers (leads) in the company
+            if (class_exists(\Modules\Drivers\app\Models\Driver::class)) {
+                // Transfer all drivers that belong to this company
+                \Modules\Drivers\app\Models\Driver::where('company_id', $id)
+                    ->update(['company_id' => $transferCompanyId]);
+
+                // Transfer all drivers assigned to users in this company
+                if (!empty($companyUserIds)) {
+                    \Modules\Drivers\app\Models\Driver::whereIn('assigned_to', $companyUserIds)
+                        ->update(['company_id' => $transferCompanyId]);
+                }
+
+                // Note: DriverFollowUps, DriverStages, and DriverDocuments are linked via driver_id,
+                // so they will automatically stay with the transferred drivers. No need to update them separately.
+            }
+        }
 
         return $company->delete();
     }
@@ -118,8 +168,20 @@ class CompanyService
         return $company->fresh(['modules']);
     }
 
-    public function createCompanyAdmin(Company $company, array $userData): \App\Models\User
+    public function createCompanyAdmin(Company $company, array $userData): ?\App\Models\User
     {
+        // Only create admin user if name and email are provided and not empty
+        $name = trim($userData['name'] ?? '');
+        $email = trim($userData['email'] ?? '');
+        
+        if (empty($name) || empty($email)) {
+            return null;
+        }
+        
+        // Use trimmed values
+        $userData['name'] = $name;
+        $userData['email'] = $email;
+
         $userData['company_id'] = $company->id;
         $userData['is_company_admin'] = true;
         $userData['is_active'] = true;

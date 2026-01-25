@@ -9,6 +9,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Core\app\Http\Requests\CompanyStoreRequest;
 use Modules\Core\app\Http\Requests\CompanyUpdateRequest;
+use Modules\Core\app\Models\Company;
 use Modules\Core\app\Models\Role;
 use Modules\Core\app\Services\CompanyService;
 
@@ -22,7 +23,65 @@ class CompanyController extends Controller
     {
         $companies = $this->companyService->getAllCompanies();
 
+        // Add riding companies count for each company
+        $companiesWithCounts = $companies->map(function ($company) {
+            $ridingCompaniesCount = 0;
+            if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+                $ridingCompaniesCount = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company->id)->count();
+            }
+
+            return [
+                'id' => $company->id,
+                'name' => $company->name,
+                'slug' => $company->slug,
+                'email' => $company->email,
+                'phone' => $company->phone,
+                'address' => $company->address,
+                'logo' => $company->logo,
+                'logo_url' => $company->logo_url,
+                'is_active' => $company->is_active,
+                'settings' => $company->settings,
+                'created_at' => $company->created_at?->toISOString(),
+                'updated_at' => $company->updated_at?->toISOString(),
+                'riding_companies_count' => $ridingCompaniesCount,
+            ];
+        });
+
         return Inertia::render('Core/Companies/Index', [
+            'companies' => $companiesWithCounts,
+        ]);
+    }
+
+    public function recycleBin(): Response
+    {
+        $companies = Company::onlyTrashed()
+            ->orderBy('deleted_at', 'desc')
+            ->get()
+            ->map(function ($company) {
+                $ridingCompaniesCount = 0;
+                if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+                    $ridingCompaniesCount = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company->id)->count();
+                }
+
+                return [
+                    'id' => $company->id,
+                    'name' => $company->name,
+                    'slug' => $company->slug,
+                    'email' => $company->email,
+                    'phone' => $company->phone,
+                    'address' => $company->address,
+                    'logo' => $company->logo,
+                    'logo_url' => $company->logo_url,
+                    'is_active' => $company->is_active,
+                    'settings' => $company->settings,
+                    'created_at' => $company->created_at?->toISOString(),
+                    'updated_at' => $company->updated_at?->toISOString(),
+                    'deleted_at' => $company->deleted_at?->toISOString(),
+                    'riding_companies_count' => $ridingCompaniesCount,
+                ];
+            });
+
+        return Inertia::render('Core/Companies/RecycleBin', [
             'companies' => $companies,
         ]);
     }
@@ -35,11 +94,18 @@ class CompanyController extends Controller
     public function store(CompanyStoreRequest $request): RedirectResponse
     {
         try {
-            $this->companyService->createCompany($request->validated());
+            $result = $this->companyService->createCompany($request->validated());
+
+            $message = 'Company created successfully.';
+            
+            // If slug was duplicate, add warning message
+            if ($result['slug_was_duplicate']) {
+                $message = 'Company created successfully. The slug "' . $result['original_slug'] . '" was already taken, so it was automatically changed to "' . $result['new_slug'] . '".';
+            }
 
             return redirect()
                 ->route('core.companies.index')
-                ->with('success', 'Company created successfully.');
+                ->with('success', $message);
         } catch (\Exception $e) {
             return redirect()
                 ->back()
@@ -63,6 +129,13 @@ class CompanyController extends Controller
 
         // Load company users with roles and riding company
         $users = $company->users()->with('roles', 'ridingCompany')->get();
+        
+        // Load deleted users
+        $deletedUsers = \App\Models\User::onlyTrashed()
+            ->where('company_id', $id)
+            ->with('roles', 'ridingCompany')
+            ->orderBy('deleted_at', 'desc')
+            ->get();
 
         // Load company roles with hierarchy, ordered by level (lowest first)
         $roles = $company->roles()
@@ -156,14 +229,21 @@ class CompanyController extends Controller
             }
         }
 
+        // Get all available companies for transfer (exclude current company)
+        $availableCompanies = Company::where('id', '!=', $id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return Inertia::render('Core/Companies/Show', [
             'company' => $company->load('users', 'roles'),
             'statistics' => $statistics,
             'users' => $users,
+            'deletedUsers' => $deletedUsers,
             'roles' => $roles,
             'roleHierarchy' => $roleHierarchy,
             'activities' => $activities,
             'ridingCompanies' => $ridingCompanies,
+            'availableCompanies' => $availableCompanies,
             'documentRequirements' => $documentRequirements,
         ]);
     }
@@ -197,10 +277,45 @@ class CompanyController extends Controller
         }
     }
 
-    public function destroy(int $id): RedirectResponse
+    public function destroy(Request $request, int $id): RedirectResponse
     {
         try {
-            $this->companyService->deleteCompany($id);
+            $company = $this->companyService->getCompanyById($id);
+
+            if (! $company) {
+                abort(404, 'Company not found.');
+            }
+
+            // Check if company has riding companies
+            $ridingCompaniesCount = 0;
+            if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+                $ridingCompaniesCount = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $id)->count();
+            }
+
+            $transferCompanyId = $request->input('transfer_company_id') ? (int) $request->input('transfer_company_id') : null;
+
+            // If company has riding companies, transfer company is required
+            if ($ridingCompaniesCount > 0 && $transferCompanyId === null) {
+                return redirect()
+                    ->back()
+                    ->with('error', 'Cannot delete company with riding companies. Please select a company to transfer them to.');
+            }
+
+            // Validate transfer company if provided
+            if ($transferCompanyId !== null) {
+                $request->validate([
+                    'transfer_company_id' => ['required', 'integer', 'exists:companies,id'],
+                ]);
+
+                // Ensure transfer company is not the same as the company being deleted
+                if ($transferCompanyId === $id) {
+                    return redirect()
+                        ->back()
+                        ->with('error', 'Cannot transfer to the same company.');
+                }
+            }
+
+            $this->companyService->deleteCompany($id, $transferCompanyId);
 
             return redirect()
                 ->route('core.companies.index')
@@ -277,8 +392,9 @@ class CompanyController extends Controller
      */
     protected function buildRoleHierarchyTree(Role $role): array
     {
-        // Load children recursively
+        // Load children recursively - only for the same company
         $children = Role::where('parent_id', $role->id)
+            ->where('team_id', $role->team_id)
             ->orderBy('hierarchy_level')
             ->orderBy('name')
             ->get();

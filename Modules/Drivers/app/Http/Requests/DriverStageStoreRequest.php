@@ -14,8 +14,9 @@ class DriverStageStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'driver_id' => ['required', 'exists:drivers,id'],
-            'riding_company_id' => ['required', 'exists:riding_companies,id'],
+            'name' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('driver_stages', 'name')],
+            'riding_company_ids' => ['required', 'array', 'min:1'],
+            'riding_company_ids.*' => ['required', 'exists:riding_companies,id'],
             'stage_order' => ['required', 'integer', 'min:1'],
             'status' => ['nullable', 'string', 'in:pending,in_progress,completed,rejected'],
             'notes' => ['nullable', 'string'],
@@ -25,8 +26,10 @@ class DriverStageStoreRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'driver_id.required' => 'Driver is required.',
-            'riding_company_id.required' => 'Riding company is required.',
+            'name.required' => 'Driver stage name is required.',
+            'name.unique' => 'This driver stage name is already taken.',
+            'riding_company_ids.required' => 'At least one riding company is required.',
+            'riding_company_ids.min' => 'At least one riding company is required.',
             'stage_order.required' => 'Stage order is required.',
         ];
     }

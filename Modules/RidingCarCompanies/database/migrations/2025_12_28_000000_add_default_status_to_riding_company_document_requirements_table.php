@@ -9,7 +9,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('riding_company_document_requirements', function (Blueprint $table) {
-            $table->string('default_status', 20)->default('pending')->after('active');
+            // Add default_status if it doesn't exist
+            if (!Schema::hasColumn('riding_company_document_requirements', 'default_status')) {
+                $table->string('default_status', 20)->default('pending')->after('active');
+            }
         });
     }
 

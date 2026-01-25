@@ -19,6 +19,7 @@ Route::middleware(['auth', 'verified'])->prefix('marketing')->name('marketing.')
 
     Route::middleware(['permission:marketing.campaigns.read'])->group(function () {
         Route::get('campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
+        Route::get('campaigns/recycle-bin', [CampaignController::class, 'recycleBin'])->name('campaigns.recycle-bin');
         Route::get('campaigns/{campaign}', [CampaignController::class, 'show'])->name('campaigns.show');
     });
 
@@ -87,6 +88,7 @@ Route::middleware(['auth', 'verified'])->prefix('marketing')->name('marketing.')
 
     Route::middleware(['permission:marketing.campaign_types.read'])->group(function () {
         Route::get('campaign-types', [CampaignTypeController::class, 'index'])->name('campaign-types.index');
+        Route::get('campaign-types/recycle-bin', [CampaignTypeController::class, 'recycleBin'])->name('campaign-types.recycle-bin');
     });
 
     Route::middleware(['permission:marketing.campaign_types.update'])->group(function () {
@@ -106,6 +108,7 @@ Route::middleware(['auth', 'verified'])->prefix('marketing')->name('marketing.')
 
     Route::middleware(['permission:marketing.campaign_statuses.read'])->group(function () {
         Route::get('campaign-statuses', [CampaignStatusController::class, 'index'])->name('campaign-statuses.index');
+        Route::get('campaign-statuses/recycle-bin', [CampaignStatusController::class, 'recycleBin'])->name('campaign-statuses.recycle-bin');
     });
 
     Route::middleware(['permission:marketing.campaign_statuses.update'])->group(function () {
@@ -125,6 +128,7 @@ Route::middleware(['auth', 'verified'])->prefix('marketing')->name('marketing.')
 
     Route::middleware(['permission:marketing.campaign_channels.read'])->group(function () {
         Route::get('campaign-channels', [CampaignChannelController::class, 'index'])->name('campaign-channels.index');
+        Route::get('campaign-channels/recycle-bin', [CampaignChannelController::class, 'recycleBin'])->name('campaign-channels.recycle-bin');
     });
 
     Route::middleware(['permission:marketing.campaign_channels.update'])->group(function () {

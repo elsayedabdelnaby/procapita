@@ -8,7 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('riding_company_stage_templates', function (Blueprint $table) {
+        if (!Schema::hasTable('riding_company_stage_templates')) {
+            Schema::create('riding_company_stage_templates', function (Blueprint $table) {
             $table->id();
             $table->foreignId('riding_company_id')->constrained('riding_companies')->onDelete('cascade');
             $table->string('name');
@@ -25,7 +26,8 @@ return new class extends Migration
             // Composite index for ordering stages within a company
             $table->index(['riding_company_id', 'order'], 'rc_stage_comp_order_idx');
             $table->index('active');
-        });
+            });
+        }
     }
 
     public function down(): void

@@ -12,14 +12,19 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('drivers', function (Blueprint $table) {
-            $table->unsignedBigInteger('team_leader_id')->nullable()->after('assigned_to');
-            $table->unsignedBigInteger('account_manager_id')->nullable()->after('team_leader_id');
-
-            $table->foreign('team_leader_id')->references('id')->on('users')->onDelete('set null');
-            $table->foreign('account_manager_id')->references('id')->on('users')->onDelete('set null');
-
-            $table->index('team_leader_id');
-            $table->index('account_manager_id');
+            // Add team_leader_id if it doesn't exist
+            if (!Schema::hasColumn('drivers', 'team_leader_id')) {
+                $table->unsignedBigInteger('team_leader_id')->nullable()->after('assigned_to');
+                $table->foreign('team_leader_id')->references('id')->on('users')->onDelete('set null');
+                $table->index('team_leader_id');
+            }
+            
+            // Add account_manager_id if it doesn't exist
+            if (!Schema::hasColumn('drivers', 'account_manager_id')) {
+                $table->unsignedBigInteger('account_manager_id')->nullable()->after('team_leader_id');
+                $table->foreign('account_manager_id')->references('id')->on('users')->onDelete('set null');
+                $table->index('account_manager_id');
+            }
         });
     }
 

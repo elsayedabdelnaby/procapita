@@ -51,7 +51,7 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
         Route::get('drivers/{driver}', [DriverController::class, 'show'])->name('drivers.show');
     });
 
-    Route::middleware(['permission:drivers.drivers.update'])->group(function () {
+    Route::middleware(['permission:drivers.drivers.update,drivers.drivers.edit'])->group(function () {
         Route::get('drivers/{driver}/edit', [DriverController::class, 'edit'])->name('drivers.edit');
         Route::put('drivers/{driver}', [DriverController::class, 'update'])->name('drivers.update');
     });
@@ -86,6 +86,7 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.leadsources.read'])->group(function () {
         Route::get('lead-sources', [LeadSourceController::class, 'index'])->name('leadsources.index');
+        Route::get('lead-sources/recycle-bin', [LeadSourceController::class, 'recycleBin'])->name('leadsources.recycle-bin');
     });
 
     Route::middleware(['permission:drivers.leadsources.export'])->group(function () {
@@ -122,6 +123,7 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.leadstatuses.read'])->group(function () {
         Route::get('lead-statuses', [LeadStatusController::class, 'index'])->name('leadstatuses.index');
+        Route::get('lead-statuses/recycle-bin', [LeadStatusController::class, 'recycleBin'])->name('leadstatuses.recycle-bin');
     });
 
     Route::middleware(['permission:drivers.leadstatuses.export'])->group(function () {
@@ -161,6 +163,7 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.leadstages.read'])->group(function () {
         Route::get('lead-stages', [LeadStageController::class, 'index'])->name('leadstages.index');
+        Route::get('lead-stages/recycle-bin', [LeadStageController::class, 'recycleBin'])->name('leadstages.recycle-bin');
     });
 
     Route::middleware(['permission:drivers.leadstages.export'])->group(function () {
@@ -200,6 +203,7 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.driverstages.read'])->group(function () {
         Route::get('driver-stages', [DriverStageController::class, 'index'])->name('driverstages.index');
+        Route::get('driver-stages/recycle-bin', [DriverStageController::class, 'recycleBin'])->name('driverstages.recycle-bin');
     });
 
     Route::middleware(['permission:drivers.driverstages.export'])->group(function () {
@@ -235,6 +239,7 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.driverdocuments.read'])->group(function () {
         Route::get('driver-documents', [DriverDocumentController::class, 'index'])->name('driverdocuments.index');
+        Route::get('driver-documents/recycle-bin', [DriverDocumentController::class, 'recycleBin'])->name('driverdocuments.recycle-bin');
     });
 
     Route::middleware(['permission:drivers.driverdocuments.export'])->group(function () {
@@ -292,6 +297,7 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.driverfollowups.read'])->group(function () {
         Route::get('driver-follow-ups', [DriverFollowUpController::class, 'index'])->name('driverfollowups.index');
+        Route::get('driver-follow-ups/recycle-bin', [DriverFollowUpController::class, 'recycleBin'])->name('driverfollowups.recycle-bin');
         Route::get('driver-follow-ups/export', [DriverFollowUpController::class, 'export'])->name('driverfollowups.export');
         Route::get('driver-follow-ups/{driverFollowUp}', [DriverFollowUpController::class, 'show'])->name('driverfollowups.show');
     });

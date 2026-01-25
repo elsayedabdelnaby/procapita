@@ -1,33 +1,36 @@
 import { DataTable } from '@/components/core/data-table';
-import { DeleteDialog } from '@/components/core/delete-dialog';
+import { CompanyDeleteDialog } from '@/components/core/company-delete-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { Company } from '@/types/core';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { usePermissions } from '@/hooks/use-permissions';
 
 interface CompaniesIndexProps {
-    companies: Company[];
+    companies: Array<Company & { riding_companies_count?: number }>;
+}
+
+interface CompanyWithCount extends Company {
+    riding_companies_count?: number;
 }
 
 export default function CompaniesIndex({ companies }: CompaniesIndexProps) {
     const { can } = usePermissions();
-    const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; company: Company | null }>({
+    const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; company: CompanyWithCount | null }>({
         open: false,
         company: null,
     });
 
-    const handleDelete = (company: Company) => {
+    const handleDelete = (company: CompanyWithCount) => {
         setDeleteDialog({ open: true, company });
     };
 
-    const confirmDelete = () => {
-        if (deleteDialog.company) {
-            router.delete(`/core/companies/${deleteDialog.company.id}`);
-        }
-    };
+    // Get available companies for transfer (exclude the company being deleted)
+    const availableCompanies = useMemo(() => {
+        return companies.filter((c) => c.id !== deleteDialog.company?.id);
+    }, [companies, deleteDialog.company]);
 
     const handleToggleStatus = (id: number, isActive: boolean) => {
         const action = isActive ? 'deactivate' : 'activate';
@@ -129,12 +132,12 @@ export default function CompaniesIndex({ companies }: CompaniesIndexProps) {
                     )}
                 />
 
-                <DeleteDialog
+                <CompanyDeleteDialog
                     open={deleteDialog.open}
                     onOpenChange={(open) => setDeleteDialog({ open, company: null })}
-                    onConfirm={confirmDelete}
-                    title="Delete Company"
-                    description={`Are you sure you want to delete "${deleteDialog.company?.name}"? This action cannot be undone and will remove all associated data including users, roles, and permissions.`}
+                    company={deleteDialog.company}
+                    availableCompanies={availableCompanies}
+                    ridingCompaniesCount={deleteDialog.company?.riding_companies_count || 0}
                 />
             </div>
         </AppLayout>

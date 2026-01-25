@@ -2,6 +2,7 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { type SharedData } from '@/types';
@@ -32,7 +33,7 @@ export default function LeadStagesCreate({ ridingCompanies: initialRidingCompani
     }, []);
 
     const { data, setData, post, processing, errors } = useForm({
-        riding_company_id: '',
+        riding_company_ids: [] as string[],
         name: '',
         slug: '',
         description: '',
@@ -136,51 +137,39 @@ export default function LeadStagesCreate({ ridingCompanies: initialRidingCompani
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="md:col-span-2">
-                                <Label htmlFor="riding_company_id">
-                                    Riding Company <span className="text-red-500">*</span>
-                                </Label>
-                                <select
-                                    id="riding_company_id"
-                                    name="riding_company_id"
-                                    value={data.riding_company_id}
-                                    onChange={(e) => setData('riding_company_id', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                    disabled={loadingRidingCompanies || (selectedCompany && ridingCompanies.length === 0)}
-                                    required
-                                >
-                                    <option value="">
-                                        {loadingRidingCompanies
-                                            ? 'Loading...'
-                                            : selectedCompany && ridingCompanies.length === 0
-                                              ? 'No riding companies available'
-                                              : 'Select a riding company'}
-                                    </option>
-                                    {ridingCompanies.map((company) => (
-                                        <option key={company.id} value={company.id}>
-                                            {company.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.riding_company_id && (
-                                    <p className="text-sm text-red-500">{errors.riding_company_id}</p>
-                                )}
-                                {selectedCompany && !loadingRidingCompanies && ridingCompanies.length === 0 && (
-                                    <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
-                                        No riding companies available for the selected company. Please create a riding company first.
-                                    </p>
-                                )}
-                            </div>
-
-                            <div className="md:col-span-2">
                                 <FormField
-                                    label="Name"
+                                    label="Lead Stage Name"
                                     name="name"
+                                    type="text"
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
                                     error={errors.name}
                                     required
-                                    placeholder="e.g., Initial Contact, Document Review, Approved"
+                                    placeholder="Enter lead stage name"
                                 />
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <Label htmlFor="riding_company_ids">
+                                    Riding Companies <span className="text-red-500">*</span>
+                                </Label>
+                                <MultiSelect
+                                    options={ridingCompanies.map((company) => ({
+                                        value: company.id.toString(),
+                                        label: company.name,
+                                    }))}
+                                    value={data.riding_company_ids}
+                                    onChange={(value) => setData('riding_company_ids', value)}
+                                    placeholder="Select riding companies..."
+                                    className="w-full"
+                                    searchable={true}
+                                />
+                                {errors.riding_company_ids && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.riding_company_ids}</p>
+                                )}
+                                <p className="mt-1 text-xs text-neutral-500">
+                                    Select one or more riding companies. This stage will be available for all drivers in the selected companies.
+                                </p>
                             </div>
 
                             <div className="md:col-span-2">

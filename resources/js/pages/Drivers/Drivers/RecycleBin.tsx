@@ -3548,8 +3548,9 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                 </div>
 
                                 {/* Tab Content */}
-                                {viewDialogTab === 'overview' && (
-                                    <div className="space-y-6">
+                                <>
+                                    {viewDialogTab === 'overview' && (
+                                        <div className="space-y-6">
                                         {/* Personal Information & CRM Information */}
                                         <div className="grid gap-6 md:grid-cols-2">
                                             <Card className="p-6">
@@ -3909,80 +3910,48 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                         )}
                                                                     </div>
                                                                 )}
-                                                                        {canViewDocument() && (
-                                                                            <Button
-                                                                                variant="outline"
-                                                                                size="sm"
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    handleViewFile(doc.id);
-                                                                                }}
-                                                                            >
-                                                                                <Eye className="h-4 w-4 mr-1" />
-                                                                                View
-                                                                                {getFileExtension(doc.original_filename, doc.uploaded_path) && (
-                                                                                    <span className="ml-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
-                                                                                        .{getFileExtension(doc.original_filename, doc.uploaded_path)}
-                                                                                    </span>
-                                                                                )}
-                                                                            </Button>
+                                                                {canViewDocument() && (
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleViewFile(doc.id);
+                                                                        }}
+                                                                    >
+                                                                        <Eye className="h-4 w-4 mr-1" />
+                                                                        View
+                                                                        {getFileExtension(doc.original_filename, doc.uploaded_path) && (
+                                                                            <span className="ml-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                                                                .{getFileExtension(doc.original_filename, doc.uploaded_path)}
+                                                                            </span>
                                                                         )}
-                                                                        {canReplaceDocument() && (
-                                                                            <>
-                                                                                <input
-                                                                                    ref={(el) => (fileInputRefs.current[doc.id] = el)}
-                                                                                    type="file"
-                                                                                    accept="image/jpeg,image/jpg,image/png,application/pdf"
-                                                                                    className="hidden"
-                                                                                    onChange={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        handleFileSelect(doc.id, e);
-                                                                                    }}
-                                                                                />
-                                                                                <Button
-                                                                                    variant="outline"
-                                                                                    size="sm"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        fileInputRefs.current[doc.id]?.click();
-                                                                                    }}
-                                                                                    disabled={uploadingDocId === doc.id}
-                                                                                >
-                                                                                    <Edit className="h-4 w-4 mr-1" />
-                                                                                    {uploadingDocId === doc.id ? 'Uploading...' : 'Replace'}
-                                                                                </Button>
-                                                                            </>
-                                                                        )}
-                                                                    </>
-                                                                ) : (
+                                                                    </Button>
+                                                                )}
+                                                                {canReplaceDocument() && (
                                                                     <>
-                                                                        {getStatusBadge(doc.status)}
-                                                                        {canUploadDocument() && (
-                                                                            <>
-                                                                                <input
-                                                                                    ref={(el) => (fileInputRefs.current[doc.id] = el)}
-                                                                                    type="file"
-                                                                                    accept="image/jpeg,image/jpg,image/png,application/pdf"
-                                                                                    className="hidden"
-                                                                                    onChange={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        handleFileSelect(doc.id, e);
-                                                                                    }}
-                                                                                />
-                                                                                <Button
-                                                                                    variant="outline"
-                                                                                    size="sm"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        fileInputRefs.current[doc.id]?.click();
-                                                                                    }}
-                                                                                    disabled={uploadingDocId === doc.id}
-                                                                                >
-                                                                                    <Upload className="h-4 w-4 mr-1" />
-                                                                                    {uploadingDocId === doc.id ? 'Uploading...' : 'Upload'}
-                                                                                </Button>
-                                                                            </>
-                                                                        )}
+                                                                        <input
+                                                                            ref={(el) => (fileInputRefs.current[doc.id] = el)}
+                                                                            type="file"
+                                                                            accept="image/jpeg,image/jpg,image/png,application/pdf"
+                                                                            className="hidden"
+                                                                            onChange={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleFileSelect(doc.id, e);
+                                                                            }}
+                                                                        />
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                fileInputRefs.current[doc.id]?.click();
+                                                                            }}
+                                                                            disabled={uploadingDocId === doc.id}
+                                                                        >
+                                                                            <Edit className="h-4 w-4 mr-1" />
+                                                                            {uploadingDocId === doc.id ? 'Uploading...' : 'Replace'}
+                                                                        </Button>
                                                                     </>
                                                                 )}
                                                             </div>
@@ -4006,172 +3975,173 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                 </p>
                                             </Card>
                                         )}
-                                    </div>
-                                )}
+                                        </div>
+                                    )}
 
-                                {viewDialogTab === 'updates' && (
-                                    <Card className="p-6">
-                                        <h2 className="mb-4 text-lg font-semibold">Activity Log</h2>
-                                        <ActivityLog activities={driverActivities} />
-                                    </Card>
-                                )}
+                                    {viewDialogTab === 'updates' && (
+                                        <Card className="p-6">
+                                            <h2 className="mb-4 text-lg font-semibold">Activity Log</h2>
+                                            <ActivityLog activities={driverActivities} />
+                                        </Card>
+                                    )}
 
-                                {viewDialogTab === 'followups' && (
-                                    <Card className="p-6">
-                                        <h2 className="mb-4 text-lg font-semibold">Follow-ups</h2>
-                                        {driverFollowUps.length > 0 ? (
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full">
-                                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
-                                                        <tr>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Feedback Comment</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Notes</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {driverFollowUps.map((followUp, index) => (
-                                                            <tr 
-                                                                key={followUp.id} 
-                                                                className={`
-                                                                    border-t transition-colors duration-150
-                                                                    ${
-                                                                        index === 0
-                                                                            ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
-                                                                            : index % 2 === 0
-                                                                              ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
-                                                                              : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
-                                                                    }
-                                                                `}
-                                                            >
-                                                                <td className="px-4 py-3 text-sm">
-                                                                    {followUp.created_time ? formatDate(followUp.created_time) : 'N/A'}
-                                                                </td>
-                                                                <td className="px-4 py-3 text-sm">
-                                                                    {followUp.user_name || 'N/A'}
-                                                                </td>
-                                                                <td className="px-4 py-3 text-sm">
-                                                                    {followUp.riding_company || 'N/A'}
-                                                                </td>
-                                                                <td className="px-4 py-3 text-sm">
-                                                                    {followUp.lead_stage || 'N/A'}
-                                                                </td>
-                                                                <td className="px-4 py-3 text-sm">
-                                                                    {followUp.lead_status || 'N/A'}
-                                                                </td>
-                                                                <td className="px-4 py-3 text-sm">
-                                                                    {followUp.lead_status_comment ? (
-                                                                        <div className="max-w-xs truncate" title={followUp.lead_status_comment}>
-                                                                            {followUp.lead_status_comment}
-                                                                        </div>
-                                                                    ) : 'N/A'}
-                                                                </td>
-                                                                <td className="px-4 py-3 text-sm">
-                                                                    {followUp.notes ? (
-                                                                        <div className="max-w-xs truncate" title={followUp.notes}>
-                                                                            {followUp.notes}
-                                                                        </div>
-                                                                    ) : 'N/A'}
-                                                                </td>
+                                    {viewDialogTab === 'followups' && (
+                                        <Card className="p-6">
+                                            <h2 className="mb-4 text-lg font-semibold">Follow-ups</h2>
+                                            {driverFollowUps.length > 0 ? (
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full">
+                                                        <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
+                                                            <tr>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Feedback Comment</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Notes</th>
                                                             </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        ) : (
-                                            <div className="py-8 text-center text-neutral-500">
-                                                No follow-ups found for this driver.
-                                            </div>
-                                        )}
-                                    </Card>
-                                )}
+                                                        </thead>
+                                                        <tbody>
+                                                            {driverFollowUps.map((followUp, index) => (
+                                                                <tr 
+                                                                    key={followUp.id} 
+                                                                    className={`
+                                                                        border-t transition-colors duration-150
+                                                                        ${
+                                                                            index === 0
+                                                                                ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                                                : index % 2 === 0
+                                                                                  ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                                                  : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                                        }
+                                                                    `}
+                                                                >
+                                                                    <td className="px-4 py-3 text-sm">
+                                                                        {followUp.created_time ? formatDate(followUp.created_time) : 'N/A'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm">
+                                                                        {followUp.user_name || 'N/A'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm">
+                                                                        {followUp.riding_company || 'N/A'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm">
+                                                                        {followUp.lead_stage || 'N/A'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm">
+                                                                        {followUp.lead_status || 'N/A'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm">
+                                                                        {followUp.lead_status_comment ? (
+                                                                            <div className="max-w-xs truncate" title={followUp.lead_status_comment}>
+                                                                                {followUp.lead_status_comment}
+                                                                            </div>
+                                                                        ) : 'N/A'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm">
+                                                                        {followUp.notes ? (
+                                                                            <div className="max-w-xs truncate" title={followUp.notes}>
+                                                                                {followUp.notes}
+                                                                            </div>
+                                                                        ) : 'N/A'}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <div className="py-8 text-center text-neutral-500">
+                                                    No follow-ups found for this driver.
+                                                </div>
+                                            )}
+                                        </Card>
+                                    )}
 
-                                {viewDialogTab === 'duplicates' && driverDetails?.duplicate > 0 && (
-                                    <Card className="p-6">
-                                        <h2 className="mb-4 text-lg font-semibold">Duplicate Drivers ({driverDetails.duplicate})</h2>
-                                        <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
-                                            Drivers with the same phone number or WhatsApp number as this driver.
-                                        </p>
-                                        {driverDuplicateDrivers.length > 0 ? (
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full">
-                                                    <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
-                                                        <tr>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Full Name</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">WhatsApp</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Email</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Campaign</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Source</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Assigned To</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {driverDuplicateDrivers.map((dup, index) => (
-                                                            <tr 
-                                                                key={dup.id} 
-                                                                className={`
-                                                                    border-t transition-colors duration-150 cursor-pointer
-                                                                    ${
-                                                                        index === 0
-                                                                            ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
-                                                                            : index % 2 === 0
-                                                                              ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
-                                                                              : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
-                                                                    }
-                                                                `} 
-                                                                onClick={() => {
-                                                                setViewDialogOpen(false);
-                                                                router.visit(`/drivers/drivers/${dup.id}`);
-                                                            }}>
-                                                                <td className="px-4 py-3 text-sm">{dup.full_name || '-'}</td>
-                                                                <td className="px-4 py-3 text-sm">{dup.phone || '-'}</td>
-                                                                <td className="px-4 py-3 text-sm">{dup.whatsapp_phone || '-'}</td>
-                                                                <td className="px-4 py-3 text-sm">{dup.email || '-'}</td>
-                                                                <td className="px-4 py-3 text-sm">{dup.riding_company?.name || '-'}</td>
-                                                                <td className="px-4 py-3 text-sm">{dup.campaign?.name || '-'}</td>
-                                                                <td className="px-4 py-3 text-sm">{dup.lead_source?.name || '-'}</td>
-                                                                <td className="px-4 py-3 text-sm">
-                                                                    {dup.lead_status ? (
-                                                                        <Badge style={{ backgroundColor: dup.lead_status.color || '#6b7280' }}>
-                                                                            {dup.lead_status.name}
-                                                                        </Badge>
-                                                                    ) : '-'}
-                                                                </td>
-                                                                <td className="px-4 py-3 text-sm">{dup.lead_stage?.name || '-'}</td>
-                                                                <td className="px-4 py-3 text-sm">
-                                                                    {dup.assigned_to?.name || (dup.assigned_users && dup.assigned_users.length > 0 ? dup.assigned_users.map((u: any) => u.name).join(', ') : '-')}
-                                                                </td>
-                                                                <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setViewDialogOpen(false);
-                                                                            router.visit(`/drivers/drivers/${dup.id}`);
-                                                                        }}
-                                                                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                                                                        title="View Details"
-                                                                    >
-                                                                        <Eye className="h-4 w-4" />
-                                                                    </button>
-                                                                </td>
+                                        {viewDialogTab === 'duplicates' && driverDetails?.duplicate > 0 && (
+                                        <Card className="p-6">
+                                            <h2 className="mb-4 text-lg font-semibold">Duplicate Drivers ({driverDetails.duplicate})</h2>
+                                            <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+                                                Drivers with the same phone number or WhatsApp number as this driver.
+                                            </p>
+                                            {driverDuplicateDrivers.length > 0 ? (
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full">
+                                                        <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
+                                                            <tr>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Full Name</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">WhatsApp</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Email</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Campaign</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Source</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Assigned To</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
                                                             </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        ) : (
-                                            <p className="text-neutral-500 dark:text-neutral-400">No duplicate drivers found.</p>
-                                        )}
-                                    </Card>
-                                )}
+                                                        </thead>
+                                                        <tbody>
+                                                            {driverDuplicateDrivers.map((dup, index) => (
+                                                                <tr 
+                                                                    key={dup.id} 
+                                                                    className={`
+                                                                        border-t transition-colors duration-150 cursor-pointer
+                                                                        ${
+                                                                            index === 0
+                                                                                ? 'bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40'
+                                                                                : index % 2 === 0
+                                                                                  ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                                                  : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                                        }
+                                                                    `} 
+                                                                    onClick={() => {
+                                                                    setViewDialogOpen(false);
+                                                                    router.visit(`/drivers/drivers/${dup.id}`);
+                                                                }}>
+                                                                    <td className="px-4 py-3 text-sm">{dup.full_name || '-'}</td>
+                                                                    <td className="px-4 py-3 text-sm">{dup.phone || '-'}</td>
+                                                                    <td className="px-4 py-3 text-sm">{dup.whatsapp_phone || '-'}</td>
+                                                                    <td className="px-4 py-3 text-sm">{dup.email || '-'}</td>
+                                                                    <td className="px-4 py-3 text-sm">{dup.riding_company?.name || '-'}</td>
+                                                                    <td className="px-4 py-3 text-sm">{dup.campaign?.name || '-'}</td>
+                                                                    <td className="px-4 py-3 text-sm">{dup.lead_source?.name || '-'}</td>
+                                                                    <td className="px-4 py-3 text-sm">
+                                                                        {dup.lead_status ? (
+                                                                            <Badge style={{ backgroundColor: dup.lead_status.color || '#6b7280' }}>
+                                                                                {dup.lead_status.name}
+                                                                            </Badge>
+                                                                        ) : '-'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm">{dup.lead_stage?.name || '-'}</td>
+                                                                    <td className="px-4 py-3 text-sm">
+                                                                        {dup.assigned_to?.name || (dup.assigned_users && dup.assigned_users.length > 0 ? dup.assigned_users.map((u: any) => u.name).join(', ') : '-')}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setViewDialogOpen(false);
+                                                                                router.visit(`/drivers/drivers/${dup.id}`);
+                                                                            }}
+                                                                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                                                            title="View Details"
+                                                                        >
+                                                                            <Eye className="h-4 w-4" />
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <p className="text-neutral-500 dark:text-neutral-400">No duplicate drivers found.</p>
+                                            )}
+                                        </Card>
+                                    )}
+                                </>
                             </div>
                         ) : (
                             <div className="py-8 text-center">

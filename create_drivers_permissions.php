@@ -13,7 +13,7 @@ $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 use Modules\Core\app\Models\Permission;
 
 $entities = [
-    'drivers' => ['create', 'read', 'update', 'delete', 'assign', 'view-stages', 'view-documents', 'view-document', 'upload-document', 'delete-document', 'reject-document', 'approve-document', 'pending-document', 'export', 'import', 'mass-edit', 'mass-delete', 'delete-all'],
+    'drivers' => ['create', 'read', 'update', 'edit', 'delete', 'assign', 'quick-edit', 'view-stages', 'view-documents', 'view-document', 'upload-document', 'delete-document', 'reject-document', 'approve-document', 'pending-document', 'export', 'import', 'mass-edit', 'mass-delete', 'delete-all'],
     'driverdocuments' => ['create', 'read', 'update', 'delete', 'upload', 'approve', 'reject', 'download', 'export', 'set-pending', 'set-approved', 'set-rejected', 'view', 'replace', 'delete-file'],
 ];
 

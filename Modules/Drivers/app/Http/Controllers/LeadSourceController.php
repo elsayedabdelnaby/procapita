@@ -8,7 +8,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
-use Modules\Core\app\Models\Company;
 use Modules\Drivers\app\Http\Requests\LeadSourceStoreRequest;
 use Modules\Drivers\app\Http\Requests\LeadSourceUpdateRequest;
 use Modules\Drivers\app\Services\LeadSourceService;
@@ -21,36 +20,59 @@ class LeadSourceController extends Controller
 
     public function index(): Response
     {
-        $user = Auth::user();
-        $companyId = $this->getCompanyId();
-
-        $leadSources = $this->leadSourceService->getAllLeadSources($companyId);
+        $leadSources = $this->leadSourceService->getAllLeadSources();
+        
+        // Get drivers count for each lead source
+        $driversCounts = [];
+        if (class_exists(\Modules\Drivers\app\Models\Driver::class)) {
+            foreach ($leadSources as $leadSource) {
+                $driversCounts[$leadSource->id] = \Modules\Drivers\app\Models\Driver::where('lead_source_id', $leadSource->id)->count();
+            }
+        }
 
         return Inertia::render('Drivers/LeadSources/Index', [
             'leadSources' => $leadSources,
+            'driversCounts' => $driversCounts,
+            'availableLeadSources' => $leadSources, // For transfer dropdown
+        ]);
+    }
+
+    public function recycleBin(): Response
+    {
+        $leadSources = \Modules\Drivers\app\Models\LeadSource::onlyTrashed()
+            ->orderBy('deleted_at', 'desc')
+            ->get();
+        
+        // Get drivers count for each lead source
+        $driversCounts = [];
+        foreach ($leadSources as $leadSource) {
+            $driversCounts[$leadSource->id] = \Modules\Drivers\app\Models\Driver::where('lead_source_id', $leadSource->id)->count();
+        }
+
+        return Inertia::render('Drivers/LeadSources/RecycleBin', [
+            'leadSources' => $leadSources->map(fn($ls) => [
+                'id' => $ls->id,
+                'name' => $ls->name,
+                'slug' => $ls->slug,
+                'description' => $ls->description,
+                'active' => $ls->active,
+                'created_at' => $ls->created_at?->toISOString(),
+                'updated_at' => $ls->updated_at?->toISOString(),
+                'deleted_at' => $ls->deleted_at?->toISOString(),
+            ]),
+            'driversCounts' => $driversCounts,
         ]);
     }
 
     public function create(): Response
     {
-        $user = Auth::user();
-        $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get() : null;
-
-        return Inertia::render('Drivers/LeadSources/Create', [
-            'companies' => $companies,
-        ]);
+        return Inertia::render('Drivers/LeadSources/Create');
     }
 
     public function store(LeadSourceStoreRequest $request): RedirectResponse
     {
         try {
             $data = $request->validated();
-            $user = Auth::user();
-
-            if (! $user->isSuperAdmin()) {
-                $data['company_id'] = $user->company_id;
-            }
-
             $data['active'] = $data['active'] ?? true;
 
             $this->leadSourceService->createLeadSource($data);
@@ -94,9 +116,21 @@ class LeadSourceController extends Controller
                 ];
             });
 
+        // Get drivers count
+        $driversCount = 0;
+        if (class_exists(\Modules\Drivers\app\Models\Driver::class)) {
+            $driversCount = \Modules\Drivers\app\Models\Driver::where('lead_source_id', $leadSource)->count();
+        }
+        
+        // Get available lead sources for transfer (exclude self)
+        $availableLeadSources = $this->leadSourceService->getAllLeadSources()
+            ->filter(fn($ls) => $ls->id !== $leadSourceModel->id);
+
         return Inertia::render('Drivers/LeadSources/Show', [
             'leadSource' => $leadSourceModel,
             'activities' => $activities,
+            'driversCount' => $driversCount,
+            'availableLeadSources' => $availableLeadSources,
         ]);
     }
 
@@ -108,12 +142,8 @@ class LeadSourceController extends Controller
             abort(404, 'Lead source not found.');
         }
 
-        $user = Auth::user();
-        $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get() : null;
-
         return Inertia::render('Drivers/LeadSources/Edit', [
             'leadSource' => $leadSourceModel,
-            'companies' => $companies,
         ]);
     }
 
@@ -133,10 +163,40 @@ class LeadSourceController extends Controller
         }
     }
 
-    public function destroy(int $leadSource): RedirectResponse
+    public function destroy(Request $request, int $leadSource): RedirectResponse
     {
         try {
-            $this->leadSourceService->deleteLeadSource($leadSource);
+            $leadSourceModel = $this->leadSourceService->getLeadSourceById($leadSource);
+            
+            if (! $leadSourceModel) {
+                abort(404, 'Lead source not found.');
+            }
+            
+            // Get drivers count
+            $driversCount = 0;
+            if (class_exists(\Modules\Drivers\app\Models\Driver::class)) {
+                $driversCount = \Modules\Drivers\app\Models\Driver::where('lead_source_id', $leadSource)->count();
+            }
+            
+            // Validate transfer_lead_source_id if drivers exist
+            $transferLeadSourceId = $request->input('transfer_lead_source_id');
+            if ($driversCount > 0) {
+                $request->validate([
+                    'transfer_lead_source_id' => [
+                        'required',
+                        'integer',
+                        'exists:lead_sources,id',
+                        function ($attribute, $value, $fail) use ($leadSourceModel) {
+                            $transferLeadSource = \Modules\Drivers\app\Models\LeadSource::find($value);
+                            if ($transferLeadSource && $transferLeadSource->id === $leadSourceModel->id) {
+                                $fail('Cannot transfer to the same lead source.');
+                            }
+                        },
+                    ],
+                ]);
+            }
+            
+            $this->leadSourceService->deleteLeadSource($leadSource, $transferLeadSourceId);
 
             return redirect()
                 ->route('drivers.leadsources.index')
@@ -165,9 +225,7 @@ class LeadSourceController extends Controller
 
     public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $user = Auth::user();
-        $companyId = $this->getCompanyId();
-        $leadSources = $this->leadSourceService->getAllLeadSources($companyId);
+        $leadSources = $this->leadSourceService->getAllLeadSources();
 
         $filename = 'lead_sources_export_' . date('Y-m-d_His') . '.csv';
         

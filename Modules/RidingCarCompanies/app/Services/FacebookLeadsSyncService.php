@@ -211,12 +211,11 @@ class FacebookLeadsSyncService
     /**
      * Get or create lead source
      */
-    private function getOrCreateLeadSource(string $name, int $companyId): int
+    private function getOrCreateLeadSource(string $name, ?int $companyId = null): int
     {
         $leadSource = \Modules\Drivers\app\Models\LeadSource::firstOrCreate(
             [
                 'name' => $name,
-                'company_id' => $companyId,
             ],
             [
                 'active' => true,
@@ -229,12 +228,11 @@ class FacebookLeadsSyncService
     /**
      * Get or create lead status
      */
-    private function getOrCreateLeadStatus(string $name, int $companyId): int
+    private function getOrCreateLeadStatus(string $name, ?int $companyId = null): int
     {
         $leadStatus = \Modules\Drivers\app\Models\LeadStatus::firstOrCreate(
             [
                 'name' => $name,
-                'company_id' => $companyId,
             ],
             [
                 'active' => true,

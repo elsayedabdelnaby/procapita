@@ -45,8 +45,20 @@ class CampaignUpdateRequest extends FormRequest
      */
     public function rules(): array
     {
+        $campaignId = $this->route('campaign');
+        $campaign = \Modules\Marketing\app\Models\Campaign::find($campaignId);
+        $companyId = $this->input('company_id') ?? $campaign?->company_id;
+        
+        $nameRule = ['required', 'string', 'max:255'];
+        if ($companyId) {
+            $nameRule[] = \Illuminate\Validation\Rule::unique('campaigns', 'name')
+                ->where('company_id', $companyId)
+                ->whereNull('deleted_at')
+                ->ignore($campaignId);
+        }
+        
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => $nameRule,
             'description' => ['nullable', 'string'],
             'campaign_type_id' => ['required', 'integer', 'exists:campaign_types,id'],
             'campaign_status_id' => ['required', 'integer', 'exists:campaign_statuses,id'],
@@ -88,6 +100,7 @@ class CampaignUpdateRequest extends FormRequest
         return [
             'name.required' => 'Campaign name is required.',
             'name.max' => 'Campaign name must not exceed 255 characters.',
+            'name.unique' => 'This campaign name is already taken for this company.',
             'campaign_type_id.required' => 'Campaign type is required.',
             'campaign_type_id.exists' => 'Selected campaign type is invalid.',
             'campaign_status_id.required' => 'Campaign status is required.',

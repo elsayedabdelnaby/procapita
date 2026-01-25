@@ -14,8 +14,10 @@ class LeadStatusUpdateRequest extends FormRequest
     public function rules(): array
     {
         $user = $this->user();
+        $leadStatusId = $this->route('leadStatus');
+        
         $rules = [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('lead_statuses', 'name')->whereNull('deleted_at')->ignore($leadStatusId)],
             'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'color' => ['nullable', 'string', 'max:50'],
@@ -34,6 +36,7 @@ class LeadStatusUpdateRequest extends FormRequest
     {
         return [
             'name.required' => 'Lead status name is required.',
+            'name.unique' => 'This lead status name is already taken.',
         ];
     }
 }

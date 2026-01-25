@@ -45,6 +45,7 @@ class Driver extends Model
         'next_follow_up',
         'last_follow_up',
         'lead_stage_id',
+        'driver_stage_id',
         'current_stage_id',
         'notes',
         'cancel_reason',
@@ -418,6 +419,11 @@ class Driver extends Model
     public function leadStage(): BelongsTo
     {
         return $this->belongsTo(LeadStage::class);
+    }
+
+    public function driverStage(): BelongsTo
+    {
+        return $this->belongsTo(DriverStage::class, 'driver_stage_id');
     }
 
     public function currentStage(): BelongsTo

@@ -7,32 +7,21 @@ use Modules\Drivers\app\Models\LeadStatus;
 
 class LeadStatusService
 {
-    public function getAllLeadStatuses(?int $companyId = null): Collection
+    public function getAllLeadStatuses(): Collection
     {
-        $query = LeadStatus::with('company');
-
-        if ($companyId) {
-            $query->where('company_id', $companyId);
-        }
-
-        return $query->ordered()->get();
+        return LeadStatus::ordered()->get();
     }
 
     public function getLeadStatusById(int $id): ?LeadStatus
     {
-        return LeadStatus::with('company')->find($id);
+        return LeadStatus::find($id);
     }
 
     public function createLeadStatus(array $data): LeadStatus
     {
         // If order is not set, assign the next available order number
         if (! isset($data['order']) || $data['order'] === 0) {
-            $companyId = $data['company_id'] ?? null;
-            $query = LeadStatus::query();
-            if ($companyId) {
-                $query->where('company_id', $companyId);
-            }
-            $maxOrder = $query->max('order') ?? 0;
+            $maxOrder = LeadStatus::max('order') ?? 0;
             $data['order'] = $maxOrder + 1;
         }
 
@@ -47,9 +36,19 @@ class LeadStatusService
         return $leadStatus->fresh();
     }
 
-    public function deleteLeadStatus(int $id): bool
+    public function deleteLeadStatus(int $id, ?int $transferLeadStatusId = null): bool
     {
         $leadStatus = LeadStatus::findOrFail($id);
+        
+        // If transfer ID is provided, transfer all drivers to the new lead status
+        if ($transferLeadStatusId !== null) {
+            // Transfer all drivers
+            if (class_exists(\Modules\Drivers\app\Models\Driver::class)) {
+                \Modules\Drivers\app\Models\Driver::where('lead_status_id', $id)
+                    ->update(['lead_status_id' => $transferLeadStatusId]);
+            }
+        }
+        
         return $leadStatus->delete();
     }
 
@@ -64,11 +63,9 @@ class LeadStatusService
     public function moveUp(int $id): LeadStatus
     {
         $leadStatus = LeadStatus::findOrFail($id);
-        $companyId = $leadStatus->company_id;
 
         // Find the previous status with lower order
-        $previousStatus = LeadStatus::where('company_id', $companyId)
-            ->where('order', '<', $leadStatus->order)
+        $previousStatus = LeadStatus::where('order', '<', $leadStatus->order)
             ->orderBy('order', 'desc')
             ->first();
 
@@ -85,11 +82,9 @@ class LeadStatusService
     public function moveDown(int $id): LeadStatus
     {
         $leadStatus = LeadStatus::findOrFail($id);
-        $companyId = $leadStatus->company_id;
 
         // Find the next status with higher order
-        $nextStatus = LeadStatus::where('company_id', $companyId)
-            ->where('order', '>', $leadStatus->order)
+        $nextStatus = LeadStatus::where('order', '>', $leadStatus->order)
             ->orderBy('order', 'asc')
             ->first();
 

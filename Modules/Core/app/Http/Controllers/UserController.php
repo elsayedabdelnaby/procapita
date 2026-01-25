@@ -42,10 +42,12 @@ class UserController extends Controller
         setPermissionsTeamId($company);
 
         $users = $this->userService->getAllUsers($company);
+        $deletedUsers = $this->userService->getDeletedUsers($company);
 
         return Inertia::render('Core/Users/Index', [
             'company' => $companyModel,
             'users' => $users,
+            'deletedUsers' => $deletedUsers,
         ]);
     }
 
@@ -337,5 +339,53 @@ class UserController extends Controller
             ->get();
 
         return response()->json(['users' => $users]);
+    }
+
+    public function restore(int $company, int $user): RedirectResponse
+    {
+        try {
+            $userModel = \App\Models\User::onlyTrashed()->findOrFail($user);
+
+            if ($userModel->company_id !== $company) {
+                abort(404, 'User not found.');
+            }
+
+            $userModel->restore();
+
+            return redirect()
+                ->back()
+                ->with('success', 'User restored successfully.');
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage());
+        }
+    }
+
+    public function forceDelete(int $company, int $user): RedirectResponse
+    {
+        try {
+            $userModel = \App\Models\User::onlyTrashed()->findOrFail($user);
+
+            if ($userModel->company_id !== $company) {
+                abort(404, 'User not found.');
+            }
+
+            if ($userModel->is_super_admin) {
+                return redirect()
+                    ->back()
+                    ->with('error', 'Cannot permanently delete super admin user.');
+            }
+
+            $userModel->forceDelete();
+
+            return redirect()
+                ->back()
+                ->with('success', 'User permanently deleted.');
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage());
+        }
     }
 }

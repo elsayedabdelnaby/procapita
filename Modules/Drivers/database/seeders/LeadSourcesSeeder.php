@@ -10,16 +10,7 @@ class LeadSourcesSeeder extends Seeder
 {
     public function run(?int $companyId = null): void
     {
-        // If no company ID provided, seed for all companies
-        $companies = $companyId 
-            ? Company::where('id', $companyId)->get()
-            : Company::all();
-
-        if ($companies->isEmpty()) {
-            $this->command->warn('No companies found. Please create a company first.');
-            return;
-        }
-
+        // Lead Sources are now global, no need for company-specific seeding
         $sources = [
             'Facebook Ads',
             'Google Ads',
@@ -35,19 +26,15 @@ class LeadSourcesSeeder extends Seeder
             'Other',
         ];
 
-        foreach ($companies as $company) {
-            foreach ($sources as $source) {
-                LeadSource::firstOrCreate(
-                    [
-                        'company_id' => $company->id,
-                        'slug' => \Illuminate\Support\Str::slug($source),
-                    ],
-                    [
-                        'name' => $source,
-                        'active' => true,
-                    ]
-                );
-            }
+        foreach ($sources as $source) {
+            LeadSource::firstOrCreate(
+                [
+                    'name' => $source,
+                ],
+                [
+                    'active' => true,
+                ]
+            );
         }
     }
 }

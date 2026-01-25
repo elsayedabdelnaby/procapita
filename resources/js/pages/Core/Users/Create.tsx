@@ -9,7 +9,6 @@ import { Company, Role } from '@/types/core';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { type SharedData } from '@/types';
 import axios from 'axios';
-import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface RidingCompany {
@@ -44,8 +43,6 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
     const [loadingTeamLeaders, setLoadingTeamLeaders] = useState(false);
     const [accountManagers, setAccountManagers] = useState<Array<{id: number; name: string; email: string}>>([]);
     const [loadingAccountManagers, setLoadingAccountManagers] = useState(false);
-    const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
-    const [expandedEntities, setExpandedEntities] = useState<Record<string, boolean>>({});
     const [showCompanyAdminConfirm, setShowCompanyAdminConfirm] = useState(false);
 
     const { data, setData, post, processing, errors } = useForm({
@@ -219,62 +216,11 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
     };
 
     const handleRoleChange = (roleId: number) => {
-        // If selecting a role, clear all direct permissions
-        setData('permissions', []);
         setData('role_id', roleId);
         setData('roles', [roleId]); // Keep for backward compatibility
+        setData('permissions', []); // Clear permissions - user will get permissions from role only
     };
 
-    const handlePermissionToggle = (permissionId: number, checked: boolean) => {
-        if (checked) {
-            // If selecting a direct permission, clear all roles
-            setData('roles', []);
-            setData('permissions', [...(data.permissions || []), permissionId]);
-        } else {
-            setData('permissions', (data.permissions || []).filter((id) => id !== permissionId));
-        }
-    };
-
-    const toggleModule = (moduleName: string) => {
-        setExpandedModules((prev) => ({
-            ...prev,
-            [moduleName]: !prev[moduleName],
-        }));
-    };
-
-    const toggleEntity = (moduleName: string, entityName: string) => {
-        const key = `${moduleName}-${entityName}`;
-        setExpandedEntities((prev) => ({
-            ...prev,
-            [key]: !prev[key],
-        }));
-    };
-
-    const handleSelectAllModule = (moduleName: string, checked: boolean) => {
-        const modulePermissions = Object.values(permissions[moduleName] || {})
-            .flat()
-            .map((p) => p.id);
-        
-        if (checked) {
-            // If selecting permissions, clear all roles
-            setData('roles', []);
-            setData('permissions', [...new Set([...(data.permissions || []), ...modulePermissions])]);
-        } else {
-            setData('permissions', (data.permissions || []).filter((id) => !modulePermissions.includes(id)));
-        }
-    };
-
-    const handleSelectAllEntity = (moduleName: string, entityName: string, checked: boolean) => {
-        const entityPermissions = (permissions[moduleName]?.[entityName] || []).map((p) => p.id);
-        
-        if (checked) {
-            // If selecting permissions, clear all roles
-            setData('roles', []);
-            setData('permissions', [...new Set([...(data.permissions || []), ...entityPermissions])]);
-        } else {
-            setData('permissions', (data.permissions || []).filter((id) => !entityPermissions.includes(id)));
-        }
-    };
 
     return (
         <AppLayout>
@@ -485,12 +431,8 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                             
                             <div className="rounded-md bg-blue-50 p-4 dark:bg-blue-900/20">
                                 <p className="text-sm text-blue-900 dark:text-blue-100">
-                                    <strong>Choose one of the following:</strong>
+                                    <strong>Assign Role:</strong> User will inherit permissions from the selected role only.
                                 </p>
-                                <ul className="mt-2 list-disc list-inside text-sm text-blue-900 dark:text-blue-100 space-y-1">
-                                    <li><strong>Assign Roles:</strong> User will inherit permissions from selected roles (hierarchy-based)</li>
-                                    <li><strong>Direct Permissions:</strong> User will have specific permissions assigned directly (outside hierarchy)</li>
-                                </ul>
                             </div>
 
                             {roles && roles.length > 0 ? (
@@ -532,208 +474,6 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                                 </p>
                             )}
 
-                            {Object.keys(permissions).length > 0 && (
-                                <div className="space-y-2">
-                                    <Label>Direct Permissions (outside hierarchy)</Label>
-                                    <div className="max-h-[600px] space-y-2 overflow-y-auto rounded-md border p-4">
-                                        {Object.entries(permissions).map(([moduleName, entities]) => {
-                                            const modulePermissions = Object.values(entities)
-                                                .flat()
-                                                .map((p) => p.id);
-                                            const allModuleSelected =
-                                                modulePermissions.length > 0 &&
-                                                modulePermissions.every((id) =>
-                                                    data.permissions?.includes(id)
-                                                );
-                                            const isModuleExpanded = expandedModules[moduleName] ?? false;
-
-                                            return (
-                                                <div
-                                                    key={moduleName}
-                                                    className="rounded-md border border-neutral-200 dark:border-neutral-800"
-                                                >
-                                                    <div
-                                                        className="flex items-center gap-2 border-b bg-neutral-50 p-3 dark:bg-neutral-900/50"
-                                                        onClick={() => toggleModule(moduleName)}
-                                                    >
-                                                        <button
-                                                            type="button"
-                                                            className="flex items-center justify-center"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                toggleModule(moduleName);
-                                                            }}
-                                                        >
-                                                            {isModuleExpanded ? (
-                                                                <ChevronDown className="h-4 w-4" />
-                                                            ) : (
-                                                                <ChevronRight className="h-4 w-4" />
-                                                            )}
-                                                        </button>
-                                                        <Checkbox
-                                                            id={`module-${moduleName}`}
-                                                            checked={allModuleSelected}
-                                                            onCheckedChange={(checked) =>
-                                                                handleSelectAllModule(
-                                                                    moduleName,
-                                                                    checked as boolean
-                                                                )
-                                                            }
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        />
-                                                        <Label
-                                                            htmlFor={`module-${moduleName}`}
-                                                            className="flex-1 cursor-pointer text-base font-semibold capitalize"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                toggleModule(moduleName);
-                                                            }}
-                                                        >
-                                                            {moduleName} Module
-                                                        </Label>
-                                                        <span className="text-xs text-neutral-500">
-                                                            ({modulePermissions.length} permissions)
-                                                        </span>
-                                                    </div>
-
-                                                    {isModuleExpanded && (
-                                                        <div className="p-3 space-y-3">
-                                                            {Object.entries(entities).map(
-                                                                ([entityName, entityPermissions]) => {
-                                                                    const entityPermissionIds =
-                                                                        entityPermissions.map(
-                                                                            (p) => p.id
-                                                                        );
-                                                                    const allEntitySelected =
-                                                                        entityPermissionIds.length > 0 &&
-                                                                        entityPermissionIds.every((id) =>
-                                                                            data.permissions?.includes(id)
-                                                                        );
-                                                                    const entityKey = `${moduleName}-${entityName}`;
-                                                                    const isEntityExpanded =
-                                                                        expandedEntities[entityKey] ?? true;
-
-                                                                    return (
-                                                                        <div
-                                                                            key={entityName}
-                                                                            className="rounded-md border border-neutral-200 dark:border-neutral-800"
-                                                                        >
-                                                                            <div
-                                                                                className="flex items-center gap-2 bg-neutral-50/50 p-2 dark:bg-neutral-900/30"
-                                                                                onClick={() =>
-                                                                                    toggleEntity(
-                                                                                        moduleName,
-                                                                                        entityName
-                                                                                    )
-                                                                                }
-                                                                            >
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="flex items-center justify-center"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        toggleEntity(
-                                                                                            moduleName,
-                                                                                            entityName
-                                                                                        );
-                                                                                    }}
-                                                                                >
-                                                                                    {isEntityExpanded ? (
-                                                                                        <ChevronDown className="h-4 w-4" />
-                                                                                    ) : (
-                                                                                        <ChevronRight className="h-4 w-4" />
-                                                                                    )}
-                                                                                </button>
-                                                                                <Checkbox
-                                                                                    id={`entity-${moduleName}-${entityName}`}
-                                                                                    checked={
-                                                                                        allEntitySelected
-                                                                                    }
-                                                                                    onCheckedChange={(
-                                                                                        checked
-                                                                                    ) =>
-                                                                                        handleSelectAllEntity(
-                                                                                            moduleName,
-                                                                                            entityName,
-                                                                                            checked as boolean
-                                                                                        )
-                                                                                    }
-                                                                                    onClick={(e) =>
-                                                                                        e.stopPropagation()
-                                                                                    }
-                                                                                />
-                                                                                <Label
-                                                                                    htmlFor={`entity-${moduleName}-${entityName}`}
-                                                                                    className="flex-1 cursor-pointer font-medium capitalize"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        toggleEntity(
-                                                                                            moduleName,
-                                                                                            entityName
-                                                                                        );
-                                                                                    }}
-                                                                                >
-                                                                                    {entityName}
-                                                                                </Label>
-                                                                                <span className="text-xs text-neutral-500">
-                                                                                    ({entityPermissionIds.length}{' '}
-                                                                                    permissions)
-                                                                                </span>
-                                                                            </div>
-
-                                                                            {isEntityExpanded && (
-                                                                                <div className="p-3 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
-                                                                                    {entityPermissions.map(
-                                                                                        (permission) => (
-                                                                                            <div
-                                                                                                key={
-                                                                                                    permission.id
-                                                                                                }
-                                                                                                className="flex items-center gap-2"
-                                                                                            >
-                                                                                                <Checkbox
-                                                                                                    id={`permission-${permission.id}`}
-                                                                                                    checked={data.permissions?.includes(
-                                                                                                        permission.id
-                                                                                                    )}
-                                                                                                    onCheckedChange={(
-                                                                                                        checked
-                                                                                                    ) =>
-                                                                                                        handlePermissionToggle(
-                                                                                                            permission.id,
-                                                                                                            checked as boolean
-                                                                                                        )
-                                                                                                    }
-                                                                                                />
-                                                                                                <Label
-                                                                                                    htmlFor={`permission-${permission.id}`}
-                                                                                                    className="text-sm font-normal capitalize cursor-pointer"
-                                                                                                >
-                                                                                                    {permission.action ||
-                                                                                                        permission.name.split(
-                                                                                                            '.'
-                                                                                                        )[2]}
-                                                                                                </Label>
-                                                                                            </div>
-                                                                                        )
-                                                                                    )}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    );
-                                                                }
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    {errors.permissions && (
-                                        <p className="text-sm text-red-500">{errors.permissions}</p>
-                                    )}
-                                </div>
-                            )}
 
                             <div className="flex items-center space-x-2">
                                 <Checkbox

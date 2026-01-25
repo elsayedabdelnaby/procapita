@@ -12,14 +12,36 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('driver_stages', function (Blueprint $table) {
-            // Drop foreign key and column for stage_template_id
-            $table->dropForeign(['stage_template_id']);
-            $table->dropIndex(['stage_template_id']);
-            $table->dropColumn('stage_template_id');
+            // Drop foreign key and column for stage_template_id if it exists
+            if (Schema::hasColumn('driver_stages', 'stage_template_id')) {
+                // Check if foreign key exists before dropping
+                $foreignKeys = Schema::getConnection()
+                    ->getDoctrineSchemaManager()
+                    ->listTableForeignKeys('driver_stages');
+                
+                $hasForeignKey = false;
+                foreach ($foreignKeys as $foreignKey) {
+                    if (in_array('stage_template_id', $foreignKey->getLocalColumns())) {
+                        $hasForeignKey = true;
+                        break;
+                    }
+                }
+                
+                if ($hasForeignKey) {
+                    $table->dropForeign(['stage_template_id']);
+                }
+                
+                if (Schema::hasColumn('driver_stages', 'stage_template_id')) {
+                    $table->dropIndex(['stage_template_id']);
+                    $table->dropColumn('stage_template_id');
+                }
+            }
 
-            // Add riding_company_id
-            $table->foreignId('riding_company_id')->nullable()->after('driver_id')->constrained('riding_companies')->onDelete('cascade');
-            $table->index('riding_company_id');
+            // Add riding_company_id if it doesn't exist
+            if (!Schema::hasColumn('driver_stages', 'riding_company_id')) {
+                $table->foreignId('riding_company_id')->nullable()->after('driver_id')->constrained('riding_companies')->onDelete('cascade');
+                $table->index('riding_company_id');
+            }
         });
     }
 

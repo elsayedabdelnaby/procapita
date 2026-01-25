@@ -11,6 +11,7 @@ Route::middleware(['auth', 'verified'])->prefix('core')->name('core.')->group(fu
         Route::post('companies/select', [CompanyController::class, 'select'])->name('companies.select');
         Route::post('companies/clear-selection', [CompanyController::class, 'clearSelection'])->name('companies.clear-selection');
         Route::resource('companies', CompanyController::class);
+        Route::get('companies/recycle-bin', [CompanyController::class, 'recycleBin'])->name('companies.recycle-bin');
         Route::post('companies/{company}/activate', [CompanyController::class, 'activate'])->name('companies.activate');
         Route::post('companies/{company}/deactivate', [CompanyController::class, 'deactivate'])->name('companies.deactivate');
 
@@ -25,6 +26,8 @@ Route::middleware(['auth', 'verified'])->prefix('core')->name('core.')->group(fu
             Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
             Route::post('users/{user}/activate', [UserController::class, 'activate'])->name('users.activate');
             Route::post('users/{user}/deactivate', [UserController::class, 'deactivate'])->name('users.deactivate');
+            Route::post('users/{user}/restore', [UserController::class, 'restore'])->name('users.restore');
+            Route::delete('users/{user}/force', [UserController::class, 'forceDelete'])->name('users.force-delete');
         });
     });
 
@@ -39,6 +42,8 @@ Route::middleware(['auth', 'verified'])->prefix('core')->name('core.')->group(fu
         Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
         Route::post('users/{user}/activate', [UserController::class, 'activate'])->name('users.activate');
         Route::post('users/{user}/deactivate', [UserController::class, 'deactivate'])->name('users.deactivate');
+        Route::post('users/{user}/restore', [UserController::class, 'restore'])->name('users.restore');
+        Route::delete('users/{user}/force', [UserController::class, 'forceDelete'])->name('users.force-delete');
     });
 
     // API routes for users

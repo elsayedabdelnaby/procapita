@@ -16,7 +16,7 @@ class CompanyUpdateRequest extends FormRequest
         $companyId = $this->route('company');
 
         return [
-            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'name' => ['sometimes', 'required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('companies', 'name')->whereNull('deleted_at')->ignore($companyId)],
             'slug' => ['nullable', 'string', 'max:255', "unique:companies,slug,{$companyId}"],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
@@ -53,6 +53,7 @@ class CompanyUpdateRequest extends FormRequest
     {
         return [
             'name.required' => 'Company name is required.',
+            'name.unique' => 'This company name is already taken.',
             'slug.unique' => 'This company slug is already taken.',
             'logo.image' => 'The logo must be an image file.',
             'logo.mimes' => 'The logo must be a .jpeg, .jpg, .png, .gif, .pjpeg, or .x-png file.',

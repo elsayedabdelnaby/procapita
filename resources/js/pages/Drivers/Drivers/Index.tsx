@@ -84,6 +84,10 @@ interface Driver {
     next_follow_up?: string;
     last_follow_up?: string;
     lead_stage?: LeadStage;
+    driver_stage?: {
+        id: number;
+        name: string;
+    };
     created_at: string;
     updated_at: string;
     duplicate?: number;
@@ -168,6 +172,7 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'account_manager', label: 'Account Manager', defaultVisible: true, defaultOrder: 8.85 },
     { id: 'resigned_leads', label: 'Resigned Leads', defaultVisible: true, defaultOrder: 8.9 },
     { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 9 },
+    { id: 'driver_stage', label: 'Driver Stage', defaultVisible: true, defaultOrder: 9.2 },
     { id: 'current_stage', label: 'Current Stage', defaultVisible: false, defaultOrder: 9.5 },
     { id: 'last_assigned_date', label: 'Last Assigned Date', defaultVisible: false, defaultOrder: 10.55 },
     { id: 'last_assigned_by', label: 'Last Assigned By', defaultVisible: false, defaultOrder: 10.6 },
@@ -305,11 +310,31 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
     const [selectedListId, setSelectedListId] = useState<number | null>(null);
     const [showMoreLists, setShowMoreLists] = useState<boolean>(false);
     const moreListsRef = useRef<HTMLDivElement>(null);
+    const tableScrollRef = useRef<HTMLDivElement>(null);
     
     // Sync local drivers with props when they change
     useEffect(() => {
         setLocalDrivers(drivers);
     }, [drivers]);
+
+    // Keep scrollbar always visible
+    useEffect(() => {
+        if (tableScrollRef.current) {
+            const element = tableScrollRef.current;
+            // Force scrollbar to be visible by ensuring overflow
+            const ensureScrollbarVisible = () => {
+                if (element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight) {
+                    element.style.overflowX = 'scroll';
+                    element.style.overflowY = 'scroll';
+                }
+            };
+            ensureScrollbarVisible();
+            // Recheck on resize
+            const resizeObserver = new ResizeObserver(ensureScrollbarVisible);
+            resizeObserver.observe(element);
+            return () => resizeObserver.disconnect();
+        }
+    }, [localDrivers]);
     
     // Auto-refresh data periodically and on window focus
     useEffect(() => {
@@ -577,6 +602,14 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
 
     const canDeleteDriver = () => {
         return hasPermission('drivers.drivers.delete');
+    };
+
+    const canQuickEdit = () => {
+        return hasPermission('drivers.drivers.quick-edit');
+    };
+
+    const canEdit = () => {
+        return hasPermission('drivers.drivers.edit');
     };
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [selectedDrivers, setSelectedDrivers] = useState<Set<number>>(new Set());
@@ -2325,6 +2358,10 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                         aValue = a.lead_stage?.name || '';
                         bValue = b.lead_stage?.name || '';
                         break;
+                    case 'driver_stage':
+                        aValue = (a as any).driver_stage?.name || '';
+                        bValue = (b as any).driver_stage?.name || '';
+                        break;
                     case 'current_stage':
                         aValue = (a as any).current_stage?.name || '';
                         bValue = (b as any).current_stage?.name || '';
@@ -3139,13 +3176,13 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
             <AppLayout>
             <Head title="Drivers" />
 
-            <div className={`p-6 ${whatsappWindowOpen && !whatsappFloating ? 'pr-0' : ''}`}>
-                <div className={`flex gap-0 ${whatsappWindowOpen && !whatsappFloating ? 'flex-row' : ''}`}>
-                    <div className={`${whatsappWindowOpen && !whatsappFloating ? 'flex-1 min-w-0' : 'w-full'}`}>
-                <div className="mb-6 flex items-center justify-between">
+            <div className={`h-full flex flex-col overflow-hidden ${whatsappWindowOpen && !whatsappFloating ? 'pr-0' : ''}`}>
+                <div className={`flex gap-0 flex-1 min-h-0 overflow-hidden ${whatsappWindowOpen && !whatsappFloating ? 'flex-row' : ''}`}>
+                    <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${whatsappWindowOpen && !whatsappFloating ? 'min-w-0' : 'w-full'}`}>
+                <div className="px-6 py-2 mb-2 flex items-center justify-between flex-shrink-0">
                     <div>
-                        <h1 className="text-2xl font-bold">Drivers</h1>
-                        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                        <h1 className="text-xl font-bold">Drivers</h1>
+                        <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
                             Manage drivers and their onboarding process
                         </p>
                     </div>
@@ -3199,11 +3236,11 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                     </div>
                 </div>
 
-                <Card className="p-6">
+                <Card className="flex-1 flex flex-col min-h-0 py-2 gap-2">
                     {safeDrivers.length > 0 ? (
                         <>
                             {/* Notification Buttons */}
-                            <div className="mb-6 flex items-center gap-4 flex-wrap">
+                            <div className="px-6 py-2 mb-2 flex items-center gap-3 flex-wrap flex-shrink-0">
                                 <button
                                     onClick={() => {
                                         setActiveTab('all');
@@ -3211,14 +3248,14 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                         setCurrentPage(1);
                                         setSelectedDrivers(new Set());
                                     }}
-                                    className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                                    className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 transition-all ${
                                         activeTab === 'all'
                                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md'
                                             : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
                                     }`}
                                 >
-                                    <Users className={`h-5 w-5 ${activeTab === 'all' ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
-                                    <span className={`font-medium ${activeTab === 'all' ? 'text-blue-700 dark:text-blue-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                                    <Users className={`h-4 w-4 ${activeTab === 'all' ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
+                                    <span className={`text-sm font-medium ${activeTab === 'all' ? 'text-blue-700 dark:text-blue-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
                                         All Drivers
                                     </span>
                                     {notificationCounts.all > 0 && (
@@ -3239,14 +3276,14 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                         setCurrentPage(1);
                                         setSelectedDrivers(new Set());
                                     }}
-                                    className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                                    className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 transition-all ${
                                         activeTab === 'new'
                                             ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-md'
                                             : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
                                     }`}
                                 >
-                                    <UserPlus className={`h-5 w-5 ${activeTab === 'new' ? 'text-green-600 dark:text-green-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
-                                    <span className={`font-medium ${activeTab === 'new' ? 'text-green-700 dark:text-green-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                                    <UserPlus className={`h-4 w-4 ${activeTab === 'new' ? 'text-green-600 dark:text-green-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
+                                    <span className={`text-sm font-medium ${activeTab === 'new' ? 'text-green-700 dark:text-green-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
                                         New Drivers
                                     </span>
                                     {notificationCounts.new > 0 && (
@@ -3267,14 +3304,14 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                         setCurrentPage(1);
                                         setSelectedDrivers(new Set());
                                     }}
-                                    className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                                    className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 transition-all ${
                                         activeTab === 'today'
                                             ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 shadow-md'
                                             : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
                                     }`}
                                 >
-                                    <Calendar className={`h-5 w-5 ${activeTab === 'today' ? 'text-yellow-600 dark:text-yellow-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
-                                    <span className={`font-medium ${activeTab === 'today' ? 'text-yellow-700 dark:text-yellow-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                                    <Calendar className={`h-4 w-4 ${activeTab === 'today' ? 'text-yellow-600 dark:text-yellow-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
+                                    <span className={`text-sm font-medium ${activeTab === 'today' ? 'text-yellow-700 dark:text-yellow-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
                                         Today Follow-up
                                     </span>
                                     {notificationCounts.today > 0 && (
@@ -3295,14 +3332,14 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                         setCurrentPage(1);
                                         setSelectedDrivers(new Set());
                                     }}
-                                    className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                                    className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 transition-all ${
                                         activeTab === 'overdue'
                                             ? 'border-red-500 bg-red-50 dark:bg-red-900/20 shadow-md'
                                             : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
                                     }`}
                                 >
-                                    <AlertCircle className={`h-5 w-5 ${activeTab === 'overdue' ? 'text-red-600 dark:text-red-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
-                                    <span className={`font-medium ${activeTab === 'overdue' ? 'text-red-700 dark:text-red-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                                    <AlertCircle className={`h-4 w-4 ${activeTab === 'overdue' ? 'text-red-600 dark:text-red-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
+                                    <span className={`text-sm font-medium ${activeTab === 'overdue' ? 'text-red-700 dark:text-red-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
                                         Overdue
                                     </span>
                                     {notificationCounts.overdue > 0 && (
@@ -3326,18 +3363,18 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                 e.stopPropagation();
                                                 setShowMoreLists(!showMoreLists);
                                             }}
-                                            className={`relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                                            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 transition-all ${
                                                 selectedListId
                                                     ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-md'
                                                     : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
                                             }`}
                                         >
-                                            <span className={`font-medium ${selectedListId ? 'text-purple-700 dark:text-purple-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                                            <span className={`text-sm font-medium ${selectedListId ? 'text-purple-700 dark:text-purple-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
                                                 More
                                             </span>
                                         </button>
                                         {showMoreLists && lists && lists.length > 0 && (
-                                            <div className={`absolute top-full left-0 mt-1 z-50 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg min-w-[200px] ${lists.length > 10 ? 'max-h-[400px] overflow-y-auto' : ''}`}>
+                                            <div className={`absolute top-full left-0 mt-1 z-[9999] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg min-w-[200px] ${lists.length > 10 ? 'max-h-[400px] overflow-y-auto' : ''}`}>
                                                 {lists.map((list: any, index: number) => (
                                                     <div
                                                     key={list.id}
@@ -3423,50 +3460,10 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                     })()}
                                 </div>
                             </div>
-                            {/* Mass Actions Bar */}
-                            {selectedDrivers.size > 0 && (
-                                <div className="mb-4 p-3 bg-muted rounded-md flex items-center justify-between">
-                                    <span className="text-sm font-medium">
-                                        {selectedDrivers.size} driver(s) selected
-                                    </span>
-                                    <div className="flex gap-2">
-                                        {selectedDrivers.size >= 2 && selectedDrivers.size <= 3 && (
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={handleMerge}
-                                            >
-                                                Merge
-                                            </Button>
-                                        )}
-                                        {canMassEdit() && (
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={handleMassEdit}
-                                            >
-                                                Mass Edit
-                                                </Button>
-                                        )}
-                                        {canMassDelete() && (
-                                            <Button
-                                                type="button"
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={handleMassDelete}
-                                            >
-                                                Delete Selected
-                                            </Button>
-                                        )}
-                                        </div>
-                                </div>
-                            )}
 
-                            {/* Table Controls Bar */}
-                            <div className="mb-4 flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-2">
+                            {/* Table Controls Bar - Always visible and fixed at bottom */}
+                            <div className="sticky bottom-0 z-50 bg-card border-t border-border px-6 py-2 flex items-center justify-between gap-4 flex-shrink-0 shadow-[0_-2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_-2px_8px_rgba(0,0,0,0.2)]">
+                                <div className="flex items-center gap-3">
                                     {isAllSelected && sortedAndFilteredDrivers && sortedAndFilteredDrivers.length > 0 && (
                                         <button
                                             onClick={handleSelectAllVisible}
@@ -3474,6 +3471,49 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                         >
                                             Select all {sortedAndFilteredDrivers.length} driver(s)
                                         </button>
+                                    )}
+                                    {selectedDrivers.size > 0 && (
+                                        <>
+                                            <span className="text-sm text-neutral-900 dark:text-neutral-100">
+                                                {selectedDrivers.size} driver(s) selected
+                                            </span>
+                                            <button
+                                                onClick={() => setSelectedDrivers(new Set())}
+                                                className="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:underline"
+                                            >
+                                                Deselect
+                                            </button>
+                                            {selectedDrivers.size >= 2 && selectedDrivers.size <= 3 && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleMerge}
+                                                >
+                                                    Merge
+                                                </Button>
+                                            )}
+                                            {canMassEdit() && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleMassEdit}
+                                                >
+                                                    Mass Edit
+                                                </Button>
+                                            )}
+                                            {canMassDelete() && (
+                                                <Button
+                                                    type="button"
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    onClick={handleMassDelete}
+                                                >
+                                                    Delete Selected
+                                                </Button>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                                 <div className="flex items-center gap-4">
@@ -3505,9 +3545,13 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="10">10</SelectItem>
+                                                <SelectItem value="15">15</SelectItem>
+                                                <SelectItem value="20">20</SelectItem>
                                                 <SelectItem value="25">25</SelectItem>
                                                 <SelectItem value="50">50</SelectItem>
                                                 <SelectItem value="100">100</SelectItem>
+                                                <SelectItem value="200">200</SelectItem>
+                                                <SelectItem value="300">300</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -3576,40 +3620,84 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                 </div>
                             </div>
 
-                            <div className="relative">
-                                <div className="overflow-x-auto overflow-y-visible rounded-lg border" style={{ 
+                            <div className="relative flex-1 min-h-0 flex flex-col pb-20">
+                                <div ref={tableScrollRef} className="drivers-table-scroll overflow-x-scroll overflow-y-auto rounded-lg border flex-1 m-6" style={{ 
                                     scrollbarWidth: 'thin', 
-                                    scrollbarColor: '#cbd5e1 transparent',
-                                    maxHeight: 'calc(100vh - 400px)',
-                                    overflowY: 'auto',
-                                    position: 'relative'
+                                    scrollbarColor: '#cbd5e1 #f1f5f9',
+                                    position: 'relative',
+                                    scrollbarGutter: 'stable'
                                 }}>
                                     <style>{`
-                                        div[class*="overflow-x-auto"]::-webkit-scrollbar {
-                                            height: 12px;
-                                            width: 12px;
+                                        .drivers-table-scroll {
+                                            scrollbar-gutter: stable both-edges;
+                                            overflow-x: scroll !important;
+                                            overflow-y: auto !important;
                                         }
-                                        div[class*="overflow-x-auto"]::-webkit-scrollbar:horizontal {
+                                        .drivers-table-scroll::-webkit-scrollbar {
+                                            height: 14px;
+                                            width: 14px;
+                                            -webkit-appearance: none;
+                                            display: block !important;
+                                            visibility: visible !important;
+                                        }
+                                        .drivers-table-scroll::-webkit-scrollbar:horizontal {
                                             position: sticky;
                                             bottom: 0;
-                                            z-index: 10;
+                                            z-index: 50;
+                                            display: block !important;
+                                            visibility: visible !important;
+                                            opacity: 1 !important;
+                                            height: 14px !important;
                                         }
-                                        div[class*="overflow-x-auto"]::-webkit-scrollbar-track {
-                                            background: transparent;
+                                        .drivers-table-scroll::-webkit-scrollbar-track:horizontal {
+                                            position: sticky;
+                                            bottom: 0;
+                                            z-index: 50;
                                         }
-                                        div[class*="overflow-x-auto"]::-webkit-scrollbar-thumb {
+                                        .drivers-table-scroll::-webkit-scrollbar-thumb:horizontal {
+                                            position: sticky;
+                                            bottom: 0;
+                                            z-index: 50;
+                                        }
+                                        .drivers-table-scroll::-webkit-scrollbar-track {
+                                            background: #f1f5f9;
+                                            border-radius: 0;
+                                            border-top: 1px solid #e2e8f0;
+                                        }
+                                        .drivers-table-scroll::-webkit-scrollbar-thumb {
                                             background-color: #cbd5e1;
-                                            border-radius: 6px;
+                                            border-radius: 0;
+                                            border: 1px solid #f1f5f9;
                                         }
-                                        div[class*="overflow-x-auto"]::-webkit-scrollbar-thumb:hover {
+                                        .drivers-table-scroll::-webkit-scrollbar-thumb:hover {
                                             background-color: #94a3b8;
                                         }
-                                        div[class*="overflow-x-auto"]::-webkit-scrollbar-corner {
-                                            background: transparent;
+                                        .drivers-table-scroll::-webkit-scrollbar-corner {
+                                            background: #f1f5f9;
+                                            border-top: 1px solid #e2e8f0;
+                                            position: sticky;
+                                            bottom: 0;
+                                            right: 0;
+                                            z-index: 50;
+                                        }
+                                        .dark .drivers-table-scroll::-webkit-scrollbar-track {
+                                            background: #1e293b;
+                                            border-top-color: #334155;
+                                        }
+                                        .dark .drivers-table-scroll::-webkit-scrollbar-thumb {
+                                            background-color: #475569;
+                                            border-color: #1e293b;
+                                        }
+                                        .dark .drivers-table-scroll::-webkit-scrollbar-thumb:hover {
+                                            background-color: #64748b;
+                                        }
+                                        .dark .drivers-table-scroll::-webkit-scrollbar-corner {
+                                            background: #1e293b;
+                                            border-top-color: #334155;
                                         }
                                     `}</style>
                                     <table className="w-full">
-                                    <thead className="bg-neutral-100 dark:bg-neutral-800 backdrop-blur-sm sticky top-0 z-20">
+                                    <thead className="bg-neutral-100 dark:bg-neutral-800 backdrop-blur-sm sticky top-0 z-30 shadow-sm" style={{ position: 'sticky', top: 0, zIndex: 30, willChange: 'transform' }}>
                                         <tr>
                                             <th className="px-4 py-3 text-left w-12">
                                                 <Checkbox
@@ -3638,6 +3726,8 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                 const columnDef = ALL_DRIVER_COLUMNS.find(c => c.id === col.id);
                                                 const sortKey = col.id === 'name' ? 'name' : 
                                                                col.id === 'whatsapp' ? 'whatsapp' :
+                                                               col.id === 'lead_stage' ? 'lead_stage' :
+                                                               col.id === 'driver_stage' ? 'driver_stage' :
                                                                col.id;
                                                 return (
                                                     <th 
@@ -3712,6 +3802,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                   col.id === 'lead_status' ? 'lead_status_id' :
                                                                   col.id === 'lead_status_comment' ? 'lead_status_comment' :
                                                                   col.id === 'lead_stage' ? 'lead_stage_id' :
+                                                                  col.id === 'driver_stage' ? 'driver_stage_id' :
                                                                   col.id === 'assigned_to' ? 'assigned_to' :
                                                                   col.id === 'team_leader' ? 'team_leader_id' :
                                                                   col.id === 'account_manager' ? 'account_manager_id' :
@@ -4239,7 +4330,9 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                         
                                                         e.stopPropagation();
                                                         e.preventDefault();
-                                                        setQuickEditDialog({ open: true, driver });
+                                                        if (canQuickEdit()) {
+                                                            setQuickEditDialog({ open: true, driver });
+                                                        }
                                                     }}
                                                 >
                                                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -4271,16 +4364,18 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                         >
                                                                             <Eye className="h-4 w-4" />
                                                                         </button>
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                setQuickEditDialog({ open: true, driver });
-                                                                            }}
-                                                                            className="text-yellow-600 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
-                                                                            title="Quick Edit"
-                                                                        >
-                                                                            <Pencil className="h-4 w-4" />
-                                                                        </button>
+                                                                        {canQuickEdit() && (
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setQuickEditDialog({ open: true, driver });
+                                                                                }}
+                                                                                className="text-yellow-600 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
+                                                                                title="Quick Edit"
+                                                                            >
+                                                                                <Pencil className="h-4 w-4" />
+                                                                            </button>
+                                                                        )}
                                                                         {canDeleteDriver() && (
                                                                             <button
                                                                                 onClick={(e) => {
@@ -4529,7 +4624,20 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                 ) : '-';
                                                                 break;
                                                             case 'lead_stage':
-                                                                cellContent = driver.lead_stage?.name || '-';
+                                                                cellContent = driver.lead_stage ? (
+                                                                    <Badge 
+                                                                        variant="outline"
+                                                                        style={driver.lead_stage.color ? {
+                                                                            borderColor: driver.lead_stage.color,
+                                                                            color: driver.lead_stage.color,
+                                                                        } : {}}
+                                                                    >
+                                                                        {driver.lead_stage.name}
+                                                                    </Badge>
+                                                                ) : '-';
+                                                                break;
+                                                            case 'driver_stage':
+                                                                cellContent = driver.driver_stage?.name || '-';
                                                                 break;
                                                             case 'current_stage':
                                                                 cellContent = (driver as any).current_stage?.name || '-';
@@ -4745,7 +4853,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
 
                         </>
                     ) : (
-                        <div className="text-center py-12 text-neutral-500">
+                        <div className="p-6 text-center py-6 text-neutral-500">
                             No drivers found
                         </div>
                     )}
@@ -4990,6 +5098,25 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                 className="w-4 h-4"
                                                             />
                                                             <span>{driver.lead_stage?.name || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                            
+                                            {/* Driver Stage */}
+                                            <tr className="border-b hover:bg-muted/50">
+                                                <td className="px-4 py-3 text-sm font-medium">Driver Stage</td>
+                                                {mergeDrivers.map((driver) => (
+                                                    <td key={driver.id} className="px-4 py-3 text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="radio"
+                                                                name="driver_stage_id"
+                                                                value={driver.id}
+                                                                defaultChecked={mergeDrivers[0].id === driver.id}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span>{driver.driver_stage?.name || '-'}</span>
                                                         </div>
                                                     </td>
                                                 ))}
@@ -5484,10 +5611,50 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                             )}
                                                         </div>
                                                     )}
-                                                    {canViewDriverField('assigned_to') && driverDetails.assigned_to && (
+                                                    {canViewDriverField('lead_stage') && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Lead Stage</p>
+                                                            {driverDetails.lead_stage ? (
+                                                                <Badge 
+                                                                    variant="outline"
+                                                                    style={driverDetails.lead_stage.color ? {
+                                                                        borderColor: driverDetails.lead_stage.color,
+                                                                        color: driverDetails.lead_stage.color,
+                                                                    } : {}}
+                                                                >
+                                                                    {driverDetails.lead_stage.name}
+                                                                </Badge>
+                                                            ) : (
+                                                                <span className="text-neutral-400 italic">Not Set</span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {canViewDriverField('driver_stage') && (
+                                                        <div>
+                                                            <p className="text-sm text-neutral-500">Driver Stage</p>
+                                                            {driverDetails.driver_stage ? (
+                                                                <p className="font-medium">{driverDetails.driver_stage.name}</p>
+                                                            ) : (
+                                                                <span className="text-neutral-400 italic">Not Set</span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {canViewDriverField('assigned_to') && (
                                                         <div>
                                                             <p className="text-sm text-neutral-500">Assigned To</p>
-                                                            <p className="font-medium">{driverDetails.assigned_to.name}</p>
+                                                            {driverDetails.assigned_to ? (
+                                                                <p className="font-medium">{driverDetails.assigned_to.name}</p>
+                                                            ) : driverDetails.assigned_users && driverDetails.assigned_users.length > 0 ? (
+                                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                                    {driverDetails.assigned_users.map((user: any) => (
+                                                                        <Badge key={user.id} variant="secondary" className="text-xs">
+                                                                            {user.name}
+                                                                        </Badge>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-neutral-400 italic">Not Set</span>
+                                                            )}
                                                         </div>
                                                     )}
                                                     {canViewDriverField('current_stage') && driverDetails.current_stage && (
@@ -5553,11 +5720,16 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                             </Card>
                                         )}
 
-                                        {/* Stages Details */}
+                                        {/* Driver Stages Details */}
                                         {driverDetails.stages_status && driverDetails.stages_status.length > 0 && (
                                             <Card className="p-6">
                                                 <div className="mb-4 flex items-center justify-between">
-                                                    <h2 className="text-lg font-semibold">Stages Details</h2>
+                                                    <div>
+                                                        <h2 className="text-lg font-semibold">Driver Stages</h2>
+                                                        <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
+                                                            Manage drivers and their onboarding process
+                                                        </p>
+                                                    </div>
                                                     <Link href={`/drivers/driver-stages?driver_id=${driverDetails.id}`}>
                                                         <Button variant="outline" size="sm">
                                                             View All Stages

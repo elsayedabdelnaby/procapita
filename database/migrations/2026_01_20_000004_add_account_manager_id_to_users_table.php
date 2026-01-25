@@ -12,8 +12,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->unsignedBigInteger('account_manager_id')->nullable()->after('team_leader_id');
-            $table->foreign('account_manager_id')->references('id')->on('users')->onDelete('set null');
+            // Add account_manager_id if it doesn't exist
+            if (!Schema::hasColumn('users', 'account_manager_id')) {
+                $table->unsignedBigInteger('account_manager_id')->nullable()->after('team_leader_id');
+                $table->foreign('account_manager_id')->references('id')->on('users')->onDelete('set null');
+            }
         });
     }
 
@@ -23,8 +26,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropForeign(['account_manager_id']);
-            $table->dropColumn('account_manager_id');
+            if (Schema::hasColumn('users', 'account_manager_id')) {
+                $table->dropForeign(['account_manager_id']);
+                $table->dropColumn('account_manager_id');
+            }
         });
     }
 };

@@ -331,6 +331,18 @@ export default function DriversShow({
         return hasPermission('drivers.driverdocuments.replace');
     };
 
+    const canViewDocuments = () => {
+        return hasPermission('drivers.drivers.view-documents') || hasPermission('drivers.driverdocuments.read');
+    };
+
+    const canViewStages = () => {
+        return hasPermission('drivers.drivers.view-stages') || hasPermission('drivers.driverstages.read');
+    };
+
+    const canEdit = () => {
+        return hasPermission('drivers.drivers.edit') || hasPermission('drivers.drivers.update');
+    };
+
     const canSetPending = () => {
         return hasPermission('drivers.drivers.pending-document') || hasPermission('drivers.driverdocuments.set-pending');
     };
@@ -534,12 +546,14 @@ export default function DriversShow({
                                 </Button>
                             </Link>
                         )}
-                        <Link href={`/drivers/drivers/${driver.id}/edit`}>
-                            <Button variant="outline" size="sm">
-                                <Edit className="h-4 w-4 mr-2" />
-                                Edit
-                            </Button>
-                        </Link>
+                        {canEdit() && (
+                            <Link href={`/drivers/drivers/${driver.id}/edit`}>
+                                <Button variant="outline" size="sm">
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit
+                                </Button>
+                            </Link>
+                        )}
                     </div>
                 </div>
 
@@ -939,7 +953,7 @@ export default function DriversShow({
                         )}
 
                         {/* Stages Progress */}
-                        {driver.stages_progress && (
+                        {canViewStages() && driver.stages_progress && (
                             <Card className="p-6">
                                 <div className="mb-4 flex items-center justify-between">
                                     <h2 className="text-lg font-semibold">Stages Progress</h2>
@@ -992,7 +1006,7 @@ export default function DriversShow({
                         )}
 
                         {/* Stages Status */}
-                        {driver.stages_status && driver.stages_status.length > 0 && (
+                        {canViewStages() && driver.stages_status && driver.stages_status.length > 0 && (
                             <Card className="p-6">
                                 <h2 className="mb-4 text-lg font-semibold">Stages Status</h2>
                                 <div className="space-y-3">
@@ -1032,11 +1046,12 @@ export default function DriversShow({
                         )}
 
                         {/* Documents */}
-                        <Card className="p-6">
-                            <div className="mb-4">
-                                <h2 className="text-lg font-semibold">Documents</h2>
-                            </div>
-                            {driver.documents && driver.documents.length > 0 ? (
+                        {canViewDocuments() && (
+                            <Card className="p-6">
+                                <div className="mb-4">
+                                    <h2 className="text-lg font-semibold">Documents</h2>
+                                </div>
+                                {driver.documents && driver.documents.length > 0 ? (
                                 <div className="space-y-3">
                                     {driver.documents.map((doc) => (
                                         <div key={doc.id} className="flex items-center justify-between rounded-lg border p-4">
@@ -1195,7 +1210,8 @@ export default function DriversShow({
                                     <p>No documents available</p>
                                 </div>
                             )}
-                        </Card>
+                            </Card>
+                        )}
 
                         {/* Notes */}
                         {canViewDriverField('notes') && driver.notes && (

@@ -48,6 +48,9 @@ class RoleController extends Controller
 
         // Auto-create driver field permissions if they don't exist
         $this->ensureDriverFieldPermissionsExist();
+        
+        // Auto-create quick-edit and edit permissions if they don't exist
+        $this->ensureDriverPermissionsExist();
 
         $roles = $this->roleService->getAllRoles($company);
         $permissions = $this->permissionService->getGroupedPermissions();
@@ -102,6 +105,9 @@ class RoleController extends Controller
 
         // Auto-create driver field permissions if they don't exist
         $this->ensureDriverFieldPermissionsExist();
+        
+        // Auto-create quick-edit and edit permissions if they don't exist
+        $this->ensureDriverPermissionsExist();
 
         $companyModel = $this->companyService->getCompanyById($company);
         $availableRoles = $this->roleService->getAllRoles($company);
@@ -159,6 +165,35 @@ class RoleController extends Controller
                 );
             }
         }
+    }
+
+    protected function ensureDriverPermissionsExist(): void
+    {
+        // Ensure quick-edit permission exists
+        Permission::firstOrCreate(
+            [
+                'name' => 'drivers.drivers.quick-edit',
+                'guard_name' => 'web',
+            ],
+            [
+                'module_name' => 'drivers',
+                'entity_name' => 'drivers',
+                'action' => 'quick-edit',
+            ]
+        );
+
+        // Ensure edit permission exists (separate from update)
+        Permission::firstOrCreate(
+            [
+                'name' => 'drivers.drivers.edit',
+                'guard_name' => 'web',
+            ],
+            [
+                'module_name' => 'drivers',
+                'entity_name' => 'drivers',
+                'action' => 'edit',
+            ]
+        );
     }
 
     public function update(int $company, int $role, RoleUpdateRequest $request): RedirectResponse

@@ -1,11 +1,11 @@
 import { DataTable } from '@/components/core/data-table';
-import { DeleteDialog } from '@/components/core/delete-dialog';
+import { LeadStatusDeleteDialog } from '@/components/core/lead-status-delete-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
 
 interface LeadStatus {
@@ -22,9 +22,15 @@ interface LeadStatus {
 
 interface LeadStatusesIndexProps {
     leadStatuses: LeadStatus[];
+    driversCounts?: Record<number, number>;
+    availableLeadStatuses?: LeadStatus[];
 }
 
-export default function LeadStatusesIndex({ leadStatuses }: LeadStatusesIndexProps) {
+export default function LeadStatusesIndex({ 
+    leadStatuses, 
+    driversCounts = {}, 
+    availableLeadStatuses = [] 
+}: LeadStatusesIndexProps) {
     const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; status: LeadStatus | null }>({
         open: false,
         status: null,
@@ -34,11 +40,13 @@ export default function LeadStatusesIndex({ leadStatuses }: LeadStatusesIndexPro
         setDeleteDialog({ open: true, status });
     };
 
-    const confirmDelete = () => {
-        if (deleteDialog.status) {
-            router.delete(`/drivers/lead-statuses/${deleteDialog.status.id}`);
+    // Filter available lead statuses for transfer (exclude the one being deleted)
+    const availableForTransfer = useMemo(() => {
+        if (!deleteDialog.status) {
+            return availableLeadStatuses;
         }
-    };
+        return availableLeadStatuses.filter((ls) => ls.id !== deleteDialog.status?.id);
+    }, [availableLeadStatuses, deleteDialog.status]);
 
     const handleToggleStatus = (id: number) => {
         router.post(`/drivers/lead-statuses/${id}/toggle-active`);
@@ -211,12 +219,12 @@ export default function LeadStatusesIndex({ leadStatuses }: LeadStatusesIndexPro
                     )}
                 </Card>
 
-                <DeleteDialog
+                <LeadStatusDeleteDialog
                     open={deleteDialog.open}
                     onOpenChange={(open) => setDeleteDialog({ open, status: null })}
-                    onConfirm={confirmDelete}
-                    title="Delete Lead Status"
-                    description={`Are you sure you want to delete "${deleteDialog.status?.name}"? This action cannot be undone.`}
+                    leadStatus={deleteDialog.status}
+                    availableLeadStatuses={availableForTransfer}
+                    driversCount={deleteDialog.status ? driversCounts[deleteDialog.status.id] || 0 : 0}
                 />
             </div>
         </AppLayout>

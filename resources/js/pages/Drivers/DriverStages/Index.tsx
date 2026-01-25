@@ -8,23 +8,21 @@ import { Head, Link, router } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { formatDate } from '@/utils/date-format';
 
-interface Driver {
-    id: number;
-    full_name: string;
-}
-
-interface StageTemplate {
+interface RidingCompany {
     id: number;
     name: string;
 }
 
 interface DriverStage {
     id: number;
-    driver?: Driver;
-    stage_template?: StageTemplate;
+    name?: string;
+    riding_company_id?: number;
+    riding_company_ids?: number[];
+    riding_companies?: RidingCompany[];
     stage_order: number;
     status: string;
     completed_at?: string;
+    notes?: string;
     created_at: string;
 }
 
@@ -111,12 +109,20 @@ export default function DriverStagesIndex({ driverStages }: DriverStagesIndexPro
                             data={driverStages}
                             columns={[
                                 {
-                                    header: 'Driver',
-                                    accessor: (row) => row.driver?.full_name || '-',
+                                    header: 'Name',
+                                    accessor: (row) => row.name || `Stage ${row.stage_order}`,
                                 },
                                 {
-                                    header: 'Stage Template',
-                                    accessor: (row) => row.stage_template?.name || '-',
+                                    header: 'Riding Companies',
+                                    accessor: (row) => {
+                                        if (row.riding_companies && row.riding_companies.length > 0) {
+                                            return row.riding_companies.map((rc: RidingCompany) => rc.name).join(', ');
+                                        }
+                                        if (row.riding_company_ids && row.riding_company_ids.length > 0) {
+                                            return `${row.riding_company_ids.length} company(ies)`;
+                                        }
+                                        return row.riding_company_id ? '1 company' : '-';
+                                    },
                                 },
                                 {
                                     header: 'Order',

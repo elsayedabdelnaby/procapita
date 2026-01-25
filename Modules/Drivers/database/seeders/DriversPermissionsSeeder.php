@@ -10,7 +10,7 @@ class DriversPermissionsSeeder extends Seeder
     public function run(): void
     {
         $entities = [
-            'drivers' => ['create', 'read', 'update', 'delete', 'assign', 'view-stages', 'view-documents', 'view-document', 'upload-document', 'delete-document', 'reject-document', 'approve-document', 'pending-document', 'export', 'import', 'mass-edit', 'mass-delete', 'delete-all'],
+            'drivers' => ['create', 'read', 'update', 'edit', 'delete', 'assign', 'quick-edit', 'view-stages', 'view-documents', 'view-document', 'upload-document', 'delete-document', 'reject-document', 'approve-document', 'pending-document', 'export', 'import', 'mass-edit', 'mass-delete', 'delete-all'],
             'leadsources' => ['create', 'read', 'update', 'delete', 'toggle-active', 'export', 'import'],
             'leadstatuses' => ['create', 'read', 'update', 'delete', 'toggle-active', 'export', 'import'],
             'leadstages' => ['create', 'read', 'update', 'delete', 'toggle-active', 'export', 'import'],

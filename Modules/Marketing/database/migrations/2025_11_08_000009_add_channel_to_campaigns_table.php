@@ -9,14 +9,23 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('campaigns', function (Blueprint $table) {
-            // Change type and status to foreign keys
-            $table->foreignId('campaign_type_id')->nullable()->after('slug')->constrained()->nullOnDelete();
-            $table->foreignId('campaign_status_id')->nullable()->after('campaign_type_id')->constrained()->nullOnDelete();
-            $table->foreignId('campaign_channel_id')->nullable()->after('campaign_status_id')->constrained()->nullOnDelete();
+            // Add campaign_type_id if it doesn't exist
+            if (!Schema::hasColumn('campaigns', 'campaign_type_id')) {
+                $table->foreignId('campaign_type_id')->nullable()->after('slug')->constrained()->nullOnDelete();
+                $table->index('campaign_type_id');
+            }
             
-            $table->index('campaign_type_id');
-            $table->index('campaign_status_id');
-            $table->index('campaign_channel_id');
+            // Add campaign_status_id if it doesn't exist
+            if (!Schema::hasColumn('campaigns', 'campaign_status_id')) {
+                $table->foreignId('campaign_status_id')->nullable()->after('campaign_type_id')->constrained()->nullOnDelete();
+                $table->index('campaign_status_id');
+            }
+            
+            // Add campaign_channel_id if it doesn't exist
+            if (!Schema::hasColumn('campaigns', 'campaign_channel_id')) {
+                $table->foreignId('campaign_channel_id')->nullable()->after('campaign_status_id')->constrained()->nullOnDelete();
+                $table->index('campaign_channel_id');
+            }
         });
     }
 

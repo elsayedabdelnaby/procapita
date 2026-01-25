@@ -32,6 +32,40 @@ class CampaignChannelController extends Controller
         ]);
     }
 
+    public function recycleBin(): Response
+    {
+        $user = auth()->user();
+        $companyId = $this->getCompanyId();
+        
+        $query = \Modules\Marketing\app\Models\CampaignChannel::onlyTrashed();
+
+        // Filter by company if applicable
+        if ($companyId) {
+            $query->where('company_id', $companyId);
+        } elseif (!$user->isSuperAdmin()) {
+            // Non-super admin without company_id sees nothing
+            $query->whereRaw('1 = 0');
+        }
+
+        $channels = $query->orderBy('deleted_at', 'desc')->get();
+
+        return Inertia::render('Marketing/CampaignChannels/RecycleBin', [
+            'campaignChannels' => $channels->map(fn($channel) => [
+                'id' => $channel->id,
+                'name' => $channel->name,
+                'slug' => $channel->slug,
+                'description' => $channel->description,
+                'color' => $channel->color,
+                'sort_order' => $channel->sort_order,
+                'active' => $channel->active,
+                'company_id' => $channel->company_id,
+                'created_at' => $channel->created_at?->toISOString(),
+                'updated_at' => $channel->updated_at?->toISOString(),
+                'deleted_at' => $channel->deleted_at?->toISOString(),
+            ]),
+        ]);
+    }
+
     public function create(): Response
     {
         $user = Auth::user();
@@ -123,6 +157,15 @@ class CampaignChannelController extends Controller
                 ->back()
                 ->with('error', $e->getMessage());
         }
+    }
+
+    protected function getCompanyId(): ?int
+    {
+        $user = Auth::user();
+        if ($user && $user->is_super_admin) {
+            return null; // Super admin can see all
+        }
+        return $user?->company_id;
     }
 }
 

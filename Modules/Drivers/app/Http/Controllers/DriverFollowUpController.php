@@ -94,6 +94,59 @@ class DriverFollowUpController extends Controller
         ]);
     }
 
+    public function recycleBin(): Response
+    {
+        $driverId = request()->input('driver_id');
+        $companyId = $this->getCompanyId();
+        $user = Auth::user();
+        
+        $query = \Modules\Drivers\app\Models\DriverFollowUp::onlyTrashed();
+
+        // Filter by company if applicable
+        if ($companyId) {
+            $query->whereHas('driver', function ($q) use ($companyId) {
+                $q->where('company_id', $companyId);
+            });
+        }
+
+        // Filter by driver if provided
+        if ($driverId) {
+            $query->where('driver_id', $driverId);
+        }
+
+        $followUps = $query->with(['driver', 'assignedTo'])->orderBy('deleted_at', 'desc')->get();
+
+        return Inertia::render('Drivers/DriverFollowUps/RecycleBin', [
+            'followUps' => $followUps->map(fn($followUp) => [
+                'id' => $followUp->id,
+                'driver_id' => $followUp->driver_id,
+                'driver' => $followUp->driver ? [
+                    'id' => $followUp->driver->id,
+                    'uuid' => $followUp->driver->uuid,
+                    'driver_num' => $followUp->driver->driver_num ?? (string) $followUp->driver->id,
+                    'full_name' => $followUp->driver->full_name,
+                    'phone' => $followUp->driver->phone,
+                ] : null,
+                'driver_num' => $followUp->driver_num ?? ($followUp->driver ? (string) $followUp->driver->id : null),
+                'assigned_to' => $followUp->assigned_to,
+                'assigned_to_user' => $followUp->assignedTo ? [
+                    'id' => $followUp->assignedTo->id,
+                    'name' => $followUp->assignedTo->name,
+                ] : null,
+                'user_name' => $followUp->user_name,
+                'created_time' => $followUp->created_time?->toISOString(),
+                'riding_company' => $followUp->riding_company,
+                'lead_stage' => $followUp->lead_stage,
+                'lead_status' => $followUp->lead_status,
+                'lead_status_comment' => $followUp->lead_status_comment,
+                'notes' => $followUp->notes,
+                'created_at' => $followUp->created_at?->toISOString(),
+                'updated_at' => $followUp->updated_at?->toISOString(),
+                'deleted_at' => $followUp->deleted_at?->toISOString(),
+            ]),
+        ]);
+    }
+
     public function create(): Response
     {
         $user = Auth::user();

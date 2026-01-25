@@ -52,6 +52,25 @@ interface User {
     name: string;
 }
 
+interface DriverStage {
+    id: number;
+    name?: string;
+    stage_order: number;
+    status: string;
+    notes?: string;
+    riding_company_id?: number;
+    riding_company_ids?: number[];
+}
+
+interface LeadStage {
+    id: number;
+    name: string;
+    order: number;
+    color?: string;
+    riding_company_id?: number;
+    riding_company_ids?: number[];
+}
+
 interface DriversCreateProps {
     companies?: Company[];
     ridingCompanies: RidingCompany[];
@@ -59,6 +78,8 @@ interface DriversCreateProps {
     leadSources: LeadSource[];
     leadStatuses: LeadStatus[];
     users: User[];
+    driverStages?: DriverStage[];
+    leadStages?: LeadStage[];
     defaultRidingCompanyId?: number;
 }
 
@@ -69,6 +90,8 @@ export default function DriversCreate({
     leadSources: initialLeadSources = [],
     leadStatuses: initialLeadStatuses = [],
     users: initialUsers = [],
+    driverStages: initialDriverStages = [],
+    leadStages: initialLeadStages = [],
     defaultRidingCompanyId,
 }: DriversCreateProps) {
     const page = usePage<SharedData>();
@@ -84,7 +107,10 @@ export default function DriversCreate({
     const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns || []);
     const [leadSources, setLeadSources] = useState<LeadSource[]>(initialLeadSources || []);
     const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>(initialLeadStatuses || []);
-    const [leadStages, setLeadStages] = useState<LeadStage[]>([]);
+    const [leadStages, setLeadStages] = useState<LeadStage[]>(initialLeadStages || []);
+    const [driverStages, setDriverStages] = useState<DriverStage[]>(initialDriverStages || []);
+    const [filteredDriverStages, setFilteredDriverStages] = useState<DriverStage[]>([]);
+    const [filteredLeadStages, setFilteredLeadStages] = useState<LeadStage[]>([]);
     const [users, setUsers] = useState<User[]>(initialUsers || []);
 
     const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
@@ -108,6 +134,7 @@ export default function DriversCreate({
         next_follow_up: '',
         last_follow_up: '',
         lead_stage_id: '',
+        driver_stage_id: '',
         current_stage_id: '',
         notes: '',
         cancel_reason: '',
@@ -317,28 +344,43 @@ export default function DriversCreate({
         }
     }, [selectedCompany?.id, data.company_id, companies, setData, initialRidingCompanies, initialCampaigns, initialLeadSources, initialLeadStatuses, initialUsers]);
 
-    // Fetch lead stages when riding company changes
+    // Filter driver stages and lead stages when riding company changes
     useEffect(() => {
-        if (data.riding_company_id) {
-            setLoadingLeadStages(true);
-            axios
-                .get(`/api/drivers/riding-companies/${data.riding_company_id}/lead-stages`)
-                .then((response) => {
-                    setLeadStages(response.data);
-                    setData('lead_stage_id', ''); // Reset lead_stage_id when riding company changes
-                })
-                .catch((error) => {
-                    console.error('Error fetching lead stages:', error);
-                    setLeadStages([]);
-                })
-                .finally(() => {
-                    setLoadingLeadStages(false);
-                });
+        const ridingCompanyId = data.riding_company_id ? Number(data.riding_company_id) : null;
+
+        if (ridingCompanyId) {
+            // Filter driver stages by riding_company_id
+            const filteredDriver = initialDriverStages.filter((stage) => {
+                if (stage.riding_company_id === ridingCompanyId) {
+                    return true;
+                }
+                if (stage.riding_company_ids && Array.isArray(stage.riding_company_ids)) {
+                    return stage.riding_company_ids.includes(ridingCompanyId);
+                }
+                return false;
+            });
+            setFilteredDriverStages(filteredDriver);
+            setData('driver_stage_id', ''); // Reset driver_stage_id when riding company changes
+
+            // Filter lead stages by riding_company_id
+            const filteredLead = initialLeadStages.filter((stage) => {
+                if (stage.riding_company_id === ridingCompanyId) {
+                    return true;
+                }
+                if (stage.riding_company_ids && Array.isArray(stage.riding_company_ids)) {
+                    return stage.riding_company_ids.includes(ridingCompanyId);
+                }
+                return false;
+            });
+            setFilteredLeadStages(filteredLead);
+            setData('lead_stage_id', ''); // Reset lead_stage_id when riding company changes
         } else {
-            setLeadStages([]);
+            setFilteredDriverStages([]);
+            setFilteredLeadStages([]);
+            setData('driver_stage_id', '');
             setData('lead_stage_id', '');
         }
-    }, [data.riding_company_id, setData]);
+    }, [data.riding_company_id, setData, initialDriverStages, initialLeadStages]);
 
     const [showValidation, setShowValidation] = useState(false);
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
@@ -1153,16 +1195,16 @@ export default function DriversCreate({
                                     value={data.lead_stage_id}
                                     onChange={(e) => setData('lead_stage_id', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
-                                    disabled={loadingLeadStages || !data.riding_company_id}
+                                    disabled={!data.riding_company_id}
                                 >
                                     <option value="">
-                                        {loadingLeadStages
-                                            ? 'Loading...'
-                                            : !data.riding_company_id
-                                              ? 'Select a riding company first'
+                                        {!data.riding_company_id
+                                            ? 'Select a riding company first'
+                                            : filteredLeadStages.length === 0
+                                              ? 'No lead stages available'
                                               : 'Select a lead stage'}
                                     </option>
-                                    {leadStages.map((stage) => (
+                                    {filteredLeadStages.map((stage) => (
                                         <option key={stage.id} value={stage.id}>
                                             {stage.name}
                                         </option>
@@ -1170,6 +1212,27 @@ export default function DriversCreate({
                                 </select>
                                 {errors.lead_stage_id && (
                                     <p className="text-sm text-red-500">{errors.lead_stage_id}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="driver_stage_id">Driver Stage</Label>
+                                <select
+                                    id="driver_stage_id"
+                                    name="driver_stage_id"
+                                    value={data.driver_stage_id}
+                                    onChange={(e) => setData('driver_stage_id', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2"
+                                >
+                                    <option value="">Select a driver stage</option>
+                                    {filteredDriverStages.map((stage) => (
+                                        <option key={stage.id} value={stage.id}>
+                                            {stage.name || `Stage ${stage.stage_order}`} {stage.status ? `(${stage.status})` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.driver_stage_id && (
+                                    <p className="text-sm text-red-500">{errors.driver_stage_id}</p>
                                 )}
                             </div>
 

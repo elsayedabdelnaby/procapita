@@ -44,8 +44,19 @@ class CampaignStoreRequest extends FormRequest
     {
         $user = $this->user();
         
+        $companyId = $user->isSuperAdmin() 
+            ? $this->input('company_id')
+            : $user->company_id;
+        
+        $nameRule = ['required', 'string', 'max:255'];
+        if ($companyId) {
+            $nameRule[] = \Illuminate\Validation\Rule::unique('campaigns', 'name')
+                ->where('company_id', $companyId)
+                ->whereNull('deleted_at');
+        }
+        
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => $nameRule,
             'description' => ['nullable', 'string'],
             'company_id' => $user->isSuperAdmin() ? ['required', 'integer', 'exists:companies,id'] : ['nullable'],
             'campaign_type_id' => ['required', 'integer', 'exists:campaign_types,id'],
@@ -78,6 +89,7 @@ class CampaignStoreRequest extends FormRequest
         return [
             'name.required' => 'Campaign name is required.',
             'name.max' => 'Campaign name must not exceed 255 characters.',
+            'name.unique' => 'This campaign name is already taken for this company.',
             'type.required' => 'Campaign type is required.',
             'type.in' => 'Invalid campaign type selected.',
             'status.required' => 'Campaign status is required.',

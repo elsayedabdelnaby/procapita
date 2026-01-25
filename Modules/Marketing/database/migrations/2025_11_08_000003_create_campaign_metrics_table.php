@@ -8,7 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('campaign_metrics', function (Blueprint $table) {
+        if (!Schema::hasTable('campaign_metrics')) {
+            Schema::create('campaign_metrics', function (Blueprint $table) {
             $table->id();
             $table->foreignId('company_id')->constrained()->onDelete('cascade');
             $table->foreignId('campaign_id')->constrained()->onDelete('cascade');
@@ -31,7 +32,8 @@ return new class extends Migration
             $table->unique(['campaign_id', 'metric_date']);
             $table->index('company_id');
             $table->index('metric_date');
-        });
+            });
+        }
     }
 
     public function down(): void

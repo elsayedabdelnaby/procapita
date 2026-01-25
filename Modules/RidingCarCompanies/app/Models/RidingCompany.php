@@ -62,9 +62,19 @@ class RidingCompany extends Model
             if (empty($model->uuid)) {
                 $model->uuid = (string) Str::uuid();
             }
+            
+            // Generate slug from name if not provided
             if (empty($model->slug)) {
-                $model->slug = static::generateUniqueSlug($model->name);
+                $model->slug = static::generateUniqueSlug($model->name, $model->company_id);
+            } else {
+                // Normalize slug (trim and convert to lowercase slug format)
+                $providedSlug = trim($model->slug);
+                $normalizedSlug = Str::slug($providedSlug);
+                
+                // Always ensure slug is unique within company, even if provided
+                $model->slug = static::generateUniqueSlug($normalizedSlug, $model->company_id);
             }
+            
             // Set active to true by default if not set
             // If active is not in the attributes array, set it to true
             $attributes = $model->getAttributes();
@@ -74,20 +84,39 @@ class RidingCompany extends Model
         });
 
         static::updating(function ($model) {
-            if ($model->isDirty('name') && empty($model->slug)) {
-                $model->slug = static::generateUniqueSlug($model->name);
+            if ($model->isDirty('name')) {
+                // If slug is empty or name changed, regenerate slug
+                if (empty($model->slug) || $model->isDirty('name')) {
+                    $model->slug = static::generateUniqueSlug($model->name, $model->company_id, $model->id);
+                }
             }
         });
     }
 
-    public static function generateUniqueSlug(string $name): string
+    public static function generateUniqueSlug(string $name, ?int $companyId = null, ?int $excludeId = null): string
     {
         $slug = Str::slug($name);
         $originalSlug = $slug;
         $counter = 1;
 
-        while (static::where('slug', $slug)->exists()) {
+        // Check for existing slug within company (including soft deleted because RidingCompany uses SoftDeletes)
+        $query = static::withTrashed()->where('slug', $slug);
+        if ($companyId) {
+            $query->where('company_id', $companyId);
+        }
+        if ($excludeId) {
+            $query->where('id', '!=', $excludeId);
+        }
+
+        while ($query->exists()) {
             $slug = $originalSlug . '-' . $counter;
+            $query = static::withTrashed()->where('slug', $slug);
+            if ($companyId) {
+                $query->where('company_id', $companyId);
+            }
+            if ($excludeId) {
+                $query->where('id', '!=', $excludeId);
+            }
             $counter++;
         }
 

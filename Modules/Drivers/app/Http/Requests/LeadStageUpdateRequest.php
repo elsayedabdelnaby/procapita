@@ -13,10 +13,12 @@ class LeadStageUpdateRequest extends FormRequest
 
     public function rules(): array
     {
-        $user = $this->user();
-        $rules = [
-            'riding_company_id' => ['required', 'exists:riding_companies,id'],
-            'name' => ['required', 'string', 'max:255'],
+        $leadStageId = $this->route('leadStage');
+        
+        return [
+            'name' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('lead_stages', 'name')->whereNull('deleted_at')->ignore($leadStageId)],
+            'riding_company_ids' => ['required', 'array', 'min:1'],
+            'riding_company_ids.*' => ['required', 'exists:riding_companies,id'],
             'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'color' => ['nullable', 'string', 'max:50'],
@@ -24,19 +26,15 @@ class LeadStageUpdateRequest extends FormRequest
             'active' => ['nullable', 'boolean'],
             'requires_all_documents_approved' => ['nullable', 'boolean'],
         ];
-
-        if ($user->isSuperAdmin()) {
-            $rules['riding_company_id'] = ['required', 'exists:riding_companies,id'];
-        }
-
-        return $rules;
     }
 
     public function messages(): array
     {
         return [
             'name.required' => 'Lead stage name is required.',
-            'riding_company_id.required' => 'Riding company is required.',
+            'name.unique' => 'This lead stage name is already taken.',
+            'riding_company_ids.required' => 'At least one riding company is required.',
+            'riding_company_ids.min' => 'At least one riding company is required.',
         ];
     }
 }

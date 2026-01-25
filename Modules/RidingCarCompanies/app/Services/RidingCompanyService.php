@@ -127,9 +127,43 @@ class RidingCompanyService
         return $ridingCompany;
     }
 
-    public function deleteRidingCompany(int $id): bool
+    public function deleteRidingCompany(int $id, ?int $transferRidingCompanyId = null): bool
     {
         $ridingCompany = RidingCompany::findOrFail($id);
+
+        // If transfer riding company is provided, transfer all users and related data
+        if ($transferRidingCompanyId !== null) {
+            $transferRidingCompany = RidingCompany::findOrFail($transferRidingCompanyId);
+
+            // Ensure transfer riding company is in the same company
+            if ($transferRidingCompany->company_id !== $ridingCompany->company_id) {
+                throw new \Exception('Cannot transfer to a riding company from a different company.');
+            }
+
+            // Get all user IDs that belong to this riding company BEFORE updating them
+            // (needed for transferring drivers assigned to these users)
+            $ridingCompanyUserIds = \App\Models\User::where('riding_company_id', $id)->pluck('id')->toArray();
+
+            // Step 1: Transfer all users in this riding company
+            \App\Models\User::where('riding_company_id', $id)
+                ->update(['riding_company_id' => $transferRidingCompanyId]);
+
+            // Step 2: Transfer all drivers (leads) in this riding company
+            if (class_exists(\Modules\Drivers\app\Models\Driver::class)) {
+                // Transfer all drivers that belong to this riding company
+                \Modules\Drivers\app\Models\Driver::where('riding_company_id', $id)
+                    ->update(['riding_company_id' => $transferRidingCompanyId]);
+
+                // Transfer all drivers assigned to users in this riding company
+                if (!empty($ridingCompanyUserIds)) {
+                    \Modules\Drivers\app\Models\Driver::whereIn('assigned_to', $ridingCompanyUserIds)
+                        ->update(['riding_company_id' => $transferRidingCompanyId]);
+                }
+
+                // Note: DriverFollowUps, DriverStages, and DriverDocuments are linked via driver_id,
+                // so they will automatically stay with the transferred drivers. No need to update them separately.
+            }
+        }
 
         // Delete WhatsApp session files
         $this->deleteWhatsAppSessionFiles($id);

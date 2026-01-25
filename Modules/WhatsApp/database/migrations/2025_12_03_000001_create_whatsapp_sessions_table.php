@@ -11,7 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('whatsapp_sessions', function (Blueprint $table) {
+        if (!Schema::hasTable('whatsapp_sessions')) {
+            Schema::create('whatsapp_sessions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('company_id')->constrained('companies')->onDelete('cascade');
             $table->string('phone_number')->nullable();
@@ -22,7 +23,8 @@ return new class extends Migration
             $table->text('session_data')->nullable(); // Store session data
             $table->timestamp('last_connected_at')->nullable();
             $table->timestamps();
-        });
+            });
+        }
     }
 
     /**

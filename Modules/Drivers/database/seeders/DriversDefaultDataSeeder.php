@@ -11,19 +11,15 @@ class DriversDefaultDataSeeder extends Seeder
 {
     public function run(): void
     {
-        // Seed for all companies
-        $companies = Company::all();
+        // Lead Sources and Lead Statuses are now global, seed once
+        $this->seedForCompany(null);
 
-        foreach ($companies as $company) {
-            $this->seedForCompany($company);
-        }
-
-        $this->command->info('Lead sources and lead statuses seeded for all companies.');
+        $this->command->info('Lead sources and lead statuses seeded globally.');
     }
 
-    public function seedForCompany(Company $company): void
+    public function seedForCompany(?Company $company = null): void
     {
-        // Lead Sources
+        // Lead Sources are now global, seed once for all companies
         $sources = [
             'Facebook Ads',
             'Google Ads',
@@ -42,17 +38,15 @@ class DriversDefaultDataSeeder extends Seeder
         foreach ($sources as $source) {
             LeadSource::firstOrCreate(
                 [
-                    'company_id' => $company->id,
-                    'slug' => \Illuminate\Support\Str::slug($source),
+                    'name' => $source,
                 ],
                 [
-                    'name' => $source,
                     'active' => true,
                 ]
             );
         }
 
-        // Lead Statuses
+        // Lead Statuses are now global, seed once for all companies
         $statuses = [
             ['name' => 'New', 'color' => '#3b82f6', 'order' => 1],
             ['name' => 'Contacted', 'color' => '#f59e0b', 'order' => 2],
@@ -66,11 +60,9 @@ class DriversDefaultDataSeeder extends Seeder
         foreach ($statuses as $status) {
             LeadStatus::firstOrCreate(
                 [
-                    'company_id' => $company->id,
-                    'slug' => \Illuminate\Support\Str::slug($status['name']),
+                    'name' => $status['name'],
                 ],
                 [
-                    'name' => $status['name'],
                     'color' => $status['color'],
                     'order' => $status['order'],
                     'active' => true,

@@ -57,8 +57,7 @@ Route::middleware(['web', 'auth'])->prefix('drivers')->name('drivers.api.')->gro
             abort(403, 'Unauthorized');
         }
 
-        return LeadSource::where('company_id', $companyId)
-            ->active()
+        return LeadSource::active()
             ->orderBy('name')
             ->get(['id', 'name']);
     })->name('lead-sources-by-company');
@@ -71,8 +70,7 @@ Route::middleware(['web', 'auth'])->prefix('drivers')->name('drivers.api.')->gro
             abort(403, 'Unauthorized');
         }
 
-        return LeadStatus::where('company_id', $companyId)
-            ->active()
+        return LeadStatus::active()
             ->ordered()
             ->get(['id', 'name']);
     })->name('lead-statuses-by-company');

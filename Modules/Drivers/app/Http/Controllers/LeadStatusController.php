@@ -8,7 +8,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
-use Modules\Core\app\Models\Company;
 use Modules\Drivers\app\Http\Requests\LeadStatusStoreRequest;
 use Modules\Drivers\app\Http\Requests\LeadStatusUpdateRequest;
 use Modules\Drivers\app\Services\LeadStatusService;
@@ -21,36 +20,61 @@ class LeadStatusController extends Controller
 
     public function index(): Response
     {
-        $user = Auth::user();
-        $companyId = $this->getCompanyId();
-
-        $leadStatuses = $this->leadStatusService->getAllLeadStatuses($companyId);
+        $leadStatuses = $this->leadStatusService->getAllLeadStatuses();
+        
+        // Get drivers count for each lead status
+        $driversCounts = [];
+        if (class_exists(\Modules\Drivers\app\Models\Driver::class)) {
+            foreach ($leadStatuses as $leadStatus) {
+                $driversCounts[$leadStatus->id] = \Modules\Drivers\app\Models\Driver::where('lead_status_id', $leadStatus->id)->count();
+            }
+        }
 
         return Inertia::render('Drivers/LeadStatuses/Index', [
             'leadStatuses' => $leadStatuses,
+            'driversCounts' => $driversCounts,
+            'availableLeadStatuses' => $leadStatuses, // For transfer dropdown
+        ]);
+    }
+
+    public function recycleBin(): Response
+    {
+        $leadStatuses = \Modules\Drivers\app\Models\LeadStatus::onlyTrashed()
+            ->orderBy('deleted_at', 'desc')
+            ->get();
+        
+        // Get drivers count for each lead status
+        $driversCounts = [];
+        foreach ($leadStatuses as $leadStatus) {
+            $driversCounts[$leadStatus->id] = \Modules\Drivers\app\Models\Driver::where('lead_status_id', $leadStatus->id)->count();
+        }
+
+        return Inertia::render('Drivers/LeadStatuses/RecycleBin', [
+            'leadStatuses' => $leadStatuses->map(fn($ls) => [
+                'id' => $ls->id,
+                'name' => $ls->name,
+                'slug' => $ls->slug,
+                'description' => $ls->description,
+                'color' => $ls->color,
+                'order' => $ls->order,
+                'active' => $ls->active,
+                'created_at' => $ls->created_at?->toISOString(),
+                'updated_at' => $ls->updated_at?->toISOString(),
+                'deleted_at' => $ls->deleted_at?->toISOString(),
+            ]),
+            'driversCounts' => $driversCounts,
         ]);
     }
 
     public function create(): Response
     {
-        $user = Auth::user();
-        $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get() : null;
-
-        return Inertia::render('Drivers/LeadStatuses/Create', [
-            'companies' => $companies,
-        ]);
+        return Inertia::render('Drivers/LeadStatuses/Create');
     }
 
     public function store(LeadStatusStoreRequest $request): RedirectResponse
     {
         try {
             $data = $request->validated();
-            $user = Auth::user();
-
-            if (! $user->isSuperAdmin()) {
-                $data['company_id'] = $user->company_id;
-            }
-
             $data['active'] = $data['active'] ?? true;
             $data['order'] = $data['order'] ?? 0;
 
@@ -95,9 +119,21 @@ class LeadStatusController extends Controller
                 ];
             });
 
+        // Get drivers count
+        $driversCount = 0;
+        if (class_exists(\Modules\Drivers\app\Models\Driver::class)) {
+            $driversCount = \Modules\Drivers\app\Models\Driver::where('lead_status_id', $leadStatus)->count();
+        }
+        
+        // Get available lead statuses for transfer (exclude self)
+        $availableLeadStatuses = $this->leadStatusService->getAllLeadStatuses()
+            ->filter(fn($ls) => $ls->id !== $leadStatusModel->id);
+
         return Inertia::render('Drivers/LeadStatuses/Show', [
             'leadStatus' => $leadStatusModel,
             'activities' => $activities,
+            'driversCount' => $driversCount,
+            'availableLeadStatuses' => $availableLeadStatuses,
         ]);
     }
 
@@ -109,12 +145,8 @@ class LeadStatusController extends Controller
             abort(404, 'Lead status not found.');
         }
 
-        $user = Auth::user();
-        $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get() : null;
-
         return Inertia::render('Drivers/LeadStatuses/Edit', [
             'leadStatus' => $leadStatusModel,
-            'companies' => $companies,
         ]);
     }
 
@@ -134,10 +166,40 @@ class LeadStatusController extends Controller
         }
     }
 
-    public function destroy(int $leadStatus): RedirectResponse
+    public function destroy(Request $request, int $leadStatus): RedirectResponse
     {
         try {
-            $this->leadStatusService->deleteLeadStatus($leadStatus);
+            $leadStatusModel = $this->leadStatusService->getLeadStatusById($leadStatus);
+            
+            if (! $leadStatusModel) {
+                abort(404, 'Lead status not found.');
+            }
+            
+            // Get drivers count
+            $driversCount = 0;
+            if (class_exists(\Modules\Drivers\app\Models\Driver::class)) {
+                $driversCount = \Modules\Drivers\app\Models\Driver::where('lead_status_id', $leadStatus)->count();
+            }
+            
+            // Validate transfer_lead_status_id if drivers exist
+            $transferLeadStatusId = $request->input('transfer_lead_status_id');
+            if ($driversCount > 0) {
+                $request->validate([
+                    'transfer_lead_status_id' => [
+                        'required',
+                        'integer',
+                        'exists:lead_statuses,id',
+                        function ($attribute, $value, $fail) use ($leadStatusModel) {
+                            $transferLeadStatus = \Modules\Drivers\app\Models\LeadStatus::find($value);
+                            if ($transferLeadStatus && $transferLeadStatus->id === $leadStatusModel->id) {
+                                $fail('Cannot transfer to the same lead status.');
+                            }
+                        },
+                    ],
+                ]);
+            }
+            
+            $this->leadStatusService->deleteLeadStatus($leadStatus, $transferLeadStatusId);
 
             return redirect()
                 ->route('drivers.leadstatuses.index')
@@ -166,9 +228,7 @@ class LeadStatusController extends Controller
 
     public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $user = Auth::user();
-        $companyId = $this->getCompanyId();
-        $leadStatuses = $this->leadStatusService->getAllLeadStatuses($companyId);
+        $leadStatuses = $this->leadStatusService->getAllLeadStatuses();
 
         $filename = 'lead_statuses_export_' . date('Y-m-d_His') . '.csv';
         

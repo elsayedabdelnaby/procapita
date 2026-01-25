@@ -3,6 +3,7 @@
 namespace Modules\Drivers\app\Services;
 
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Schema;
 use Modules\Drivers\app\Models\Driver;
 use Modules\Drivers\app\Models\DriverDocument;
 use Modules\Drivers\app\Models\DriverStage;
@@ -13,7 +14,7 @@ class DriverService
 {
     public function getAllDrivers(?int $companyId = null, ?\App\Models\User $user = null, ?int $selectedRidingCompanyId = null): Collection
     {
-        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'teamLeader', 'accountManager', 'assignedUsers', 'leadStatus', 'leadStage', 'currentStage', 'lastAssignedByUser']);
+        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'teamLeader', 'accountManager', 'assignedUsers', 'leadStatus', 'leadStage', 'driverStage', 'currentStage', 'lastAssignedByUser']);
 
         if ($companyId) {
             $query->where('company_id', $companyId);
@@ -63,6 +64,7 @@ class DriverService
             'assignedUsers',
             'leadStatus',
             'leadStage',
+            'driverStage',
             'currentStage',
             'lastAssignedByUser',
             'stages.ridingCompany',
@@ -175,6 +177,9 @@ class DriverService
             unset($data['assigned_users']);
         }
 
+        // Filter out columns that don't exist in the database
+        $data = $this->filterExistingColumns($data);
+
         $driver = Driver::create($data);
 
         // Sync assigned users
@@ -280,6 +285,9 @@ class DriverService
 
         // Remove driver_num from data if present - it's auto-generated and read-only
         unset($data['driver_num']);
+
+        // Filter out columns that don't exist in the database
+        $data = $this->filterExistingColumns($data);
 
         $driver = Driver::findOrFail($id);
 
@@ -392,5 +400,17 @@ class DriverService
         }
 
         return $cleanedNumber;
+    }
+
+    /**
+     * Filter out columns that don't exist in the drivers table
+     * This prevents SQL errors when trying to insert/update with non-existent columns
+     */
+    protected function filterExistingColumns(array $data): array
+    {
+        $existingColumns = Schema::getColumnListing('drivers');
+        
+        // Filter data to only include columns that exist in the database
+        return array_intersect_key($data, array_flip($existingColumns));
     }
 }

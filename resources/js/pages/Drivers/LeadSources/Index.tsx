@@ -1,11 +1,11 @@
 import { DataTable } from '@/components/core/data-table';
-import { DeleteDialog } from '@/components/core/delete-dialog';
+import { LeadSourceDeleteDialog } from '@/components/core/lead-source-delete-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 interface LeadSource {
     id: number;
@@ -19,9 +19,15 @@ interface LeadSource {
 
 interface LeadSourcesIndexProps {
     leadSources: LeadSource[];
+    driversCounts?: Record<number, number>;
+    availableLeadSources?: LeadSource[];
 }
 
-export default function LeadSourcesIndex({ leadSources }: LeadSourcesIndexProps) {
+export default function LeadSourcesIndex({ 
+    leadSources, 
+    driversCounts = {}, 
+    availableLeadSources = [] 
+}: LeadSourcesIndexProps) {
     const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; source: LeadSource | null }>({
         open: false,
         source: null,
@@ -31,11 +37,13 @@ export default function LeadSourcesIndex({ leadSources }: LeadSourcesIndexProps)
         setDeleteDialog({ open: true, source });
     };
 
-    const confirmDelete = () => {
-        if (deleteDialog.source) {
-            router.delete(`/drivers/lead-sources/${deleteDialog.source.id}`);
+    // Filter available lead sources for transfer (exclude the one being deleted)
+    const availableForTransfer = useMemo(() => {
+        if (!deleteDialog.source) {
+            return availableLeadSources;
         }
-    };
+        return availableLeadSources.filter((ls) => ls.id !== deleteDialog.source?.id);
+    }, [availableLeadSources, deleteDialog.source]);
 
     const handleToggleStatus = (id: number) => {
         router.post(`/drivers/lead-sources/${id}/toggle-active`);
@@ -136,6 +144,10 @@ export default function LeadSourcesIndex({ leadSources }: LeadSourcesIndexProps)
                                         </div>
                                     ),
                                 },
+                                {
+                                    header: 'Drivers',
+                                    accessor: (row) => driversCounts[row.id] || 0,
+                                },
                             ]}
                         />
                     ) : (
@@ -148,12 +160,12 @@ export default function LeadSourcesIndex({ leadSources }: LeadSourcesIndexProps)
                     )}
                 </Card>
 
-                <DeleteDialog
+                <LeadSourceDeleteDialog
                     open={deleteDialog.open}
                     onOpenChange={(open) => setDeleteDialog({ open, source: null })}
-                    onConfirm={confirmDelete}
-                    title="Delete Lead Source"
-                    description={`Are you sure you want to delete "${deleteDialog.source?.name}"? This action cannot be undone.`}
+                    leadSource={deleteDialog.source}
+                    availableLeadSources={availableForTransfer}
+                    driversCount={deleteDialog.source ? driversCounts[deleteDialog.source.id] || 0 : 0}
                 />
             </div>
         </AppLayout>

@@ -1,6 +1,7 @@
 import { ActivityLog } from '@/components/core/activity-log';
 import { DataTable } from '@/components/core/data-table';
 import { DeleteDialog } from '@/components/core/delete-dialog';
+import { CompanyDeleteDialog } from '@/components/core/company-delete-dialog';
 import { RoleTree } from '@/components/core/role-tree';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Company, CoreUser, Role } from '@/types/core';
 import { Head, Link, router } from '@inertiajs/react';
-import { Activity, Building2, ChevronLeft, ChevronRight, Mail, MapPin, Network, Phone, ShieldCheck, Users as UsersIcon, X } from 'lucide-react';
+import { Activity, Building2, ChevronLeft, ChevronRight, Mail, MapPin, Network, Phone, ShieldCheck, Users as UsersIcon, X, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 interface RidingCompany {
@@ -30,9 +31,14 @@ interface CompanyShowProps {
         active_modules: number;
     };
     users?: CoreUser[];
+    deletedUsers?: CoreUser[];
     roles?: Role[];
     roleHierarchy?: Role[];
     ridingCompanies?: RidingCompany[];
+    availableCompanies?: Array<{
+        id: number;
+        name: string;
+    }>;
     documentRequirements?: Array<{
         id: number;
         name: string;
@@ -62,7 +68,7 @@ interface CompanyShowProps {
     }>;
 }
 
-export default function CompanyShow({ company, statistics, users, roles, roleHierarchy, ridingCompanies = [], documentRequirements = [], activities = [] }: CompanyShowProps) {
+export default function CompanyShow({ company, statistics, users, deletedUsers = [], roles, roleHierarchy, ridingCompanies = [], availableCompanies = [], documentRequirements = [], activities = [] }: CompanyShowProps) {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'roles' | 'hierarchy' | 'updates'>('overview');
     const [deleteUserDialog, setDeleteUserDialog] = useState<{ open: boolean; user: CoreUser | null }>({
@@ -84,9 +90,6 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(100);
 
-    const handleDelete = () => {
-        router.delete(`/core/companies/${company.id}`);
-    };
 
     const handleToggleStatus = () => {
         const action = company.is_active ? 'deactivate' : 'activate';
@@ -301,12 +304,12 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
                     </nav>
                 </div>
 
-                <DeleteDialog
+                <CompanyDeleteDialog
                     open={deleteDialogOpen}
                     onOpenChange={setDeleteDialogOpen}
-                    onConfirm={handleDelete}
-                    title="Delete Company"
-                    description={`Are you sure you want to delete "${company.name}"? This action cannot be undone and will remove all associated data including users, roles, and permissions.`}
+                    company={company}
+                    availableCompanies={availableCompanies}
+                    ridingCompaniesCount={ridingCompanies.length}
                 />
 
                 {/* Tab Content */}
@@ -832,6 +835,127 @@ export default function CompanyShow({ company, statistics, users, roles, roleHie
                                 </DialogFooter>
                             </DialogContent>
                         </Dialog>
+                    </Card>
+                )}
+
+                {activeTab === 'users' && deletedUsers && deletedUsers.length > 0 && (
+                    <Card className="p-6 mt-6">
+                        <div className="mb-4">
+                            <h2 className="text-xl font-semibold">Deleted Users</h2>
+                            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                                Deleted records that can be restored
+                            </p>
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border">
+                            <table className="w-full">
+                                <thead className="bg-neutral-100/60 dark:bg-neutral-800/60 backdrop-blur-sm">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            Name
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            Email
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            Mobile 1
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            Mobile 2
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            Riding Company
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            Roles
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            Deleted At
+                                        </th>
+                                        <th className="px-4 py-3 text-right text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                            Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                                    {deletedUsers.length === 0 ? (
+                                        <tr>
+                                            <td
+                                                colSpan={8}
+                                                className="px-4 py-8 text-center text-sm text-neutral-500"
+                                            >
+                                                No deleted users found
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        deletedUsers.map((user, index) => (
+                                            <tr
+                                                key={user.id}
+                                                className={`
+                                                    transition-colors duration-150
+                                                    ${
+                                                        index % 2 === 0
+                                                            ? 'bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
+                                                            : 'bg-neutral-50/80 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-900/60'
+                                                    }
+                                                `}
+                                            >
+                                                <td className="px-4 py-3 text-sm">{user.name}</td>
+                                                <td className="px-4 py-3 text-sm">{user.email}</td>
+                                                <td className="px-4 py-3 text-sm">{user.mobile1 || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">{user.mobile2 || '-'}</td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {user.ridingCompany?.name || '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {user.roles && user.roles.length > 0
+                                                        ? user.roles.map((r: any) => r.name).join(', ')
+                                                        : 'No roles'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {user.deleted_at ? new Date(user.deleted_at).toLocaleString() : '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-sm">
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => {
+                                                                if (confirm('Are you sure you want to restore this user?')) {
+                                                                    router.post(`/core/companies/${company.id}/users/${user.id}/restore`, {}, {
+                                                                        preserveScroll: true,
+                                                                        onSuccess: () => {
+                                                                            router.reload({ only: ['users', 'deletedUsers'] });
+                                                                        },
+                                                                    });
+                                                                }
+                                                            }}
+                                                        >
+                                                            Restore
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => {
+                                                                if (confirm('Are you sure you want to permanently delete this user? This action cannot be undone.')) {
+                                                                    router.delete(`/core/companies/${company.id}/users/${user.id}/force`, {
+                                                                        preserveScroll: true,
+                                                                        onSuccess: () => {
+                                                                            router.reload({ only: ['users', 'deletedUsers'] });
+                                                                        },
+                                                                    });
+                                                                }
+                                                            }}
+                                                        >
+                                                            Delete Permanently
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </Card>
                 )}
 

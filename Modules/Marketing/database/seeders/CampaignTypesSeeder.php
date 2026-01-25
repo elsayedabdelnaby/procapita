@@ -22,7 +22,7 @@ class CampaignTypesSeeder extends Seeder
         $this->command->info('Campaign types, statuses, and channels seeded for all companies.');
     }
 
-    private function seedForCompany(Company $company): void
+    public function seedForCompany(Company $company): void
     {
         // Campaign Types
         $types = [

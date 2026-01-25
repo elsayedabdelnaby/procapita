@@ -24,6 +24,7 @@ interface LeadStage {
     active: boolean;
     requires_all_documents_approved: boolean;
     riding_company?: RidingCompany;
+    ridingCompanies?: RidingCompany[];
     created_at: string;
     updated_at: string;
 }
@@ -164,8 +165,13 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
                                     ),
                                 },
                                 {
-                                    header: 'Riding Company',
-                                    accessor: (row) => row.riding_company?.name || '-',
+                                    header: 'Riding Companies',
+                                    accessor: (row) => {
+                                        if (row.ridingCompanies && row.ridingCompanies.length > 0) {
+                                            return row.ridingCompanies.map(rc => rc.name).join(', ');
+                                        }
+                                        return row.riding_company?.name || '-';
+                                    },
                                 },
                                 {
                                     header: 'Color',

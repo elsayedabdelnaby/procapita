@@ -47,12 +47,14 @@ class Role extends SpatieRole
 
     public function children(): HasMany
     {
-        return $this->hasMany(Role::class, 'parent_id');
+        return $this->hasMany(Role::class, 'parent_id')
+            ->where('team_id', $this->team_id);
     }
 
     public function descendants(): HasMany
     {
         return $this->hasMany(Role::class, 'parent_id')
+            ->where('team_id', $this->team_id)
             ->with('descendants');
     }
 

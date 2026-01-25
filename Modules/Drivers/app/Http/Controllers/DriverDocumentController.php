@@ -87,6 +87,50 @@ class DriverDocumentController extends Controller
         ]);
     }
 
+    public function recycleBin(): Response
+    {
+        $companyId = $this->getCompanyId();
+        
+        $query = \Modules\Drivers\app\Models\DriverDocument::onlyTrashed();
+
+        // Filter by company if applicable
+        if ($companyId) {
+            // Get riding company IDs for this company
+            $ridingCompanyIds = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $companyId)->pluck('id')->toArray();
+            
+            if (!empty($ridingCompanyIds)) {
+                $query->whereIn('riding_company_id', $ridingCompanyIds);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        $driverDocuments = $query->with(['driver', 'ridingCompany'])->orderBy('deleted_at', 'desc')->get();
+
+        return Inertia::render('Drivers/DriverDocuments/RecycleBin', [
+            'driverDocuments' => $driverDocuments->map(fn($doc) => [
+                'id' => $doc->id,
+                'driver_id' => $doc->driver_id,
+                'driver' => $doc->driver ? [
+                    'id' => $doc->driver->id,
+                    'full_name' => $doc->driver->full_name,
+                ] : null,
+                'name' => $doc->name ?? ($doc->documentName?->name ?? null),
+                'riding_company_id' => $doc->riding_company_id,
+                'riding_company' => $doc->ridingCompany ? [
+                    'id' => $doc->ridingCompany->id,
+                    'name' => $doc->ridingCompany->name,
+                ] : null,
+                'status' => $doc->status,
+                'uploaded_path' => $doc->uploaded_path,
+                'original_filename' => $doc->original_filename,
+                'created_at' => $doc->created_at?->toISOString(),
+                'updated_at' => $doc->updated_at?->toISOString(),
+                'deleted_at' => $doc->deleted_at?->toISOString(),
+            ]),
+        ]);
+    }
+
     /**
      * Legacy index method for backward compatibility
      */
@@ -881,5 +925,14 @@ class DriverDocumentController extends Controller
         $response->headers->set('Expires', '0');
 
         return $response;
+    }
+
+    protected function getCompanyId(): ?int
+    {
+        $user = Auth::user();
+        if ($user && $user->is_super_admin) {
+            return null; // Super admin can see all
+        }
+        return $user?->company_id;
     }
 }

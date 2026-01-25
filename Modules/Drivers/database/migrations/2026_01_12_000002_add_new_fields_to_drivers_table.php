@@ -12,10 +12,25 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('drivers', function (Blueprint $table) {
-            $table->integer('feedback_count')->default(0)->after('lead_status_comment');
-            $table->string('vehicle_type')->nullable()->after('feedback_count');
-            $table->string('has_worked_before')->nullable()->after('vehicle_type');
-            $table->string('governorate')->nullable()->after('has_worked_before');
+            // Add feedback_count if it doesn't exist
+            if (!Schema::hasColumn('drivers', 'feedback_count')) {
+                $table->integer('feedback_count')->default(0)->after('lead_status_comment');
+            }
+            
+            // Add vehicle_type if it doesn't exist
+            if (!Schema::hasColumn('drivers', 'vehicle_type')) {
+                $table->string('vehicle_type')->nullable()->after('feedback_count');
+            }
+            
+            // Add has_worked_before if it doesn't exist
+            if (!Schema::hasColumn('drivers', 'has_worked_before')) {
+                $table->string('has_worked_before')->nullable()->after('vehicle_type');
+            }
+            
+            // Add governorate if it doesn't exist
+            if (!Schema::hasColumn('drivers', 'governorate')) {
+                $table->string('governorate')->nullable()->after('has_worked_before');
+            }
         });
     }
 

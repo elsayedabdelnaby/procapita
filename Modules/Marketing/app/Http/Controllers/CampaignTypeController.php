@@ -30,6 +30,40 @@ class CampaignTypeController extends Controller
         ]);
     }
 
+    public function recycleBin(): Response
+    {
+        $user = auth()->user();
+        $companyId = $this->getCompanyId();
+        
+        $query = \Modules\Marketing\app\Models\CampaignType::onlyTrashed();
+
+        // Filter by company if applicable
+        if ($companyId) {
+            $query->where('company_id', $companyId);
+        } elseif (!$user->isSuperAdmin()) {
+            // Non-super admin without company_id sees nothing
+            $query->whereRaw('1 = 0');
+        }
+
+        $types = $query->orderBy('deleted_at', 'desc')->get();
+
+        return Inertia::render('Marketing/CampaignTypes/RecycleBin', [
+            'campaignTypes' => $types->map(fn($type) => [
+                'id' => $type->id,
+                'name' => $type->name,
+                'slug' => $type->slug,
+                'description' => $type->description,
+                'color' => $type->color,
+                'sort_order' => $type->sort_order,
+                'active' => $type->active,
+                'company_id' => $type->company_id,
+                'created_at' => $type->created_at?->toISOString(),
+                'updated_at' => $type->updated_at?->toISOString(),
+                'deleted_at' => $type->deleted_at?->toISOString(),
+            ]),
+        ]);
+    }
+
     public function create(): Response
     {
         $user = Auth::user();
@@ -111,6 +145,15 @@ class CampaignTypeController extends Controller
                 ->back()
                 ->with('error', $e->getMessage());
         }
+    }
+
+    protected function getCompanyId(): ?int
+    {
+        $user = auth()->user();
+        if ($user && $user->is_super_admin) {
+            return null; // Super admin can see all
+        }
+        return $user?->company_id;
     }
 }
 

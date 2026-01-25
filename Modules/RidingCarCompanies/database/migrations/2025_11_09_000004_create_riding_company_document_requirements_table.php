@@ -8,7 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('riding_company_document_requirements', function (Blueprint $table) {
+        if (!Schema::hasTable('riding_company_document_requirements')) {
+            Schema::create('riding_company_document_requirements', function (Blueprint $table) {
             $table->id();
             $table->foreignId('riding_company_id')->constrained('riding_companies')->onDelete('cascade');
             $table->string('name');
@@ -22,7 +23,8 @@ return new class extends Migration
             $table->index(['riding_company_id', 'type'], 'rc_doc_req_comp_type_idx');
             $table->index('active');
             $table->index('required');
-        });
+            });
+        }
     }
 
     public function down(): void

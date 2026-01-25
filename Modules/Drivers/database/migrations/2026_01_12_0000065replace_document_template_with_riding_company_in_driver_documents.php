@@ -12,14 +12,36 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('driver_documents', function (Blueprint $table) {
-            // Drop foreign key and column for document_template_id
-            $table->dropForeign(['document_template_id']);
-            $table->dropIndex(['document_template_id']);
-            $table->dropColumn('document_template_id');
+            // Drop foreign key and column for document_template_id if it exists
+            if (Schema::hasColumn('driver_documents', 'document_template_id')) {
+                // Check if foreign key exists before dropping
+                $foreignKeys = Schema::getConnection()
+                    ->getDoctrineSchemaManager()
+                    ->listTableForeignKeys('driver_documents');
+                
+                $hasForeignKey = false;
+                foreach ($foreignKeys as $foreignKey) {
+                    if (in_array('document_template_id', $foreignKey->getLocalColumns())) {
+                        $hasForeignKey = true;
+                        break;
+                    }
+                }
+                
+                if ($hasForeignKey) {
+                    $table->dropForeign(['document_template_id']);
+                }
+                
+                if (Schema::hasColumn('driver_documents', 'document_template_id')) {
+                    $table->dropIndex(['document_template_id']);
+                    $table->dropColumn('document_template_id');
+                }
+            }
 
-            // Add riding_company_id
-            $table->foreignId('riding_company_id')->nullable()->after('driver_id')->constrained('riding_companies')->onDelete('cascade');
-            $table->index('riding_company_id');
+            // Add riding_company_id if it doesn't exist
+            if (!Schema::hasColumn('driver_documents', 'riding_company_id')) {
+                $table->foreignId('riding_company_id')->nullable()->after('driver_id')->constrained('riding_companies')->onDelete('cascade');
+                $table->index('riding_company_id');
+            }
         });
     }
 

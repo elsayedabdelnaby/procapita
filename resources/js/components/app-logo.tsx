@@ -15,8 +15,11 @@ export default function AppLogo() {
     const companies = Array.isArray(props.companies) ? props.companies : [];
     
     // Determine which company to show
-    // Priority: selectedCompany > auth.user.company > companies.find by company_id
-    const currentCompany = selectedCompany || auth?.user?.company || (auth?.user?.company_id ? companies.find(c => c?.id === auth.user.company_id) : null);
+    // Priority: selectedCompany > first company in list > auth.user.company > companies.find by company_id
+    const currentCompany = selectedCompany || 
+        (companies && companies.length > 0 ? companies[0] : null) ||
+        auth?.user?.company || 
+        (auth?.user?.company_id ? companies.find(c => c?.id === auth.user.company_id) : null);
     const companyName = currentCompany?.name || null;
     
     // Convert company name to logo filename

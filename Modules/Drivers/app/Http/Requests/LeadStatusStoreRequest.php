@@ -15,7 +15,7 @@ class LeadStatusStoreRequest extends FormRequest
     {
         $user = $this->user();
         $rules = [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('lead_statuses', 'name')->whereNull('deleted_at')],
             'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'color' => ['nullable', 'string', 'max:50'],
@@ -34,6 +34,7 @@ class LeadStatusStoreRequest extends FormRequest
     {
         return [
             'name.required' => 'Lead status name is required.',
+            'name.unique' => 'This lead status name is already taken.',
         ];
     }
 }

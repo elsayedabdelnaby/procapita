@@ -8,8 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm, router, usePage } from '@inertiajs/react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
 import { formatDate } from '@/utils/date-format';
 import { EGYPT_GOVERNORATES } from '@/constants/egypt-governorates';
 import { useFieldPermissions } from '@/hooks/use-field-permissions';
@@ -43,6 +43,8 @@ interface LeadStage {
     id: number;
     name: string;
     color?: string;
+    riding_company_id?: number;
+    riding_company_ids?: number[];
 }
 
 interface User {
@@ -71,6 +73,16 @@ interface Driver {
     notes?: string;
 }
 
+interface DriverStage {
+    id: number;
+    name?: string;
+    stage_order: number;
+    status: string;
+    notes?: string;
+    riding_company_id?: number;
+    riding_company_ids?: number[];
+}
+
 interface DriversEditProps {
     driver: Driver;
     companies?: Company[];
@@ -79,6 +91,8 @@ interface DriversEditProps {
     leadSources: LeadSource[];
     leadStatuses: LeadStatus[];
     users: User[];
+    driverStages?: DriverStage[];
+    leadStages?: LeadStage[];
 }
 
 export default function DriversEdit({
@@ -89,6 +103,8 @@ export default function DriversEdit({
     leadSources,
     leadStatuses,
     users,
+    driverStages: initialDriverStages = [],
+    leadStages: initialLeadStages = [],
 }: DriversEditProps) {
     const page = usePage();
     const auth = (page.props as any).auth;
@@ -103,7 +119,10 @@ export default function DriversEdit({
     // Hide riding company field if user has a specific riding company assigned (not admin)
     const showRidingCompanyField = isSuperAdmin || isCompanyAdmin || !userRidingCompanyId;
     
-    const [leadStages, setLeadStages] = useState<LeadStage[]>([]);
+    const [leadStages, setLeadStages] = useState<LeadStage[]>(initialLeadStages || []);
+    const [driverStages, setDriverStages] = useState<DriverStage[]>(initialDriverStages || []);
+    const [filteredDriverStages, setFilteredDriverStages] = useState<DriverStage[]>([]);
+    const [filteredLeadStages, setFilteredLeadStages] = useState<LeadStage[]>([]);
     const [loadingLeadStages, setLoadingLeadStages] = useState(false);
     const [timeEditingState, setTimeEditingState] = useState<'hours' | 'minutes' | null>(null);
     const [showReassignDialog, setShowReassignDialog] = useState(false);
@@ -113,6 +132,34 @@ export default function DriversEdit({
     const [confirmDuplicate, setConfirmDuplicate] = useState(driver.confirm_duplicate || false);
     const originalAssignedTo = driver.assigned_to;
     const isAdmin = isSuperAdmin || isCompanyAdmin;
+
+    // Permission checking function
+    const hasPermission = (permission: string): boolean => {
+        if (isSuperAdmin || isCompanyAdmin) {
+            return true;
+        }
+        const permissions = (currentUser as any)?.permissions || [];
+        return permissions.some((p: any) => {
+            if (typeof p === 'string') {
+                return p === permission;
+            }
+            if (p && typeof p === 'object' && 'name' in p) {
+                return p.name === permission;
+            }
+            return false;
+        });
+    };
+
+    const canEdit = () => {
+        return hasPermission('drivers.drivers.edit') || hasPermission('drivers.drivers.update');
+    };
+
+    // Check if user has edit permission, redirect if not
+    useEffect(() => {
+        if (!canEdit()) {
+            router.visit(`/drivers/drivers/${driver.id}`);
+        }
+    }, []);
 
     const { data, setData, put, processing, errors } = useForm({
         company_id: driver.company_id ? String(driver.company_id) : '',
@@ -125,11 +172,12 @@ export default function DriversEdit({
         lead_source_id: driver.lead_source_id ? String(driver.lead_source_id) : '',
         assigned_to: driver.assigned_to ? String(driver.assigned_to) : '',
         assigned_users: driver.assigned_users || [],
-        lead_status_id: '', // Always clear on edit - user must select
-        lead_status_comment: '', // Always clear on edit - user must enter
-        next_follow_up: '', // Always clear on edit - user must enter
+        lead_status_id: driver.lead_status_id ? String(driver.lead_status_id) : '', // Show current value in Edit
+        lead_status_comment: driver.lead_status_comment || '', // Show current value in Edit
+        next_follow_up: driver.next_follow_up || '', // Show current value in Edit
         last_follow_up: driver.last_follow_up || '',
         lead_stage_id: driver.lead_stage_id ? String(driver.lead_stage_id) : '',
+        driver_stage_id: driver.driver_stage_id ? String(driver.driver_stage_id) : '',
         current_stage_id: driver.current_stage_id ? String(driver.current_stage_id) : '',
         notes: driver.notes || '',
         cancel_reason: driver.cancel_reason || '',
@@ -207,46 +255,89 @@ export default function DriversEdit({
         }
     }, [data.lead_status_id, leadStatuses, setData]);
 
-    // Fetch lead stages when riding company changes
+    // Helper function to filter stages by riding company
+    const filterStagesByRidingCompany = (ridingCompanyId: number | null) => {
+        if (!ridingCompanyId) {
+            setFilteredDriverStages([]);
+            setFilteredLeadStages([]);
+            return;
+        }
+
+        // Filter driver stages by riding_company_id
+        const filteredDriver = initialDriverStages.filter((stage) => {
+            if (stage.riding_company_id === ridingCompanyId) {
+                return true;
+            }
+            if (stage.riding_company_ids && Array.isArray(stage.riding_company_ids)) {
+                return stage.riding_company_ids.includes(ridingCompanyId);
+            }
+            return false;
+        });
+        setFilteredDriverStages(filteredDriver);
+
+        // Filter lead stages by riding_company_id
+        const filteredLead = initialLeadStages.filter((stage) => {
+            if (stage.riding_company_id === ridingCompanyId) {
+                return true;
+            }
+            if (stage.riding_company_ids && Array.isArray(stage.riding_company_ids)) {
+                return stage.riding_company_ids.includes(ridingCompanyId);
+            }
+            return false;
+        });
+        setFilteredLeadStages(filteredLead);
+    };
+
+    // Filter driver stages and lead stages when riding company changes
     useEffect(() => {
-        if (data.riding_company_id) {
-            setLoadingLeadStages(true);
-            axios
-                .get(`/api/drivers/riding-companies/${data.riding_company_id}/lead-stages`)
-                .then((response) => {
-                    setLeadStages(response.data);
-                })
-                .catch((error) => {
-                    console.error('Error fetching lead stages:', error);
-                    setLeadStages([]);
-                })
-                .finally(() => {
-                    setLoadingLeadStages(false);
-                });
-        } else {
-            setLeadStages([]);
+        const ridingCompanyId = data.riding_company_id ? Number(data.riding_company_id) : null;
+        filterStagesByRidingCompany(ridingCompanyId);
+
+        // Reset driver_stage_id if current selection is not in filtered list
+        if (ridingCompanyId && data.driver_stage_id) {
+            const filteredDriver = initialDriverStages.filter((stage) => {
+                if (stage.riding_company_id === ridingCompanyId) {
+                    return true;
+                }
+                if (stage.riding_company_ids && Array.isArray(stage.riding_company_ids)) {
+                    return stage.riding_company_ids.includes(ridingCompanyId);
+                }
+                return false;
+            });
+            const exists = filteredDriver.some((stage) => String(stage.id) === String(data.driver_stage_id));
+            if (!exists) {
+                setData('driver_stage_id', '');
+            }
+        } else if (!ridingCompanyId) {
+            setData('driver_stage_id', '');
+        }
+
+        // Reset lead_stage_id if current selection is not in filtered list
+        if (ridingCompanyId && data.lead_stage_id) {
+            const filteredLead = initialLeadStages.filter((stage) => {
+                if (stage.riding_company_id === ridingCompanyId) {
+                    return true;
+                }
+                if (stage.riding_company_ids && Array.isArray(stage.riding_company_ids)) {
+                    return stage.riding_company_ids.includes(ridingCompanyId);
+                }
+                return false;
+            });
+            const exists = filteredLead.some((stage) => String(stage.id) === String(data.lead_stage_id));
+            if (!exists) {
+                setData('lead_stage_id', '');
+            }
+        } else if (!ridingCompanyId) {
             setData('lead_stage_id', '');
         }
-    }, [data.riding_company_id]);
+    }, [data.riding_company_id, setData, initialDriverStages, initialLeadStages, data.driver_stage_id, data.lead_stage_id]);
 
-    // Load lead stages on mount if riding company is already selected
+    // Filter stages on initial load if driver has riding_company_id
     useEffect(() => {
-        if (driver.riding_company_id) {
-            setLoadingLeadStages(true);
-            axios
-                .get(`/api/drivers/riding-companies/${driver.riding_company_id}/lead-stages`)
-                .then((response) => {
-                    setLeadStages(response.data);
-                })
-                .catch((error) => {
-                    console.error('Error fetching lead stages:', error);
-                    setLeadStages([]);
-                })
-                .finally(() => {
-                    setLoadingLeadStages(false);
-                });
+        if (driver.riding_company_id && initialDriverStages.length > 0 && initialLeadStages.length > 0) {
+            filterStagesByRidingCompany(driver.riding_company_id);
         }
-    }, []);
+    }, [driver.riding_company_id, initialDriverStages, initialLeadStages]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -278,12 +369,8 @@ export default function DriversEdit({
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => {
-                // Reload drivers list to show updates immediately
-                router.reload({ 
-                    only: ['drivers', 'filterOptions'],
-                    preserveState: true,
-                    preserveScroll: true
-                });
+                // Redirect to driver details page after successful update
+                router.visit(`/drivers/drivers/${driver.id}`);
             },
         });
     };
@@ -358,7 +445,8 @@ export default function DriversEdit({
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    <Card className="p-6">
+                    <div>
+                        <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
                             {companies && companies.length > 0 && (
@@ -503,100 +591,100 @@ export default function DriversEdit({
                                 </div>
                             )}
 
-                            {/* Lead Status Group with Green Border */}
-                            {(canViewDriverField('lead_status') || canViewDriverField('lead_status_comment') || canViewDriverField('cancel_reason') || canViewDriverField('next_follow_up')) && (
-                                <div className="rounded-lg border-2 border-green-500 dark:border-green-600 bg-green-100/50 dark:bg-green-900/30 p-4 grid grid-cols-2 gap-4">
-                                    {canViewDriverField('lead_status') && (
-                                        <div>
-                                            <Label htmlFor="lead_status_id" className="font-bold text-green-700 dark:text-green-300">Lead Status <span className="text-red-500">*</span></Label>
-                                            <select
-                                                id="lead_status_id"
-                                                name="lead_status_id"
-                                                value={data.lead_status_id}
-                                                onChange={(e) => setData('lead_status_id', e.target.value)}
-                                                className="w-full rounded-md border px-3 py-2"
-                                                required
-                                                disabled={!canEditDriverField('lead_status')}
-                                            >
-                                                <option value="">-- Select Lead Status (Required) --</option>
-                                                {leadStatuses.map((status) => (
-                                                    <option key={status.id} value={String(status.id)}>
-                                                        {status.name}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            {errors.lead_status_id && (
-                                                <p className="text-sm text-red-500">{errors.lead_status_id}</p>
-                                            )}
-                                        </div>
+                            {/* Lead Status Group with Green Border - Always visible in Edit page (not Quick Edit) if user has permission */}
+                            {(canViewDriverField('lead_status') || canViewDriverField('lead_status_id') || canViewDriverField('lead_status_comment') || canViewDriverField('cancel_reason') || canViewDriverField('next_follow_up')) && (
+                            <div className="rounded-lg border-2 border-green-500 dark:border-green-600 bg-green-100/50 dark:bg-green-900/30 p-4 grid grid-cols-2 gap-4">
+                                {(canViewDriverField('lead_status') || canViewDriverField('lead_status_id')) && (
+                                <div>
+                                    <Label htmlFor="lead_status_id" className="font-bold text-green-700 dark:text-green-300">Lead Status <span className="text-red-500">*</span></Label>
+                                    <select
+                                        id="lead_status_id"
+                                        name="lead_status_id"
+                                        value={data.lead_status_id}
+                                        onChange={(e) => setData('lead_status_id', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        required
+                                        disabled={!canEditDriverField('lead_status')}
+                                    >
+                                        <option value="">-- Select Lead Status (Required) --</option>
+                                        {leadStatuses.map((status) => (
+                                            <option key={status.id} value={String(status.id)}>
+                                                {status.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.lead_status_id && (
+                                        <p className="text-sm text-red-500">{errors.lead_status_id}</p>
                                     )}
+                                </div>
+                                )}
 
-                                    {canViewDriverField('lead_status_comment') && (
-                                        <div>
-                                            <Label htmlFor="lead_status_comment" className="font-bold text-green-700 dark:text-green-300">
-                                                Feedback Comment
-                                                {isFollowUpRequired() && <span className="text-red-500 ml-1">*</span>}
-                                            </Label>
-                                            <textarea
-                                                id="lead_status_comment"
-                                                name="lead_status_comment"
-                                                value={data.lead_status_comment}
-                                                onChange={(e) => setData('lead_status_comment', e.target.value)}
-                                                className={`w-full rounded-md border px-3 py-2 ${isFollowUpRequired() && !data.lead_status_comment ? 'border-red-500' : ''}`}
-                                                rows={3}
-                                                placeholder="Enter lead status comment..."
-                                                required={isFollowUpRequired()}
-                                                disabled={!canEditDriverField('lead_status_comment')}
-                                            />
-                                            {errors.lead_status_comment && (
-                                                <p className="text-sm text-red-500">{errors.lead_status_comment}</p>
-                                            )}
-                                            {isFollowUpRequired() && !data.lead_status_comment && !errors.lead_status_comment && (
-                                                <p className="text-sm text-red-500">Feedback comment is required for this lead status.</p>
-                                            )}
-                                        </div>
+                                {canViewDriverField('lead_status_comment') && (
+                                <div>
+                                    <Label htmlFor="lead_status_comment" className="font-bold text-green-700 dark:text-green-300">
+                                        Feedback Comment
+                                        {isFollowUpRequired() && <span className="text-red-500 ml-1">*</span>}
+                                    </Label>
+                                    <textarea
+                                        id="lead_status_comment"
+                                        name="lead_status_comment"
+                                        value={data.lead_status_comment}
+                                        onChange={(e) => setData('lead_status_comment', e.target.value)}
+                                        className={`w-full rounded-md border px-3 py-2 ${isFollowUpRequired() && !data.lead_status_comment ? 'border-red-500' : ''}`}
+                                        rows={3}
+                                        placeholder="Enter lead status comment..."
+                                        required={isFollowUpRequired()}
+                                        disabled={!canEditDriverField('lead_status_comment')}
+                                    />
+                                    {errors.lead_status_comment && (
+                                        <p className="text-sm text-red-500">{errors.lead_status_comment}</p>
                                     )}
-
-                                    {canViewDriverField('cancel_reason') && (
-                                        <div>
-                                            <Label htmlFor="cancel_reason" className="font-bold text-green-700 dark:text-green-300">
-                                                Cancel Reasons
-                                                {isCancelReasonRequired() && <span className="text-red-500 ml-1">*</span>}
-                                            </Label>
-                                            <Select
-                                                value={data.cancel_reason || undefined}
-                                                onValueChange={(value) => setData('cancel_reason', value || '')}
-                                                required={isCancelReasonRequired()}
-                                                disabled={!canEditDriverField('cancel_reason')}
-                                            >
-                                                <SelectTrigger className={isCancelReasonRequired() && !data.cancel_reason ? 'border-red-500' : ''}>
-                                                    <SelectValue placeholder="Select cancel reason..." />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Not interested">Not interested</SelectItem>
-                                                    <SelectItem value="Wrong Number">Wrong Number</SelectItem>
-                                                    <SelectItem value="Under Age">Under Age</SelectItem>
-                                                    <SelectItem value="Duplicated">Duplicated</SelectItem>
-                                                    <SelectItem value="Wrong Documents">Wrong Documents</SelectItem>
-                                                    <SelectItem value="Car Not Accepted">Car Not Accepted</SelectItem>
-                                                    <SelectItem value="Other">Other</SelectItem>
-                                                    <SelectItem value="Already driver">Already driver</SelectItem>
-                                                    <SelectItem value="Expired">Expired</SelectItem>
-                                                    <SelectItem value="Cities">Cities</SelectItem>
-                                                    <SelectItem value="Dont have driving license">Dont have driving license</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.cancel_reason && (
-                                                <p className="text-sm text-red-500">{errors.cancel_reason}</p>
-                                            )}
-                                            {isCancelReasonRequired() && !data.cancel_reason && !errors.cancel_reason && (
-                                                <p className="text-sm text-red-500">Cancel reason is required for this lead status.</p>
-                                            )}
-                                        </div>
+                                    {isFollowUpRequired() && !data.lead_status_comment && !errors.lead_status_comment && (
+                                        <p className="text-sm text-red-500">Feedback comment is required for this lead status.</p>
                                     )}
+                                </div>
+                                )}
 
-                                    {canViewDriverField('next_follow_up') && (
-                                        <div className="col-span-2">
+                                {canViewDriverField('cancel_reason') && (
+                                <div>
+                                    <Label htmlFor="cancel_reason" className="font-bold text-green-700 dark:text-green-300">
+                                        Cancel Reasons
+                                        {isCancelReasonRequired() && <span className="text-red-500 ml-1">*</span>}
+                                    </Label>
+                                    <Select
+                                        value={data.cancel_reason || undefined}
+                                        onValueChange={(value) => setData('cancel_reason', value || '')}
+                                        required={isCancelReasonRequired()}
+                                        disabled={!canEditDriverField('cancel_reason')}
+                                    >
+                                        <SelectTrigger className={isCancelReasonRequired() && !data.cancel_reason ? 'border-red-500' : ''}>
+                                            <SelectValue placeholder="Select cancel reason..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Not interested">Not interested</SelectItem>
+                                            <SelectItem value="Wrong Number">Wrong Number</SelectItem>
+                                            <SelectItem value="Under Age">Under Age</SelectItem>
+                                            <SelectItem value="Duplicated">Duplicated</SelectItem>
+                                            <SelectItem value="Wrong Documents">Wrong Documents</SelectItem>
+                                            <SelectItem value="Car Not Accepted">Car Not Accepted</SelectItem>
+                                            <SelectItem value="Other">Other</SelectItem>
+                                            <SelectItem value="Already driver">Already driver</SelectItem>
+                                            <SelectItem value="Expired">Expired</SelectItem>
+                                            <SelectItem value="Cities">Cities</SelectItem>
+                                            <SelectItem value="Dont have driving license">Dont have driving license</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.cancel_reason && (
+                                        <p className="text-sm text-red-500">{errors.cancel_reason}</p>
+                                    )}
+                                    {isCancelReasonRequired() && !data.cancel_reason && !errors.cancel_reason && (
+                                        <p className="text-sm text-red-500">Cancel reason is required for this lead status.</p>
+                                    )}
+                                </div>
+                                )}
+
+                                {canViewDriverField('next_follow_up') && (
+                                <div className="col-span-2">
                                             <Label 
                                                 htmlFor="next_follow_up" 
                                                 className="font-bold text-green-700 dark:text-green-300 block mb-1"
@@ -874,14 +962,14 @@ export default function DriversEdit({
                                                     dd-mm-yyyy | hh:mm AM/PM
                                                 </span>
                                             )}
-                                        </div>
+                                    </div>
                                     </div>
                                     {errors.next_follow_up && (
                                         <p className="text-sm text-red-500">{errors.next_follow_up}</p>
                                     )}
-                                        </div>
-                                    )}
                                 </div>
+                                )}
+                            </div>
                             )}
 
                             {canViewDriverField('last_follow_up') && (
@@ -908,16 +996,16 @@ export default function DriversEdit({
                                         value={data.lead_stage_id}
                                         onChange={(e) => setData('lead_stage_id', e.target.value)}
                                         className="w-full rounded-md border px-3 py-2"
-                                        disabled={loadingLeadStages || !data.riding_company_id || !canEditDriverField('lead_stage')}
+                                        disabled={!data.riding_company_id || !canEditDriverField('lead_stage')}
                                     >
                                         <option value="">
-                                            {loadingLeadStages
-                                                ? 'Loading...'
-                                                : !data.riding_company_id
-                                                  ? 'Select a riding company first'
+                                            {!data.riding_company_id
+                                                ? 'Select a riding company first'
+                                                : filteredLeadStages.length === 0
+                                                  ? 'No lead stages available'
                                                   : 'Select a lead stage'}
                                         </option>
-                                        {leadStages.map((stage) => (
+                                        {filteredLeadStages.map((stage) => (
                                             <option key={stage.id} value={String(stage.id)}>
                                                 {stage.name}
                                             </option>
@@ -925,6 +1013,30 @@ export default function DriversEdit({
                                     </select>
                                     {errors.lead_stage_id && (
                                         <p className="text-sm text-red-500">{errors.lead_stage_id}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {canViewDriverField('driver_stage') && (
+                                <div>
+                                    <Label htmlFor="driver_stage_id">Driver Stage</Label>
+                                    <select
+                                        id="driver_stage_id"
+                                        name="driver_stage_id"
+                                        value={data.driver_stage_id}
+                                        onChange={(e) => setData('driver_stage_id', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        disabled={!canEditDriverField('driver_stage')}
+                                    >
+                                        <option value="">Select a driver stage</option>
+                                        {driverStages.map((stage) => (
+                                            <option key={stage.id} value={String(stage.id)}>
+                                                {stage.name || `Stage ${stage.stage_order}`} {stage.status ? `(${stage.status})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.driver_stage_id && (
+                                        <p className="text-sm text-red-500">{errors.driver_stage_id}</p>
                                     )}
                                 </div>
                             )}
@@ -1085,16 +1197,20 @@ export default function DriversEdit({
                             )}
                         </div>
                     </Card>
-
                     <div className="flex justify-end gap-4">
-                        <Link href="/drivers/drivers">
-                            <Button type="button" variant="outline">
-                                Cancel
-                            </Button>
-                        </Link>
-                        <Button type="submit" disabled={processing}>
-                            {processing ? 'Updating...' : 'Update Driver'}
-                        </Button>
+                        {canEdit() && (
+                            <>
+                                <Link href="/drivers/drivers">
+                                    <Button type="button" variant="outline">
+                                        Cancel
+                                    </Button>
+                                </Link>
+                                <Button type="submit" disabled={processing}>
+                                    {processing ? 'Updating...' : 'Update Driver'}
+                                </Button>
+                            </>
+                        )}
+                    </div>
                     </div>
                 </form>
 

@@ -219,6 +219,44 @@ export default function RoleEdit({
         }
     };
 
+    // Function to format permission action names for display
+    const formatPermissionAction = (action: string): string => {
+        const actionMap: Record<string, string> = {
+            'update': 'Edit',
+            'edit': 'Edit',
+            'quick-edit': 'Quick Edit',
+            'view-documents': 'View Documents',
+            'view-stages': 'View Stages',
+            'view-document': 'View Document',
+            'upload-document': 'Upload Document',
+            'delete-document': 'Delete Document',
+            'reject-document': 'Reject Document',
+            'mass-edit': 'Mass Edit',
+            'mass-delete': 'Mass Delete',
+            'delete-all': 'Delete All',
+            'toggle-active': 'Toggle Active',
+            'approve-document': 'Approve Document',
+            'approve': 'Approve',
+            'reject': 'Reject',
+            'pending-document': 'Pending Document',
+            'set-pending': 'Set Pending',
+            'set-approved': 'Set Approved',
+            'set-rejected': 'Set Rejected',
+            'delete-file': 'Delete File',
+        };
+        
+        // If action has a mapping, use it
+        if (actionMap[action]) {
+            return actionMap[action];
+        }
+        
+        // Otherwise, capitalize and replace hyphens with spaces
+        return action
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    };
+
     // Field mapping for Drivers fields
     const driverFieldMapping: Record<string, string> = {
         'assigned_to': 'Assigned To',
@@ -1084,40 +1122,93 @@ export default function RoleEdit({
                                                                                     </div>
                                                                                 ) : (
                                                                                     <div className="p-3 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
-                                                                                        {entityPermissions.map(
-                                                                                            (permission) => (
-                                                                                                <div
-                                                                                                    key={
-                                                                                                        permission.id
+                                                                                        {(() => {
+                                                                                            // Remove duplicate permissions based on formatted action name
+                                                                                            // If both 'update' and 'edit' exist, keep only 'edit'
+                                                                                            // If both 'approve' and 'set-approved' exist, keep only 'set-approved'
+                                                                                            // If both 'reject' and 'set-rejected' exist, keep only 'set-rejected'
+                                                                                            
+                                                                                            // First, check which permissions exist
+                                                                                            const hasApprove = entityPermissions.some(p => {
+                                                                                                const pAction = p.action || p.name.split('.')[2];
+                                                                                                return pAction === 'approve';
+                                                                                            });
+                                                                                            const hasSetApproved = entityPermissions.some(p => {
+                                                                                                const pAction = p.action || p.name.split('.')[2];
+                                                                                                return pAction === 'set-approved';
+                                                                                            });
+                                                                                            const hasReject = entityPermissions.some(p => {
+                                                                                                const pAction = p.action || p.name.split('.')[2];
+                                                                                                return pAction === 'reject';
+                                                                                            });
+                                                                                            const hasSetRejected = entityPermissions.some(p => {
+                                                                                                const pAction = p.action || p.name.split('.')[2];
+                                                                                                return pAction === 'set-rejected';
+                                                                                            });
+                                                                                            
+                                                                                            const seenActions = new Set<string>();
+                                                                                            const filteredPermissions = entityPermissions.filter((permission) => {
+                                                                                                const action = permission.action || permission.name.split('.')[2];
+                                                                                                const formattedAction = formatPermissionAction(action);
+                                                                                                
+                                                                                                // For drivers.drivers entity, if both 'update' and 'edit' exist, keep only 'edit'
+                                                                                                if (moduleName === 'drivers' && entityName === 'drivers') {
+                                                                                                    if (formattedAction === 'Edit') {
+                                                                                                        if (seenActions.has('Edit')) {
+                                                                                                            // If 'Edit' already seen, keep only the one with action 'edit' (not 'update')
+                                                                                                            if (action === 'update') {
+                                                                                                                return false; // Skip 'update' if 'edit' already exists
+                                                                                                            }
+                                                                                                        } else {
+                                                                                                            seenActions.add('Edit');
+                                                                                                        }
                                                                                                     }
+                                                                                                }
+                                                                                                
+                                                                                                // For drivers.driverdocuments entity, handle approve/reject duplicates
+                                                                                                if (moduleName === 'drivers' && entityName === 'driverdocuments') {
+                                                                                                    // If both 'approve' and 'set-approved' exist, keep only 'set-approved'
+                                                                                                    if (hasSetApproved && action === 'approve') {
+                                                                                                        return false; // Skip 'approve' if 'set-approved' exists
+                                                                                                    }
+                                                                                                    
+                                                                                                    // If both 'reject' and 'set-rejected' exist, keep only 'set-rejected'
+                                                                                                    if (hasSetRejected && action === 'reject') {
+                                                                                                        return false; // Skip 'reject' if 'set-rejected' exists
+                                                                                                    }
+                                                                                                }
+                                                                                                
+                                                                                                // For other cases, check if we've seen this formatted action
+                                                                                                if (seenActions.has(formattedAction)) {
+                                                                                                    return false;
+                                                                                                }
+                                                                                                seenActions.add(formattedAction);
+                                                                                                return true;
+                                                                                            });
+                                                                                            
+                                                                                            return filteredPermissions.map((permission) => (
+                                                                                                <div
+                                                                                                    key={permission.id}
                                                                                                     className="flex items-center gap-2"
                                                                                                 >
                                                                                                     <Checkbox
                                                                                                         id={`permission-${permission.id}`}
-                                                                                                        checked={data.permissions?.includes(
-                                                                                                            permission.id
-                                                                                                        )}
-                                                                                                        onCheckedChange={(
-                                                                                                            checked
-                                                                                                        ) =>
-                                                                                                            handlePermissionToggle(
-                                                                                                                permission.id,
-                                                                                                                checked as boolean
-                                                                                                            )
+                                                                                                        checked={data.permissions?.includes(permission.id)}
+                                                                                                        onCheckedChange={(checked) =>
+                                                                                                            handlePermissionToggle(permission.id, checked as boolean)
                                                                                                         }
                                                                                                     />
                                                                                                     <Label
                                                                                                         htmlFor={`permission-${permission.id}`}
-                                                                                                        className="text-sm font-normal capitalize cursor-pointer"
+                                                                                                        className="text-sm font-normal cursor-pointer"
                                                                                                     >
-                                                                                                        {permission.action ||
-                                                                                                            permission.name.split(
-                                                                                                                '.'
-                                                                                                            )[2]}
+                                                                                                        {formatPermissionAction(
+                                                                                                            permission.action || permission.name.split('.')[2]
+                                                                                                        )}
                                                                                                     </Label>
                                                                                                 </div>
-                                                                                            )
-                                                                                        )}
+                                                                                            ));
+                                                                                        })()}
                                                                                     </div>
                                                                                 )}
                                                                             </>

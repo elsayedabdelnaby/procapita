@@ -15,6 +15,7 @@ Route::middleware(['auth', 'verified'])->prefix('ridingcarcompanies')->name('rid
     
     // Riding Companies
     Route::get('riding-companies', [RidingCompanyController::class, 'index'])->name('ridingcompanies.index');
+    Route::get('riding-companies/recycle-bin', [RidingCompanyController::class, 'recycleBin'])->name('ridingcompanies.recycle-bin');
     Route::get('riding-companies/create', [RidingCompanyController::class, 'create'])->name('ridingcompanies.create');
     Route::post('riding-companies', [RidingCompanyController::class, 'store'])->name('ridingcompanies.store');
     Route::get('riding-companies/{id}', [RidingCompanyController::class, 'show'])->name('ridingcompanies.show');

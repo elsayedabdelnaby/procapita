@@ -1,3 +1,4 @@
+import { RidingCompanyDeleteDialog } from '@/components/core/riding-company-delete-dialog';
 import { DeleteDialog } from '@/components/core/delete-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -94,6 +95,10 @@ interface RidingCompanyShowProps {
             name: string;
             email: string;
         } | null;
+        company?: {
+            id: number;
+            name: string;
+        } | null;
     };
     users?: CoreUser[];
     availableUsers?: Array<{
@@ -113,9 +118,15 @@ interface RidingCompanyShowProps {
         id: number;
         name: string;
     }>;
+    availableRidingCompanies?: Array<{
+        id: number;
+        name: string;
+        company_id?: number;
+    }>;
+    usersCount?: number;
 }
 
-export default function RidingCompaniesShow({ ridingCompany, users = [], availableUsers = [], leadSources = [], campaigns = [], roles = [] }: RidingCompanyShowProps) {
+export default function RidingCompaniesShow({ ridingCompany, users = [], availableUsers = [], leadSources = [], campaigns = [], roles = [], availableRidingCompanies = [], usersCount = 0 }: RidingCompanyShowProps) {
     const page = usePage();
     const { can } = usePermissions();
     // Preserve active tab in localStorage
@@ -472,10 +483,10 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
         }
     };
 
+    const [deleteRidingCompanyDialog, setDeleteRidingCompanyDialog] = useState(false);
+
     const handleDelete = () => {
-        if (confirm(`Are you sure you want to delete "${ridingCompany.name}"?`)) {
-            router.delete(`/ridingcarcompanies/riding-companies/${ridingCompany.id}`);
-        }
+        setDeleteRidingCompanyDialog(true);
     };
 
     const handleToggleStatus = () => {
@@ -1634,6 +1645,14 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                 onConfirm={confirmDeleteStage}
                 title="Delete Stage Template"
                 description={`Are you sure you want to delete "${deleteStageDialog.stage?.name}"? This action cannot be undone.`}
+            />
+
+            <RidingCompanyDeleteDialog
+                open={deleteRidingCompanyDialog}
+                onOpenChange={setDeleteRidingCompanyDialog}
+                ridingCompany={ridingCompany}
+                availableRidingCompanies={availableRidingCompanies}
+                usersCount={usersCount}
             />
         </AppLayout>
     );

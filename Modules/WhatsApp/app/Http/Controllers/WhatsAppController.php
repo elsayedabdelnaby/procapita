@@ -644,44 +644,36 @@ class WhatsAppController extends Controller
                     ]);
                 }
 
-                // Get or create "WhatsApp" lead source for this company
+                // Get or create "WhatsApp" lead source (global)
                 $whatsappLeadSource = \Modules\Drivers\app\Models\LeadSource::firstOrCreate(
                     [
                         'name' => 'WhatsApp',
-                        'company_id' => $ridingCompany->company_id,
                     ],
                     [
-                        'name' => 'WhatsApp',
                         'description' => 'Leads created automatically from WhatsApp messages',
                         'active' => true,
-                        'company_id' => $ridingCompany->company_id,
                     ]
                 );
 
                 \Log::info('WhatsApp lead source', [
                     'lead_source_id' => $whatsappLeadSource->id,
                     'name' => $whatsappLeadSource->name,
-                    'company_id' => $ridingCompany->company_id,
                 ]);
 
-                // Get or create "New" lead status for this company
+                // Get or create "New" lead status (global)
                 $newLeadStatus = \Modules\Drivers\app\Models\LeadStatus::firstOrCreate(
                     [
                         'name' => 'New',
-                        'company_id' => $ridingCompany->company_id,
                     ],
                     [
-                        'name' => 'New',
                         'description' => 'New leads created automatically',
                         'active' => true,
-                        'company_id' => $ridingCompany->company_id,
                     ]
                 );
 
                 \Log::info('New lead status', [
                     'lead_status_id' => $newLeadStatus->id,
                     'name' => $newLeadStatus->name,
-                    'company_id' => $ridingCompany->company_id,
                 ]);
 
                 // Create driver

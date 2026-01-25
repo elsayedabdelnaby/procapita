@@ -8,7 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('riding_companies', function (Blueprint $table) {
+        if (!Schema::hasTable('riding_companies')) {
+            Schema::create('riding_companies', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
             $table->string('name');
@@ -28,7 +29,8 @@ return new class extends Migration
             // Indexes
             $table->index('active');
             $table->index('country');
-        });
+            });
+        }
     }
 
     public function down(): void

@@ -11,17 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('custom_dropdown_values', function (Blueprint $table) {
-            $table->id();
-            $table->string('field'); // e.g., 'governorate', 'cancel_reason'
-            $table->string('value');
-            $table->unsignedBigInteger('company_id')->nullable();
-            $table->timestamps();
+        if (!Schema::hasTable('custom_dropdown_values')) {
+            Schema::create('custom_dropdown_values', function (Blueprint $table) {
+                $table->id();
+                $table->string('field'); // e.g., 'governorate', 'cancel_reason'
+                $table->string('value');
+                $table->unsignedBigInteger('company_id')->nullable();
+                $table->timestamps();
 
-            $table->unique(['field', 'value', 'company_id']);
-            $table->index('field');
-            $table->index('company_id');
-        });
+                $table->unique(['field', 'value', 'company_id']);
+                $table->index('field');
+                $table->index('company_id');
+            });
+        }
     }
 
     /**

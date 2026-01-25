@@ -11,7 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('whatsapp_messages', function (Blueprint $table) {
+        if (!Schema::hasTable('whatsapp_messages')) {
+            Schema::create('whatsapp_messages', function (Blueprint $table) {
             $table->id();
             $table->foreignId('whatsapp_session_id')->constrained('whatsapp_sessions')->onDelete('cascade');
             $table->foreignId('driver_id')->nullable()->constrained('drivers')->onDelete('set null');
@@ -32,7 +33,8 @@ return new class extends Migration
             $table->index(['whatsapp_session_id', 'driver_id']);
             $table->index(['from_number', 'to_number']);
             $table->index('timestamp');
-        });
+            });
+        }
     }
 
     /**

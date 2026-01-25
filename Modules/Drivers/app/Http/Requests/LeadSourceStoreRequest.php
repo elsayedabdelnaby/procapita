@@ -13,19 +13,12 @@ class LeadSourceStoreRequest extends FormRequest
 
     public function rules(): array
     {
-        $user = $this->user();
-        $rules = [
-            'name' => ['required', 'string', 'max:255'],
-            'slug' => ['nullable', 'string', 'max:255'],
+        return [
+            'name' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('lead_sources', 'name')->whereNull('deleted_at')],
+            'slug' => ['nullable', 'string', 'max:255', \Illuminate\Validation\Rule::unique('lead_sources', 'slug')->whereNull('deleted_at')],
             'description' => ['nullable', 'string'],
             'active' => ['nullable', 'boolean'],
         ];
-
-        if ($user->isSuperAdmin()) {
-            $rules['company_id'] = ['required', 'exists:companies,id'];
-        }
-
-        return $rules;
     }
 
     public function messages(): array
