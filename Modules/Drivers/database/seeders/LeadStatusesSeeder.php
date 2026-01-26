@@ -3,29 +3,21 @@
 namespace Modules\Drivers\database\seeders;
 
 use Illuminate\Database\Seeder;
-use Modules\Core\app\Models\Company;
 use Modules\Drivers\app\Models\LeadStatus;
 
 class LeadStatusesSeeder extends Seeder
 {
     public function run(?int $companyId = null): void
     {
-        // If no company ID provided, seed for all companies
-        $companies = $companyId 
-            ? Company::where('id', $companyId)->get()
-            : Company::all();
-
-        if ($companies->isEmpty()) {
-            $this->command->warn('No companies found. Please create a company first.');
-            return;
-        }
+        // Note: lead_statuses table no longer has company_id column
+        // Statuses are now global and shared across all companies
 
         // Default statuses for all companies
         $defaultStatuses = [
             ['name' => 'New', 'color' => 'blue', 'order' => 1],
         ];
 
-        // Extended statuses for specific companies (تريد واى and كابتن مصر)
+        // Extended statuses (for companies like Tradeway and Captain Masr)
         $extendedStatuses = [
             ['name' => 'No Answer 1st Call', 'color' => 'orange', 'order' => 2],
             ['name' => 'Probleme with link', 'color' => 'red', 'order' => 3],
@@ -51,61 +43,49 @@ class LeadStatusesSeeder extends Seeder
             ['name' => 'Fresh stage', 'color' => 'blue', 'order' => 23],
         ];
 
-        // Company names that should get extended statuses
-        // Include both English and Arabic names
-        $extendedCompanies = ['Tradeway', 'Captain Masr'];
+        // Use all statuses (default + extended) since they're now global
+        $allStatuses = array_merge($defaultStatuses, $extendedStatuses);
 
-        foreach ($companies as $company) {
-            // Determine which statuses to use for this company
-            $shouldUseExtended = in_array($company->name, $extendedCompanies);
-            $statusesToUse = $shouldUseExtended 
-                ? array_merge($defaultStatuses, $extendedStatuses)
-                : $defaultStatuses;
+        // Get all slugs that should exist
+        $expectedSlugs = array_map(function($status) {
+            return \Illuminate\Support\Str::slug($status['name']);
+        }, $allStatuses);
 
-            // Get all slugs that should exist
-            $expectedSlugs = array_map(function($status) {
-                return \Illuminate\Support\Str::slug($status['name']);
-            }, $statusesToUse);
+        // Delete all statuses that are not in the expected list (including soft deleted)
+        LeadStatus::withTrashed()
+            ->whereNotIn('slug', $expectedSlugs)
+            ->forceDelete();
 
-            // Delete all statuses that are not in the expected list (including soft deleted)
-            LeadStatus::withTrashed()
-                ->where('company_id', $company->id)
-                ->whereNotIn('slug', $expectedSlugs)
-                ->forceDelete();
-
-            // Create or update all statuses
-            foreach ($statusesToUse as $status) {
-                $slug = \Illuminate\Support\Str::slug($status['name']);
-                
-                // Check if status exists (including soft deleted)
-                $existingStatus = LeadStatus::withTrashed()
-                    ->where('company_id', $company->id)
-                    ->where('slug', $slug)
-                    ->first();
-                
-                if ($existingStatus) {
-                    // Restore if soft deleted
-                    if ($existingStatus->trashed()) {
-                        $existingStatus->restore();
-                    }
-                    // Update existing status
-                    $existingStatus->update([
-                        'name' => $status['name'],
-                        'color' => $status['color'],
-                        'order' => $status['order'],
-                        'active' => true,
-                    ]);
-                } else {
-                    // Create new status
-                    LeadStatus::create([
-                        'company_id' => $company->id,
-                        'name' => $status['name'],
-                        'slug' => $slug,
-                        'color' => $status['color'],
-                        'order' => $status['order'],
-                        'active' => true,
-                    ]);
+        // Create or update all statuses
+        foreach ($allStatuses as $status) {
+            $slug = \Illuminate\Support\Str::slug($status['name']);
+            
+            // Check if status exists (including soft deleted)
+            $existingStatus = LeadStatus::withTrashed()
+                ->where('slug', $slug)
+                ->first();
+            
+            if ($existingStatus) {
+                // Restore if soft deleted
+                if ($existingStatus->trashed()) {
+                    $existingStatus->restore();
                 }
+                // Update existing status
+                $existingStatus->update([
+                    'name' => $status['name'],
+                    'color' => $status['color'],
+                    'order' => $status['order'],
+                    'active' => true,
+                ]);
+            } else {
+                // Create new status
+                LeadStatus::create([
+                    'name' => $status['name'],
+                    'slug' => $slug,
+                    'color' => $status['color'],
+                    'order' => $status['order'],
+                    'active' => true,
+                ]);
             }
         }
     }
