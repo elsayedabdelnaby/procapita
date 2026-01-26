@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -39,9 +40,11 @@ return new class extends Migration
 
     private function hasIndex(string $table, string $index): bool
     {
-        $connection = Schema::getConnection();
-        $doctrineSchemaManager = $connection->getDoctrineSchemaManager();
-        $doctrineTable = $doctrineSchemaManager->introspectTable($table);
-        return $doctrineTable->hasIndex($index);
+        try {
+            $indexes = DB::select("SHOW INDEXES FROM `{$table}` WHERE Key_name = ?", [$index]);
+            return !empty($indexes);
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 };
