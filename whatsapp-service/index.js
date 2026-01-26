@@ -129,6 +129,13 @@ function initializeClientWithPath(clientKey, sessionPath) {
         clients.set(`status_${clientKey}`, 'disconnected');
     });
 
+    client.on('loading_screen', (percent, message) => {
+        console.log(`Loading screen for ${clientKey}: ${percent}% - ${message}`);
+        if (!clients.has(`status_${clientKey}`) || clients.get(`status_${clientKey}`) === 'disconnected') {
+            clients.set(`status_${clientKey}`, 'connecting');
+        }
+    });
+
     client.on('disconnected', (reason) => {
         console.log(`WhatsApp disconnected for ${clientKey}:`, reason);
         clients.set(`status_${clientKey}`, 'disconnected');
@@ -746,33 +753,65 @@ app.post('/api/whatsapp/riding-company/:ridingCompanyId/initialize', async (req,
     
     try {
         let client = clients.get(`client_${clientKey}`);
+        let isNewClient = false;
         
         if (!client) {
+            console.log(`Initializing new WhatsApp client for riding company ${ridingCompanyId}`);
             client = initializeRidingCompanyClient(ridingCompanyId);
             clients.set(`client_${clientKey}`, client);
-            await client.initialize();
+            clients.set(`status_${clientKey}`, 'connecting');
+            isNewClient = true;
+            
+            // Initialize client (this will trigger QR code generation if needed)
+            client.initialize().catch(err => {
+                console.error(`Error during client initialization for ${clientKey}:`, err);
+                clients.set(`status_${clientKey}`, 'error');
+            });
         } else {
             // If client exists, check if QR is available
             const existingQR = clients.get(`qr_${clientKey}`);
+            const existingStatus = clients.get(`status_${clientKey}`);
+            
             if (existingQR) {
                 return res.json({
                     success: true,
-                    status: clients.get(`status_${clientKey}`) || 'qr_code',
+                    status: existingStatus || 'qr_code',
                     qr_code: existingQR,
+                });
+            }
+            
+            // If client exists but no QR, check status
+            if (existingStatus === 'ready') {
+                return res.json({
+                    success: true,
+                    status: 'ready',
+                    qr_code: null,
                 });
             }
         }
 
-        // Wait a bit for QR code to be generated
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Wait longer for QR code to be generated (up to 5 seconds)
+        let qrCode = null;
+        let status = clients.get(`status_${clientKey}`) || 'connecting';
+        
+        for (let i = 0; i < 10; i++) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            qrCode = clients.get(`qr_${clientKey}`);
+            status = clients.get(`status_${clientKey}`) || 'connecting';
+            
+            if (qrCode || status === 'ready' || status === 'authenticated') {
+                break;
+            }
+        }
 
         res.json({
             success: true,
-            status: clients.get(`status_${clientKey}`) || 'connecting',
-            qr_code: clients.get(`qr_${clientKey}`) || null,
+            status: status,
+            qr_code: qrCode,
         });
     } catch (error) {
         console.error('Error initializing riding company client:', error);
+        clients.set(`status_${clientKey}`, 'error');
         res.status(500).json({ success: false, error: error.message });
     }
 });
