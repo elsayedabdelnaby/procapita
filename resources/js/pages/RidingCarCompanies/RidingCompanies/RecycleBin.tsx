@@ -216,17 +216,17 @@ export default function RidingCompaniesRecycleBin({ ridingCompanies = [], usersC
 
     return (
         <AppLayout>
-            <Head title="Deleted Riding Companies - Recycle Bin" />
+            <Head title="Deleted ReSellers - Recycle Bin" />
             <div className="p-6">
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold">Deleted Riding Companies</h1>
+                        <h1 className="text-2xl font-bold">Deleted ReSellers</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
                             Deleted records that can be restored
                         </p>
                     </div>
                     <Link href="/ridingcarcompanies/riding-companies">
-                        <Button variant="outline">Back to Riding Companies</Button>
+                        <Button variant="outline">Back to ReSellers</Button>
                     </Link>
                 </div>
 
@@ -451,7 +451,7 @@ export default function RidingCompaniesRecycleBin({ ridingCompanies = [], usersC
                     open={deleteDialog.open}
                     onOpenChange={(open) => setDeleteDialog({ open, company: null })}
                     onConfirm={confirmDelete}
-                    title="Permanently Delete Riding Company"
+                    title="Permanently Delete ReSeller"
                     description={`Are you sure you want to permanently delete "${deleteDialog.company?.name}"? This action cannot be undone.`}
                 />
 

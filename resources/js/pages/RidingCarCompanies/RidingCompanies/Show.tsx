@@ -562,7 +562,7 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                     <div>
                         <h1 className="text-2xl font-bold">{ridingCompany.name}</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Riding Company Details
+                            ReSeller Details
                         </p>
                     </div>
                     {activeTab === 'overview' && (
@@ -1294,7 +1294,7 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                 {activeTab === 'users' && (
                     <Card className="p-6">
                         <div className="mb-4 flex items-center justify-between">
-                            <h2 className="text-lg font-semibold">Riding Company Users</h2>
+                            <h2 className="text-lg font-semibold">ReSeller Users</h2>
                         </div>
                         
                         {users && users.length > 0 ? (

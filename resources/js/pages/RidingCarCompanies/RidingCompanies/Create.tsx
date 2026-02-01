@@ -47,13 +47,13 @@ export default function RidingCompaniesCreate({ companies }: RidingCompaniesCrea
 
     return (
         <AppLayout>
-            <Head title="Create Riding Company" />
+            <Head title="Create ReSeller" />
 
             <div className="p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold">Create Riding Company</h1>
+                    <h1 className="text-2xl font-bold">Create ReSeller</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Add a new riding company to the system
+                        Add a new reseller to the system
                     </p>
                 </div>
 
@@ -125,7 +125,7 @@ export default function RidingCompaniesCreate({ companies }: RidingCompaniesCrea
 
                             <div className="md:col-span-2">
                                 <FormField
-                                    label="Riding Company Name"
+                                    label="ReSeller Name"
                                     name="name"
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
@@ -226,7 +226,7 @@ export default function RidingCompaniesCreate({ companies }: RidingCompaniesCrea
                             </Button>
                         </Link>
                         <Button type="submit" disabled={processing}>
-                            {processing ? 'Creating...' : 'Create Riding Company'}
+                            {processing ? 'Creating...' : 'Create ReSeller'}
                         </Button>
                     </div>
                 </form>

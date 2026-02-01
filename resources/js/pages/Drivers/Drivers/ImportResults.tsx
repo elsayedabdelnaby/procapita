@@ -248,7 +248,7 @@ export default function ImportResults({ importResults }: ImportResultsProps) {
                 {/* Actions */}
                 <div className="mt-6 flex gap-2 justify-end">
                     <Link href="/drivers/drivers">
-                        <Button variant="outline">Back to Drivers</Button>
+                        <Button variant="outline">Back to Leads</Button>
                     </Link>
                     <Button onClick={() => router.reload()}>Import Another File</Button>
                 </div>

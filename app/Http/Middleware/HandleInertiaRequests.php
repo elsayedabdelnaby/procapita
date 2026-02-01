@@ -336,9 +336,9 @@ class HandleInertiaRequests extends Middleware
                 'permission_entity' => 'leadstatuses',
             ];
 
-            // Riding Companies - accessible to super admin
+            // ReSellers - accessible to super admin
             $coreItems[] = [
-                'title' => 'Riding Companies',
+                'title' => 'ReSellers',
                 'href' => '/ridingcarcompanies/riding-companies',
                 'icon' => 'Car',
                 'permission_module' => 'ridingcarcompanies',
@@ -421,8 +421,8 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
-        // Riding Car Companies Module - For Company Admin and users with access
-        // Super admin sees Riding Companies under Core group
+        // ReSellers Module - For Company Admin and users with access
+        // Super admin sees ReSellers under Core group
         if (! $user->isSuperAdmin() && ($user->canAccessModule('ridingcarcompanies') || $user->isCompanyAdmin())) {
             $ridingCarItems = [];
 
@@ -454,7 +454,7 @@ class HandleInertiaRequests extends Middleware
             } else {
                 // If only one or no riding companies, show the general link
                 $ridingCarItems[] = [
-                    'title' => 'Riding Companies',
+                    'title' => 'ReSellers',
                     'href' => '/ridingcarcompanies/riding-companies',
                     'icon' => 'Car',
                     'permission_module' => 'ridingcarcompanies',
@@ -462,23 +462,23 @@ class HandleInertiaRequests extends Middleware
                 ];
             }
 
-            // Only add Riding Car Companies group if there are items
+            // Only add ReSellers group if there are items
             if (! empty($ridingCarItems)) {
                 $navigation[] = [
-                    'title' => 'Riding Companies',
+                    'title' => 'ReSellers',
                     'icon' => 'Car',
                     'items' => $ridingCarItems,
                 ];
             }
         }
 
-        // Drivers Module
+        // Leads Module
         if ($user->canAccessModule('drivers') || $user->isSuperAdmin()) {
             $driversItems = [];
 
-            // Drivers
+            // Leads
             $driversItems[] = [
-                'title' => 'Drivers',
+                'title' => 'Leads',
                 'href' => '/drivers/drivers',
                 'icon' => 'User',
                 'permission_module' => 'drivers',
@@ -543,10 +543,10 @@ class HandleInertiaRequests extends Middleware
                 'permission_entity' => 'driverfollowups',
             ];
 
-            // Only add Drivers group if there are items
+            // Only add Leads group if there are items
             if (! empty($driversItems)) {
                 $navigation[] = [
-                    'title' => 'Drivers',
+                    'title' => 'Leads',
                     'icon' => 'Users',
                     'items' => $driversItems,
                 ];

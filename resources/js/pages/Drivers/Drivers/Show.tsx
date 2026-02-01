@@ -508,7 +508,7 @@ export default function DriversShow({
 
     return (
         <AppLayout>
-            <Head title={`Driver - ${driver.full_name}`} />
+            <Head title={`Lead - ${driver.full_name}`} />
             <div className="p-6">
                 {/* Header */}
                 <div className="mb-6 flex items-center justify-between">
@@ -522,7 +522,7 @@ export default function DriversShow({
                         <div>
                             <h1 className="text-2xl font-bold">{driver.full_name}</h1>
                             <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                                Driver Details & Onboarding Progress
+                                Lead Details & Onboarding Progress
                             </p>
                         </div>
                     </div>

@@ -158,9 +158,9 @@ export default function RidingCompaniesEdit({ ridingCompany, companies }: Riding
 
             <div className="p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold">Edit Riding Company</h1>
+                    <h1 className="text-2xl font-bold">Edit ReSeller</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Update riding company information
+                        Update reseller information
                     </p>
                 </div>
 
@@ -229,7 +229,7 @@ export default function RidingCompaniesEdit({ ridingCompany, companies }: Riding
 
                             <div className="md:col-span-2">
                                 <FormField
-                                    label="Riding Company Name"
+                                    label="ReSeller Name"
                                     name="name"
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
@@ -379,7 +379,7 @@ export default function RidingCompaniesEdit({ ridingCompany, companies }: Riding
                             </Button>
                         </Link>
                         <Button type="submit" disabled={processing}>
-                            {processing ? 'Updating...' : 'Update Riding Company'}
+                            {processing ? 'Updating...' : 'Update ReSeller'}
                         </Button>
                     </div>
                 </form>

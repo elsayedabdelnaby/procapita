@@ -403,9 +403,9 @@ export default function DriversEdit({
 
             <div className="p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold">Edit Driver</h1>
+                    <h1 className="text-2xl font-bold">Edit Lead</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Update driver information
+                        Update lead information
                     </p>
                 </div>
 

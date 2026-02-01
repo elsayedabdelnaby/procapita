@@ -112,13 +112,13 @@ interface DriversRecycleBinProps {
 // Define all available columns outside component to avoid hoisting issues
 const ALL_DRIVER_COLUMNS = [
     { id: 'actions', label: 'Actions', defaultVisible: true, defaultOrder: 0 },
-    { id: 'driver_num', label: 'Driver Num', defaultVisible: false, defaultOrder: 0.5 },
+    { id: 'driver_num', label: 'Lead Num', defaultVisible: false, defaultOrder: 0.5 },
     { id: 'duplicate', label: 'Duplicate Count', defaultVisible: false, defaultOrder: 0.6 },
     { id: 'name', label: 'Name', defaultVisible: true, defaultOrder: 1 },
     { id: 'phone', label: 'Phone', defaultVisible: true, defaultOrder: 2 },
     { id: 'whatsapp', label: 'WhatsApp', defaultVisible: true, defaultOrder: 3 },
     { id: 'email', label: 'Email', defaultVisible: true, defaultOrder: 4 },
-    { id: 'riding_company', label: 'Riding Company', defaultVisible: true, defaultOrder: 5 },
+    { id: 'riding_company', label: 'ReSeller', defaultVisible: true, defaultOrder: 5 },
     { id: 'campaign', label: 'Campaign', defaultVisible: true, defaultOrder: 6 },
     { id: 'lead_source', label: 'Lead Source', defaultVisible: true, defaultOrder: 7 },
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 8 },
@@ -470,7 +470,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
         { value: 'whatsapp_phone', label: 'WhatsApp Phone' },
         { value: 'email', label: 'Email' },
         { value: 'company_id', label: 'Company' },
-        { value: 'riding_company_id', label: 'Riding Company' },
+        { value: 'riding_company_id', label: 'ReSeller' },
         { value: 'campaign_id', label: 'Campaign' },
         { value: 'lead_source_id', label: 'Lead Source' },
         { value: 'lead_status_id', label: 'Lead Status' },
@@ -1802,21 +1802,21 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
     return (
         <>
             <AppLayout>
-            <Head title="Deleted Drivers - Recycle Bin" />
+            <Head title="Deleted Leads - Recycle Bin" />
 
             <div className={`p-6 ${whatsappWindowOpen && !whatsappFloating ? 'pr-0' : ''}`}>
                 <div className={`flex gap-0 ${whatsappWindowOpen && !whatsappFloating ? 'flex-row' : ''}`}>
                     <div className={`${whatsappWindowOpen && !whatsappFloating ? 'flex-1 min-w-0' : 'w-full'}`}>
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold">Deleted Drivers</h1>
+                        <h1 className="text-2xl font-bold">Deleted Leads</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
                             Deleted records that can be restored
                         </p>
                     </div>
                     <div className="flex gap-2">
                         <Link href="/drivers/drivers">
-                            <Button variant="outline">Back to Drivers</Button>
+                            <Button variant="outline">Back to Leads</Button>
                         </Link>
                     </div>
                 </div>
@@ -4431,7 +4431,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="!max-w-6xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Quick Edit Driver</DialogTitle>
+                    <DialogTitle>Quick Edit Lead</DialogTitle>
                     <DialogDescription>
                         Edit driver details: {driver.full_name}
                     </DialogDescription>
@@ -4484,7 +4484,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                             )}
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Riding Company</label>
+                            <label className="block text-sm font-medium mb-1">ReSeller</label>
                             <Select
                                 value={data.riding_company_id}
                                 onValueChange={(value) => setData('riding_company_id', value)}

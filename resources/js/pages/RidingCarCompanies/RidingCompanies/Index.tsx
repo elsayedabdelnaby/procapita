@@ -61,18 +61,18 @@ export default function RidingCompaniesIndex({ ridingCompanies, availableRidingC
 
     return (
         <AppLayout>
-            <Head title="Riding Companies" />
+            <Head title="ReSellers" />
 
             <div className="p-6">
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold">Riding Companies</h1>
+                        <h1 className="text-2xl font-bold">ReSellers</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Manage riding companies and their configurations
+                            Manage resellers and their configurations
                         </p>
                     </div>
                     <Link href="/ridingcarcompanies/riding-companies/create">
-                        <Button>Create Riding Company</Button>
+                        <Button>Create ReSeller</Button>
                     </Link>
                 </div>
 
@@ -181,7 +181,7 @@ export default function RidingCompaniesIndex({ ridingCompanies, availableRidingC
                         <div className="py-8 text-center text-neutral-500">
                             <p>No riding companies found.</p>
                             <Link href="/ridingcarcompanies/riding-companies/create">
-                                <Button className="mt-4">Create First Riding Company</Button>
+                                <Button className="mt-4">Create First ReSeller</Button>
                             </Link>
                         </div>
                     )}

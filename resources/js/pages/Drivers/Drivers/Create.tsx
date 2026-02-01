@@ -560,13 +560,13 @@ export default function DriversCreate({
 
     return (
         <AppLayout>
-            <Head title="Create Driver" />
+            <Head title="Create Lead" />
 
             <div className="p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold">Create Driver</h1>
+                    <h1 className="text-2xl font-bold">Create Lead</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Add a new driver to the system
+                        Add a new lead to the system
                     </p>
                 </div>
 

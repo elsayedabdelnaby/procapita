@@ -154,13 +154,13 @@ interface DriversIndexProps {
 // Define all available columns outside component to avoid hoisting issues
 const ALL_DRIVER_COLUMNS = [
     { id: 'actions', label: 'Actions', defaultVisible: true, defaultOrder: 0 },
-    { id: 'driver_num', label: 'Driver Num', defaultVisible: false, defaultOrder: 0.5 },
+    { id: 'driver_num', label: 'Lead Num', defaultVisible: false, defaultOrder: 0.5 },
     { id: 'duplicate', label: 'Duplicate Count', defaultVisible: false, defaultOrder: 0.6 },
     { id: 'name', label: 'Name', defaultVisible: true, defaultOrder: 1 },
     { id: 'phone', label: 'Phone', defaultVisible: true, defaultOrder: 2 },
     { id: 'whatsapp', label: 'WhatsApp', defaultVisible: true, defaultOrder: 3 },
     { id: 'email', label: 'Email', defaultVisible: true, defaultOrder: 4 },
-    { id: 'riding_company', label: 'Riding Company', defaultVisible: true, defaultOrder: 5 },
+    { id: 'riding_company', label: 'ReSeller', defaultVisible: true, defaultOrder: 5 },
     { id: 'campaign', label: 'Campaign', defaultVisible: true, defaultOrder: 6 },
     { id: 'lead_source', label: 'Lead Source', defaultVisible: true, defaultOrder: 7 },
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 8 },
@@ -172,7 +172,7 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'account_manager', label: 'Account Manager', defaultVisible: true, defaultOrder: 8.85 },
     { id: 'resigned_leads', label: 'Resigned Leads', defaultVisible: true, defaultOrder: 8.9 },
     { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 9 },
-    { id: 'driver_stage', label: 'Driver Stage', defaultVisible: true, defaultOrder: 9.2 },
+    { id: 'driver_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 9.2 },
     { id: 'current_stage', label: 'Current Stage', defaultVisible: false, defaultOrder: 9.5 },
     { id: 'last_assigned_date', label: 'Last Assigned Date', defaultVisible: false, defaultOrder: 10.55 },
     { id: 'last_assigned_by', label: 'Last Assigned By', defaultVisible: false, defaultOrder: 10.6 },
@@ -519,7 +519,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
     // Otherwise, use sidebar selection
     const whatsAppRidingCompanyId = userRidingCompanyId || sidebarSelectedRidingCompanyId;
     
-    // Hide WhatsApp button when "All Riding Companies" is selected (no specific riding company)
+    // Hide WhatsApp button when "All ReSellers" is selected (no specific reseller)
     // Show only when user has a specific riding company OR admin selected a specific riding company from sidebar
     const showWhatsAppButton = !!userRidingCompanyId || !!sidebarSelectedRidingCompanyId;
     
@@ -819,7 +819,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
         { value: 'whatsapp_phone', label: 'WhatsApp Phone' },
         { value: 'email', label: 'Email' },
         { value: 'company_id', label: 'Company' },
-        { value: 'riding_company_id', label: 'Riding Company' },
+        { value: 'riding_company_id', label: 'ReSeller' },
         { value: 'campaign_id', label: 'Campaign' },
         { value: 'lead_source_id', label: 'Lead Source' },
         { value: 'lead_status_id', label: 'Lead Status' },
@@ -3097,16 +3097,16 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
     return (
         <>
             <AppLayout>
-            <Head title="Drivers" />
+            <Head title="Leads" />
 
             <div className={`h-full flex flex-col overflow-hidden ${whatsappWindowOpen && !whatsappFloating ? 'pr-0' : ''}`}>
                 <div className={`flex gap-0 flex-1 min-h-0 overflow-hidden ${whatsappWindowOpen && !whatsappFloating ? 'flex-row' : ''}`}>
                     <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${whatsappWindowOpen && !whatsappFloating ? 'min-w-0' : 'w-full'}`}>
                 <div className="px-6 py-2 mb-2 flex items-center justify-between flex-shrink-0">
                     <div>
-                        <h1 className="text-xl font-bold">Drivers</h1>
+                        <h1 className="text-xl font-bold">Leads</h1>
                         <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
-                            Manage drivers and their onboarding process
+                            Manage leads and their onboarding process
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -3153,7 +3153,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                 </Button>
                             )}
                             <Link href="/drivers/drivers/create">
-                                <Button>Create Driver</Button>
+                                <Button>Create Lead</Button>
                             </Link>
                         </div>
                     </div>
@@ -4912,9 +4912,9 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                 ))}
                                             </tr>
                                             
-                                            {/* Riding Company */}
+                                            {/* ReSeller */}
                                             <tr className="border-b hover:bg-muted/50">
-                                                <td className="px-4 py-3 text-sm font-medium">Riding Company</td>
+                                                <td className="px-4 py-3 text-sm font-medium">ReSeller</td>
                                                 {mergeDrivers.map((driver) => (
                                                     <td key={driver.id} className="px-4 py-3 text-sm">
                                                         <div className="flex items-center gap-2">
@@ -5013,9 +5013,9 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                 ))}
                                             </tr>
                                             
-                                            {/* Driver Stage */}
+                                            {/* Lead Stage */}
                                             <tr className="border-b hover:bg-muted/50">
-                                                <td className="px-4 py-3 text-sm font-medium">Driver Stage</td>
+                                                <td className="px-4 py-3 text-sm font-medium">Lead Stage</td>
                                                 {mergeDrivers.map((driver) => (
                                                     <td key={driver.id} className="px-4 py-3 text-sm">
                                                         <div className="flex items-center gap-2">
@@ -5398,7 +5398,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                 <div className="space-y-4">
                                                     {canViewDriverField('riding_company') && (
                                                         <div>
-                                                            <p className="text-sm text-neutral-500">Riding Company</p>
+                                                            <p className="text-sm text-neutral-500">ReSeller</p>
                                                             <p className="font-medium">
                                                                 {driverDetails.riding_company?.name || <span className="text-neutral-400 italic">Not Set</span>}
                                                             </p>
@@ -5590,9 +5590,9 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                             <Card className="p-6">
                                                 <div className="mb-4 flex items-center justify-between">
                                                     <div>
-                                                        <h2 className="text-lg font-semibold">Driver Stages</h2>
+                                                        <h2 className="text-lg font-semibold">Lead Stages</h2>
                                                         <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
-                                                            Manage drivers and their onboarding process
+                                                            Manage leads and their onboarding process
                                                         </p>
                                                     </div>
                                                     <Link href={`/drivers/driver-stages?driver_id=${driverDetails.id}`}>
@@ -5832,7 +5832,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                         <tr>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">ReSeller</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Feedback Comment</th>
@@ -5911,7 +5911,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">WhatsApp</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Email</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">ReSeller</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Campaign</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Source</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
@@ -6388,7 +6388,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         <Dialog key={`quick-edit-${driver.id}`} open={open} onOpenChange={onOpenChange}>
                 <DialogContent className="!max-w-6xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>Quick Edit Driver</DialogTitle>
+                        <DialogTitle>Quick Edit Lead</DialogTitle>
                         <DialogDescription>
                             Edit driver details: {driver?.full_name || 'Driver'}
                         </DialogDescription>
@@ -6467,13 +6467,13 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                         )}
                         {showRidingCompanyField && (
                             <div>
-                                <label className="block text-sm font-medium mb-1">Riding Company</label>
+                                <label className="block text-sm font-medium mb-1">ReSeller</label>
                                 <Select
                                     value={data.riding_company_id}
                                     onValueChange={(value) => setData('riding_company_id', value)}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select Riding Company" />
+                                        <SelectValue placeholder="Select ReSeller" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {filterOptions.ridingCompanies?.map((company) => (
