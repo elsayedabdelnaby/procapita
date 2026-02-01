@@ -116,20 +116,7 @@ class DriverController extends Controller
                     'type' => 'picklist',
                     'options' => $this->getCustomDropdownOptions('cancel_reason', $companyId),
                 ],
-                ['value' => 'worked_with_us_before', 'label' => 'Worked With Us Before', 'type' => 'textarea'],
-                ['value' => 'vehicle_type_and_year', 'label' => 'Vehicle Type and Year', 'type' => 'textarea'],
                 ['value' => 'city', 'label' => 'City', 'type' => 'text'],
-                ['value' => 'vehicle_type', 'label' => 'Vehicle Type', 'type' => 'text'],
-                [
-                    'value' => 'car_or_scooter',
-                    'label' => 'Car or Scooter',
-                    'type' => 'picklist',
-                    'options' => [
-                        ['value' => 'Car', 'label' => 'Car'],
-                        ['value' => 'Scooter', 'label' => 'Scooter'],
-                    ],
-                ],
-                ['value' => 'has_worked_before', 'label' => 'Has the driver worked before?', 'type' => 'text'],
                 [
                     'value' => 'governorate',
                     'label' => 'Governorate',

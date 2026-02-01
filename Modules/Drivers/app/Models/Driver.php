@@ -53,13 +53,8 @@ class Driver extends Model
         'duplicate',
         'confirm_duplicate',
         'next_time',
-        'worked_with_us_before',
-        'vehicle_type_and_year',
         'city',
         'feedback_count',
-        'vehicle_type',
-        'car_or_scooter',
-        'has_worked_before',
         'governorate',
     ];
 
@@ -276,7 +271,7 @@ class Driver extends Model
                     ]);
                 } catch (\Exception $e) {
                     // Log error but don't break the update process
-                    \Log::error('Failed to create follow-up for driver '.$driver->id.': '.$e->getMessage());
+                    Log::error('Failed to create follow-up for driver '.$driver->id.': '.$e->getMessage());
                 }
             }
         });

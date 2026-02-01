@@ -139,9 +139,6 @@ export default function DriversCreate({
         notes: '',
         cancel_reason: '',
         feedback_count: 0,
-        vehicle_type: '',
-        car_or_scooter: '',
-        has_worked_before: '',
         governorate: '',
     });
 
@@ -1343,58 +1340,6 @@ export default function DriversCreate({
                                     {isCancelReasonRequired() && !data.cancel_reason && !errors.cancel_reason && (
                                         <p className="text-sm text-red-500">Cancel reason is required for this lead status.</p>
                                     )}
-                                </div>
-                            )}
-
-                            {canViewDriverField('vehicle_type') && (
-                                <div>
-                                    <Label htmlFor="vehicle_type">Vehicle Type</Label>
-                                    <FormField
-                                        label=""
-                                        name="vehicle_type"
-                                        value={data.vehicle_type}
-                                        onChange={(e) => setData('vehicle_type', e.target.value)}
-                                        error={errors.vehicle_type}
-                                        placeholder="Enter vehicle type..."
-                                        disabled={!canEditDriverField('vehicle_type')}
-                                    />
-                                </div>
-                            )}
-
-                            {canViewDriverField('car_or_scooter') && (
-                                <div>
-                                    <Label htmlFor="car_or_scooter">Car or Scooter</Label>
-                                    <Select
-                                        value={data.car_or_scooter}
-                                        onValueChange={(value) => setData('car_or_scooter', value)}
-                                        disabled={!canEditDriverField('car_or_scooter')}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select Car or Scooter" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Car">Car</SelectItem>
-                                            <SelectItem value="Scooter">Scooter</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    {errors.car_or_scooter && (
-                                        <p className="text-sm text-red-500 mt-1">{errors.car_or_scooter}</p>
-                                    )}
-                                </div>
-                            )}
-
-                            {canViewDriverField('has_worked_before') && (
-                                <div>
-                                    <Label htmlFor="has_worked_before">Has the driver worked before?</Label>
-                                    <FormField
-                                        label=""
-                                        name="has_worked_before"
-                                        value={data.has_worked_before}
-                                        onChange={(e) => setData('has_worked_before', e.target.value)}
-                                        error={errors.has_worked_before}
-                                        placeholder="Enter information about previous work experience..."
-                                        disabled={!canEditDriverField('has_worked_before')}
-                                    />
                                 </div>
                             )}
 

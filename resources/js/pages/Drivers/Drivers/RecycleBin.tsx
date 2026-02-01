@@ -477,8 +477,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
         { value: 'assigned_to', label: 'Assigned To' },
         { value: 'notes', label: 'Notes' },
         { value: 'cancel_reason', label: 'Cancel Reasons' },
-        { value: 'worked_with_us_before', label: 'Worked With Us Before' },
-        { value: 'vehicle_type_and_year', label: 'Vehicle Type and Year' },
         { value: 'city', label: 'City' },
     ];
 
@@ -3671,21 +3669,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                         <div>
                                                             <p className="text-sm text-neutral-500">City</p>
                                                             <p className="font-medium">{driverDetails.city}</p>
-                                                        </div>
-                                                    )}
-                                                    {driverDetails.worked_with_us_before && (
-                                                        <div>
-                                                            <p className="text-sm text-neutral-500">Worked With Us Before</p>
-                                                            <p className="font-medium whitespace-pre-wrap">{driverDetails.worked_with_us_before}</p>
-                                                        </div>
-                                                    )}
-                                                    {driverDetails.vehicle_type_and_year && (
-                                                        <div>
-                                                            <p className="text-sm text-neutral-500 flex items-center gap-2">
-                                                                <Car className="h-4 w-4" />
-                                                                Vehicle Type and Year
-                                                            </p>
-                                                            <p className="font-medium whitespace-pre-wrap">{driverDetails.vehicle_type_and_year}</p>
                                                         </div>
                                                     )}
                                                     {driverDetails.assigned_to && (

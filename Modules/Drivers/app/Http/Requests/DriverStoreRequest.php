@@ -167,9 +167,6 @@ class DriverStoreRequest extends FormRequest
             'next_time' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
             'feedback_count' => ['nullable', 'integer', 'min:0'],
-            'vehicle_type' => ['nullable', 'string', 'max:255'],
-            'car_or_scooter' => ['nullable', 'string', 'in:Car,Scooter'],
-            'has_worked_before' => ['nullable', 'string', 'max:255'],
             'governorate' => ['nullable', 'string', 'max:255'],
             'cancel_reason' => [
                 function ($attribute, $value, $fail) {

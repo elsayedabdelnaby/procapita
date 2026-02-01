@@ -151,20 +151,8 @@ class HandleInertiaRequests extends Middleware
             
             // If no company is selected, try to select one
             if (! $selectedCompany) {
-                // First, try to default to Tradeway
-                $tradewayCompany = \Modules\Core\app\Models\Company::where(function ($query) {
-                    $query->where('name', 'Tradeway')
-                        ->orWhere('slug', 'tradeway');
-                })
-                    ->active()
-                    ->first();
-
-                if ($tradewayCompany) {
-                    $selectedCompany = $tradewayCompany;
-                    // Set it in session so it persists
-                    $request->session()->put('selected_company_id', $tradewayCompany->id);
-                } elseif ($companies->isNotEmpty()) {
-                    // If Tradeway doesn't exist, select the first active company
+                if ($companies->isNotEmpty()) {
+                    // Select the first active company
                     $selectedCompany = $companies->first();
                     $request->session()->put('selected_company_id', $selectedCompany->id);
                 }

@@ -182,9 +182,6 @@ export default function DriversEdit({
         notes: driver.notes || '',
         cancel_reason: driver.cancel_reason || '',
         feedback_count: driver.feedback_count || 0,
-        vehicle_type: driver.vehicle_type || '',
-        car_or_scooter: driver.car_or_scooter || '',
-        has_worked_before: driver.has_worked_before || '',
         governorate: driver.governorate || '',
     });
 
@@ -1089,66 +1086,6 @@ export default function DriversEdit({
                                     />
                                     {errors.notes && (
                                         <p className="text-sm text-red-500">{errors.notes}</p>
-                                    )}
-                                </div>
-                            )}
-
-                            {canViewDriverField('vehicle_type') && (
-                                <div>
-                                    <Label htmlFor="vehicle_type">Vehicle Type</Label>
-                                    <input
-                                        type="text"
-                                        id="vehicle_type"
-                                        name="vehicle_type"
-                                        value={data.vehicle_type}
-                                        onChange={(e) => setData('vehicle_type', e.target.value)}
-                                        className="w-full rounded-md border px-3 py-2"
-                                        placeholder="Enter vehicle type..."
-                                        disabled={!canEditDriverField('vehicle_type')}
-                                    />
-                                    {errors.vehicle_type && (
-                                        <p className="text-sm text-red-500">{errors.vehicle_type}</p>
-                                    )}
-                                </div>
-                            )}
-
-                            {canViewDriverField('car_or_scooter') && (
-                                <div>
-                                    <Label htmlFor="car_or_scooter">Car or Scooter</Label>
-                                    <Select
-                                        value={data.car_or_scooter}
-                                        onValueChange={(value) => setData('car_or_scooter', value)}
-                                        disabled={!canEditDriverField('car_or_scooter')}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select Car or Scooter" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Car">Car</SelectItem>
-                                            <SelectItem value="Scooter">Scooter</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    {errors.car_or_scooter && (
-                                        <p className="text-sm text-red-500 mt-1">{errors.car_or_scooter}</p>
-                                    )}
-                                </div>
-                            )}
-
-                            {canViewDriverField('has_worked_before') && (
-                                <div>
-                                    <Label htmlFor="has_worked_before">Has the driver worked before?</Label>
-                                    <input
-                                        type="text"
-                                        id="has_worked_before"
-                                        name="has_worked_before"
-                                        value={data.has_worked_before}
-                                        onChange={(e) => setData('has_worked_before', e.target.value)}
-                                        className="w-full rounded-md border px-3 py-2"
-                                        placeholder="Enter information about previous work experience..."
-                                        disabled={!canEditDriverField('has_worked_before')}
-                                    />
-                                    {errors.has_worked_before && (
-                                        <p className="text-sm text-red-500">{errors.has_worked_before}</p>
                                     )}
                                 </div>
                             )}

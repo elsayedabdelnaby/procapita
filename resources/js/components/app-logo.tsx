@@ -1,8 +1,6 @@
-import AppLogoIcon from './app-logo-icon';
 import { usePage } from '@inertiajs/react';
 import { type SharedData } from '@/types';
 import { useState, useEffect, useMemo } from 'react';
-import { Car } from 'lucide-react';
 
 export default function AppLogo() {
     const page = usePage<SharedData>();
@@ -23,7 +21,6 @@ export default function AppLogo() {
     const companyName = currentCompany?.name || null;
     
     // Convert company name to logo filename
-    // Example: "Tradeway" -> "tradeway-logo.png", "Captain Masr" -> "captain-masr-logo.png"
     const getLogoFilename = (name: string | null | undefined): string | null => {
         if (!name) return null;
         
@@ -73,7 +70,8 @@ export default function AppLogo() {
             return getLogoFilename(companyName);
         }
         
-        return null;
+        // Strategy 5: Default to ProCapita logo
+        return '/logos/procapita_logo.svg';
     }, [currentCompany, companyName]);
     
     const shouldShowImage = logoPath && !imageError;
@@ -97,18 +95,7 @@ export default function AppLogo() {
                 />
             ) : (
                 <>
-                    <div className="flex aspect-square size-8 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-                        {companyName ? (
-                            <AppLogoIcon className="size-5 fill-current text-white dark:text-black" />
-                        ) : (
-                            <Car className="size-5 text-white dark:text-black" />
-                        )}
-                    </div>
-                    <div className="ml-1 grid flex-1 text-left text-sm">
-                        <span className="mb-0.5 truncate leading-tight font-semibold">
-                            {companyName || 'Riding Companies'}
-                        </span>
-                    </div>
+                <img src="/logos/procapita_logo.svg" alt="ProCapita Logo" className="h-[45px] w-auto" />
                 </>
             )}
         </>

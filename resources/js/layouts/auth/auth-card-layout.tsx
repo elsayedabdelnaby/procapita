@@ -26,9 +26,11 @@ export default function AuthCardLayout({
                     href={home()}
                     className="flex items-center gap-2 self-center font-medium"
                 >
-                    <div className="flex h-9 w-9 items-center justify-center">
-                        <AppLogoIcon className="size-9 fill-current text-black dark:text-white" />
-                    </div>
+                    <img 
+                        src="/logos/procapita_logo.svg" 
+                        alt="ProCapita Logo" 
+                        className="h-9 w-auto"
+                    />
                 </Link>
 
                 <div className="flex flex-col gap-6">

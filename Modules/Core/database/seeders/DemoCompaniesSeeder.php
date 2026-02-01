@@ -104,21 +104,22 @@ class DemoCompaniesSeeder extends Seeder
     private function seedCompany2(): void
     {
         $company = Company::firstOrCreate(
-            ['email' => 'info@captianmasr.local'],
+            ['email' => 'info@procapita.local'],
             [
-                'name' => 'Captain Masr',
-                'slug' => 'captain-masr',
+                'name' => 'procapita',
+                'slug' => 'procapita',
                 'phone' => '+1-555-0200',
                 'address' => '456 Retail Avenue, New York, NY 10001',
+                'logo' => '/logos/procapita_logo.svg',
                 'is_active' => true,
             ]
         );
 
         // Create Company Admin
         $admin = User::firstOrCreate(
-            ['email' => 'admin@captainmasr.local'],
+            ['email' => 'admin@procapita.local'],
             [
-                'name' => 'Captain Masr Admin',
+                'name' => 'ProCapita Admin',
                 'password' => Hash::make('password'),
                 'company_id' => $company->id,
                 'is_super_admin' => false,

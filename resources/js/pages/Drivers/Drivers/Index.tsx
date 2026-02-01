@@ -178,11 +178,6 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'last_assigned_by', label: 'Last Assigned By', defaultVisible: false, defaultOrder: 10.6 },
     { id: 'notes', label: 'Notes', defaultVisible: false, defaultOrder: 10.7 },
     { id: 'cancel_reason', label: 'Cancel Reasons', defaultVisible: false, defaultOrder: 10.8 },
-    { id: 'vehicle_type', label: 'Vehicle Type', defaultVisible: false, defaultOrder: 10.9 },
-    { id: 'car_or_scooter', label: 'Car or Scooter', defaultVisible: false, defaultOrder: 10.92 },
-    { id: 'vehicle_type_and_year', label: 'Vehicle Type and Year', defaultVisible: false, defaultOrder: 10.91 },
-    { id: 'has_worked_before', label: 'Has the driver worked before?', defaultVisible: false, defaultOrder: 11.0 },
-    { id: 'worked_with_us_before', label: 'Worked With Us Before', defaultVisible: false, defaultOrder: 11.01 },
     { id: 'city', label: 'City', defaultVisible: false, defaultOrder: 11.1 },
     { id: 'feedback_count', label: 'Feedback Count', defaultVisible: false, defaultOrder: 11.3 },
     { id: 'uuid', label: 'UUID', defaultVisible: false, defaultOrder: 12 },
@@ -780,7 +775,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
         lead_status_id: null,
         lead_status_comment: '',
         cancel_reason: null,
-        car_or_scooter: null,
         lead_stage_id: null,
         assigned_to: null,
         team_leader_id: null,
@@ -832,9 +826,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
         { value: 'assigned_to', label: 'Assigned To' },
         { value: 'notes', label: 'Notes' },
         { value: 'cancel_reason', label: 'Cancel Reason' },
-        { value: 'worked_with_us_before', label: 'Worked With Us Before' },
-        { value: 'vehicle_type_and_year', label: 'Vehicle Type and Year' },
-        { value: 'car_or_scooter', label: 'Car or Scooter' },
         { value: 'city', label: 'City' },
     ];
 
@@ -967,21 +958,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                 break;
             case 'last_assigned_date':
                 driverValue = (driver as any).last_assigned_time;
-                break;
-            case 'vehicle_type':
-                driverValue = (driver as any).vehicle_type;
-                break;
-            case 'car_or_scooter':
-                driverValue = (driver as any).car_or_scooter;
-                break;
-            case 'vehicle_type_and_year':
-                driverValue = (driver as any).vehicle_type_and_year;
-                break;
-            case 'has_worked_before':
-                driverValue = (driver as any).has_worked_before;
-                break;
-            case 'worked_with_us_before':
-                driverValue = (driver as any).worked_with_us_before;
                 break;
             case 'feedback_count':
                 driverValue = (driver as any).feedback_count ?? 0;
@@ -1626,20 +1602,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                     }
                 }
             }
-            // Car or Scooter filter
-            if (filters.car_or_scooter) {
-                if (filters.car_or_scooter === 'is_empty') {
-                    const carOrScooter = (driver as any).car_or_scooter;
-                    if (carOrScooter && String(carOrScooter).trim() !== '') {
-                        return false;
-                    }
-                } else {
-                    const carOrScooter = (driver as any).car_or_scooter;
-                    if (!carOrScooter || String(carOrScooter).trim() !== String(filters.car_or_scooter).trim()) {
-                        return false;
-                    }
-                }
-            }
             // Cancel Reason filter
             if (filters.cancel_reason) {
                 if (filters.cancel_reason === 'is_empty') {
@@ -2005,20 +1967,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                     }
                 }
             }
-            // Car or Scooter filter
-            if (filters.car_or_scooter) {
-                if (filters.car_or_scooter === 'is_empty') {
-                    const carOrScooter = (driver as any).car_or_scooter;
-                    if (carOrScooter && String(carOrScooter).trim() !== '') {
-                        return false;
-                    }
-                } else {
-                    const carOrScooter = (driver as any).car_or_scooter;
-                    if (!carOrScooter || String(carOrScooter).trim() !== String(filters.car_or_scooter).trim()) {
-                        return false;
-                    }
-                }
-            }
             // Cancel Reason filter
             if (filters.cancel_reason) {
                 if (filters.cancel_reason === 'is_empty') {
@@ -2226,11 +2174,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
         'last_assigned_by': 'last_assigned_by',
         'notes': 'notes',
         'cancel_reason': 'cancel_reason',
-        'vehicle_type': 'vehicle_type',
-        'car_or_scooter': 'car_or_scooter',
-        'vehicle_type_and_year': 'vehicle_type_and_year',
-        'has_worked_before': 'has_worked_before',
-        'worked_with_us_before': 'worked_with_us_before',
         'city': 'city',
         'feedback_count': 'feedback_count',
         'driver_num': 'driver_num',
@@ -2401,26 +2344,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                     case 'cancel_reason':
                         aValue = (a as any).cancel_reason || '';
                         bValue = (b as any).cancel_reason || '';
-                        break;
-                    case 'vehicle_type':
-                        aValue = (a as any).vehicle_type || '';
-                        bValue = (b as any).vehicle_type || '';
-                        break;
-                    case 'vehicle_type_and_year':
-                        aValue = (a as any).vehicle_type_and_year || '';
-                        bValue = (b as any).vehicle_type_and_year || '';
-                        break;
-                    case 'car_or_scooter':
-                        aValue = (a as any).car_or_scooter || '';
-                        bValue = (b as any).car_or_scooter || '';
-                        break;
-                    case 'has_worked_before':
-                        aValue = (a as any).has_worked_before || '';
-                        bValue = (b as any).has_worked_before || '';
-                        break;
-                    case 'worked_with_us_before':
-                        aValue = (a as any).worked_with_us_before || '';
-                        bValue = (b as any).worked_with_us_before || '';
                         break;
                     case 'city':
                         aValue = (a as any).city || '';
@@ -3807,7 +3730,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                   col.id === 'team_leader' ? 'team_leader_id' :
                                                                   col.id === 'account_manager' ? 'account_manager_id' :
                                                                   col.id === 'city' ? 'city' :
-                                                                  col.id === 'car_or_scooter' ? 'car_or_scooter' :
                                                                   col.id === 'cancel_reason' ? 'cancel_reason' :
                                                                   col.id === 'campaign' ? 'campaign_id' :
                                                                   col.id === 'last_assigned_date' ? 'last_assigned_date' :
@@ -4153,7 +4075,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                         </th>
                                                     );
                                                 }
-                                                if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to', 'team_leader', 'account_manager', 'riding_company', 'city', 'car_or_scooter', 'cancel_reason', 'last_assigned_by'].includes(col.id)) {
+                                                if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to', 'team_leader', 'account_manager', 'riding_company', 'city', 'cancel_reason', 'last_assigned_by'].includes(col.id)) {
                                                     const cancelReasonOptions = [
                                                         'Not interested',
                                                         'Wrong Number',
@@ -4168,8 +4090,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                         'Dont have driving license'
                                                     ];
                                                     
-                                                    const carOrScooterOptions = ['Car', 'Scooter'];
-                                                    
                                                     const options = col.id === 'campaign' ? (filterOptions?.campaigns || []) :
                                                                   col.id === 'lead_source' ? (filterOptions?.leadSources || []) :
                                                                   col.id === 'lead_status' ? (filterOptions?.leadStatuses || []) :
@@ -4180,12 +4100,11 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                   col.id === 'last_assigned_by' ? (filterOptions?.users || []) :
                                                                   col.id === 'riding_company' ? (filterOptions?.ridingCompanies || []) :
                                                                   col.id === 'city' ? EGYPT_GOVERNORATES.map((gov) => ({ id: gov, name: gov })) :
-                                                                  col.id === 'car_or_scooter' ? carOrScooterOptions.map((val) => ({ id: val, name: val })) :
                                                                   col.id === 'cancel_reason' ? cancelReasonOptions.map((val) => ({ id: val, name: val })) : [];
                                                     
                                                     const selectedOption = options.find((opt: any) => String(opt.id) === String(filters[filterKey]));
                                                     const displayValue = filters[filterKey] === 'is_empty' ? 'Is Empty' : 
-                                                        (col.id === 'city' || col.id === 'car_or_scooter' || col.id === 'cancel_reason' ? 
+                                                        (col.id === 'city' || col.id === 'cancel_reason' ? 
                                                             (filters[filterKey] ? String(filters[filterKey]) : '') : 
                                                             selectedOption?.name || '');
                                                     
@@ -4196,7 +4115,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                 value={filters[filterKey]}
                                                                 displayValue={displayValue}
                                                                 onSelect={(value) => {
-                                                                    if (col.id === 'city' || col.id === 'car_or_scooter' || col.id === 'cancel_reason') {
+                                                                    if (col.id === 'city' || col.id === 'cancel_reason') {
                                                                         handleFilterChange(filterKey, value === 'is_empty' ? 'is_empty' : String(value));
                                                                     } else {
                                                                         handleFilterChange(filterKey, value);
@@ -4696,15 +4615,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                 break;
                                                             case 'cancel_reason':
                                                                 cellContent = (driver as any).cancel_reason || '-';
-                                                                break;
-                                                            case 'vehicle_type':
-                                                                cellContent = (driver as any).vehicle_type || '-';
-                                                                break;
-                                                            case 'car_or_scooter':
-                                                                cellContent = (driver as any).car_or_scooter || '-';
-                                                                break;
-                                                            case 'has_worked_before':
-                                                                cellContent = (driver as any).has_worked_before || '-';
                                                                 break;
                                                             case 'city':
                                                                 cellContent = (driver as any).city || '-';
@@ -5435,51 +5345,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                             <div className="flex-1">
                                                                 <p className="text-sm text-neutral-500">City</p>
                                                                 <p className="font-medium">{driverDetails.city}</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    {canViewDriverField('vehicle_type') && driverDetails.vehicle_type && (
-                                                        <div className="flex items-start gap-2">
-                                                            <Car className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                                            <div className="flex-1">
-                                                                <p className="text-sm text-neutral-500">Vehicle Type</p>
-                                                                <p className="font-medium">{driverDetails.vehicle_type}</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    {canViewDriverField('car_or_scooter') && driverDetails.car_or_scooter && (
-                                                        <div className="flex items-start gap-2">
-                                                            <Car className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                                            <div className="flex-1">
-                                                                <p className="text-sm text-neutral-500">Car or Scooter</p>
-                                                                <p className="font-medium">{driverDetails.car_or_scooter}</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    {canViewDriverField('has_worked_before') && driverDetails.has_worked_before && (
-                                                        <div className="flex items-start gap-2">
-                                                            <User className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                                            <div className="flex-1">
-                                                                <p className="text-sm text-neutral-500">Has Worked Before</p>
-                                                                <p className="font-medium">{driverDetails.has_worked_before}</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    {canViewDriverField('worked_with_us_before') && driverDetails.worked_with_us_before && (
-                                                        <div className="flex items-start gap-2">
-                                                            <User className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                                            <div className="flex-1">
-                                                                <p className="text-sm text-neutral-500">Worked With Us Before</p>
-                                                                <p className="text-sm whitespace-pre-wrap">{driverDetails.worked_with_us_before}</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    {canViewDriverField('vehicle_type_and_year') && driverDetails.vehicle_type_and_year && (
-                                                        <div className="flex items-start gap-2">
-                                                            <Car className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                                            <div className="flex-1">
-                                                                <p className="text-sm text-neutral-500">Vehicle Type and Year</p>
-                                                                <p className="text-sm whitespace-pre-wrap">{driverDetails.vehicle_type_and_year}</p>
                                                             </div>
                                                         </div>
                                                     )}
@@ -6306,11 +6171,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         current_stage_id: '',
                 notes: driver?.notes || '',
                 feedback_count: driver?.feedback_count || 0,
-                vehicle_type: driver?.vehicle_type || '',
-                car_or_scooter: driver?.car_or_scooter || '',
-                has_worked_before: driver?.has_worked_before || '',
-                worked_with_us_before: driver?.worked_with_us_before || '',
-                vehicle_type_and_year: driver?.vehicle_type_and_year || '',
                 city: driver?.city || '',
     });
     
@@ -6405,11 +6265,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                 current_stage_id: '',
                 notes: driver.notes || '',
                 feedback_count: driver.feedback_count || 0,
-                vehicle_type: driver.vehicle_type || '',
-                car_or_scooter: driver.car_or_scooter || '',
-                has_worked_before: driver.has_worked_before || '',
-                worked_with_us_before: driver.worked_with_us_before || '',
-                vehicle_type_and_year: driver.vehicle_type_and_year || '',
                 city: driver.city || '',
             });
         }
@@ -6438,11 +6293,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
             current_stage_id: data.current_stage_id || null,
             notes: data.notes || null,
             feedback_count: data.feedback_count !== undefined ? Number(data.feedback_count) : null,
-            vehicle_type: data.vehicle_type || null,
-            car_or_scooter: data.car_or_scooter || null,
-            has_worked_before: data.has_worked_before || null,
-            worked_with_us_before: data.worked_with_us_before || null,
-            vehicle_type_and_year: data.vehicle_type_and_year || null,
             city: data.city || null,
         };
         
@@ -7145,57 +6995,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                 )}
                             </div>
                         )}
-                        {canViewDriverField('vehicle_type') && (
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Vehicle Type</label>
-                                <Input
-                                    value={data.vehicle_type}
-                                    onChange={(e) => setData('vehicle_type', e.target.value)}
-                                    className={errors.vehicle_type ? 'border-red-500' : ''}
-                                    placeholder="Enter vehicle type..."
-                                    disabled={!canEditDriverField('vehicle_type')}
-                                />
-                                {errors.vehicle_type && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.vehicle_type}</p>
-                                )}
-                            </div>
-                        )}
-                        {canViewDriverField('car_or_scooter') && (
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Car or Scooter</label>
-                                <Select
-                                    value={data.car_or_scooter}
-                                    onValueChange={(value) => setData('car_or_scooter', value)}
-                                    disabled={!canEditDriverField('car_or_scooter')}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Car or Scooter" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Car">Car</SelectItem>
-                                        <SelectItem value="Scooter">Scooter</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                {errors.car_or_scooter && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.car_or_scooter}</p>
-                                )}
-                            </div>
-                        )}
-                        {canViewDriverField('has_worked_before') && (
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Has the driver worked before?</label>
-                                <Input
-                                    value={data.has_worked_before}
-                                    onChange={(e) => setData('has_worked_before', e.target.value)}
-                                    className={errors.has_worked_before ? 'border-red-500' : ''}
-                                    placeholder="Enter information about previous work experience..."
-                                    disabled={!canEditDriverField('has_worked_before')}
-                                />
-                                {errors.has_worked_before && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.has_worked_before}</p>
-                                )}
-                            </div>
-                        )}
                         {canViewDriverField('city') && (
                             <div>
                                 <label className="block text-sm font-medium mb-1">City</label>
@@ -7217,36 +7016,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                 </Select>
                                 {errors.city && (
                                     <p className="text-sm text-red-500 mt-1">{errors.city}</p>
-                                )}
-                            </div>
-                        )}
-                        {canViewDriverField('worked_with_us_before') && (
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Worked With Us Before</label>
-                                <Input
-                                    value={data.worked_with_us_before}
-                                    onChange={(e) => setData('worked_with_us_before', e.target.value)}
-                                    className={errors.worked_with_us_before ? 'border-red-500' : ''}
-                                    placeholder="Enter information..."
-                                    disabled={!canEditDriverField('worked_with_us_before')}
-                                />
-                                {errors.worked_with_us_before && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.worked_with_us_before}</p>
-                                )}
-                            </div>
-                        )}
-                        {canViewDriverField('vehicle_type_and_year') && (
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Vehicle Type and Year</label>
-                                <Input
-                                    value={data.vehicle_type_and_year}
-                                    onChange={(e) => setData('vehicle_type_and_year', e.target.value)}
-                                    className={errors.vehicle_type_and_year ? 'border-red-500' : ''}
-                                    placeholder="Enter vehicle type and year..."
-                                    disabled={!canEditDriverField('vehicle_type_and_year')}
-                                />
-                                {errors.vehicle_type_and_year && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.vehicle_type_and_year}</p>
                                 )}
                             </div>
                         )}

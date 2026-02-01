@@ -152,13 +152,8 @@ interface Driver {
     };
     notes?: string;
     cancel_reason?: string;
-    worked_with_us_before?: string;
-    vehicle_type_and_year?: string;
     city?: string;
     governorate?: string;
-    vehicle_type?: string;
-    car_or_scooter?: string;
-    has_worked_before?: string;
     feedback_count?: number;
     duplicate?: number;
     confirm_duplicate?: boolean;
@@ -672,51 +667,6 @@ export default function DriversShow({
                                             <div className="flex-1">
                                                 <p className="text-sm text-neutral-500">Governorate</p>
                                                 <p className="font-medium">{driver.governorate}</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {canViewDriverField('vehicle_type') && driver.vehicle_type && (
-                                        <div className="flex items-start gap-2">
-                                            <Car className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                            <div className="flex-1">
-                                                <p className="text-sm text-neutral-500">Vehicle Type</p>
-                                                <p className="font-medium">{driver.vehicle_type}</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {canViewDriverField('car_or_scooter') && driver.car_or_scooter && (
-                                        <div className="flex items-start gap-2">
-                                            <Car className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                            <div className="flex-1">
-                                                <p className="text-sm text-neutral-500">Car or Scooter</p>
-                                                <p className="font-medium">{driver.car_or_scooter}</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {canViewDriverField('has_worked_before') && driver.has_worked_before && (
-                                        <div className="flex items-start gap-2">
-                                            <User className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                            <div className="flex-1">
-                                                <p className="text-sm text-neutral-500">Has Worked Before</p>
-                                                <p className="font-medium">{driver.has_worked_before}</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {canViewDriverField('worked_with_us_before') && driver.worked_with_us_before && (
-                                        <div className="flex items-start gap-2">
-                                            <User className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                            <div className="flex-1">
-                                                <p className="text-sm text-neutral-500">Worked With Us Before</p>
-                                                <p className="text-sm whitespace-pre-wrap">{driver.worked_with_us_before}</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {canViewDriverField('vehicle_type_and_year') && driver.vehicle_type_and_year && (
-                                        <div className="flex items-start gap-2">
-                                            <Car className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                            <div className="flex-1">
-                                                <p className="text-sm text-neutral-500">Vehicle Type and Year</p>
-                                                <p className="text-sm whitespace-pre-wrap">{driver.vehicle_type_and_year}</p>
                                             </div>
                                         </div>
                                     )}
