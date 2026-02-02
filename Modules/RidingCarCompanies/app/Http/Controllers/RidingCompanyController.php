@@ -105,6 +105,14 @@ class RidingCompanyController extends Controller
         $user = Auth::user();
         $companyId = $this->getCompanyId();
 
+        // Check if the riding_companies table exists before querying
+        if (!\Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
+            return Inertia::render('RidingCarCompanies/RidingCompanies/RecycleBin', [
+                'ridingCompanies' => [],
+                'usersCounts' => [],
+            ]);
+        }
+
         $query = \Modules\RidingCarCompanies\app\Models\RidingCompany::onlyTrashed();
 
         // Filter by company if applicable
