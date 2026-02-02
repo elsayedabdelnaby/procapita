@@ -12,7 +12,6 @@ class CampaignTypesSeeder extends Seeder
 {
     public function run(): void
     {
-        // Seed for all companies
         $companies = Company::all();
 
         foreach ($companies as $company) {
@@ -22,9 +21,48 @@ class CampaignTypesSeeder extends Seeder
         $this->command->info('Campaign types, statuses, and channels seeded for all companies.');
     }
 
+    /**
+     * Create campaign type, on duplicate key retry with name/slug + number.
+     */
+    private function createCampaignTypeOnce(Company $company, array $typeData, int $sortOrder): void
+    {
+        $attempt = 0;
+        $name = $typeData['name'];
+        $slug = $typeData['slug'];
+
+        while (true) {
+            try {
+                $tryName = $attempt === 0 ? $name : $name.' '.($attempt + 1);
+                $trySlug = $attempt === 0 ? $slug : $slug.'_'.($attempt + 1);
+
+                CampaignType::firstOrCreate(
+                    ['company_id' => $company->id, 'slug' => $trySlug],
+                    [
+                        'name' => $tryName,
+                        'slug' => $trySlug,
+                        'icon' => $typeData['icon'] ?? null,
+                        'color' => $typeData['color'] ?? null,
+                        'sort_order' => $sortOrder,
+                        'is_active' => true,
+                    ]
+                );
+
+                return;
+            } catch (\Illuminate\Database\QueryException $e) {
+                if ($e->getCode() === '23000' || str_contains($e->getMessage(), 'Duplicate entry')) {
+                    $attempt++;
+                    if ($attempt > 99) {
+                        throw $e;
+                    }
+                    continue;
+                }
+                throw $e;
+            }
+        }
+    }
+
     public function seedForCompany(Company $company): void
     {
-        // Campaign Types
         $types = [
             ['name' => 'Email', 'slug' => 'email', 'icon' => 'Mail', 'color' => 'blue'],
             ['name' => 'Social Media', 'slug' => 'social', 'icon' => 'Share2', 'color' => 'purple'],
@@ -36,13 +74,13 @@ class CampaignTypesSeeder extends Seeder
         ];
 
         foreach ($types as $index => $typeData) {
-            CampaignType::firstOrCreate(
-                ['company_id' => $company->id, 'slug' => $typeData['slug']],
-                array_merge($typeData, ['sort_order' => $index])
-            );
+            try {
+                $this->createCampaignTypeOnce($company, $typeData, $index);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
-        // Campaign Statuses
         $statuses = [
             ['name' => 'Draft', 'slug' => 'draft', 'color' => 'gray', 'is_final' => false],
             ['name' => 'Scheduled', 'slug' => 'scheduled', 'color' => 'blue', 'is_final' => false],
@@ -53,10 +91,11 @@ class CampaignTypesSeeder extends Seeder
         ];
 
         foreach ($statuses as $index => $statusData) {
-            CampaignStatus::firstOrCreate(
-                ['company_id' => $company->id, 'slug' => $statusData['slug']],
-                array_merge($statusData, ['sort_order' => $index])
-            );
+            try {
+                $this->createCampaignStatusOnce($company, $statusData, $index);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
         // Campaign Channels - Based on Type
@@ -94,20 +133,79 @@ class CampaignTypesSeeder extends Seeder
 
         foreach ($channels as $typeSlug => $typeChannels) {
             $campaignType = CampaignType::where('company_id', $company->id)
-                ->where('slug', $typeSlug)
+                ->where(function ($q) use ($typeSlug) {
+                    $q->where('slug', $typeSlug)
+                        ->orWhere('slug', 'like', $typeSlug.'\_%');
+                })
+                ->orderBy('id')
                 ->first();
 
             if ($campaignType) {
                 foreach ($typeChannels as $index => $channelData) {
-                    CampaignChannel::firstOrCreate(
-                        [
-                            'company_id' => $company->id,
-                            'campaign_type_id' => $campaignType->id,
-                            'slug' => $channelData['slug'],
-                        ],
-                        array_merge($channelData, ['sort_order' => $index])
-                    );
+                    try {
+                        $this->createCampaignChannelOnce($company, $campaignType, $channelData, $index);
+                    } catch (\Throwable $e) {
+                        report($e);
+                    }
                 }
+            }
+        }
+    }
+
+    private function createCampaignStatusOnce(Company $company, array $statusData, int $sortOrder): void
+    {
+        $attempt = 0;
+        $name = $statusData['name'];
+        $slug = $statusData['slug'];
+
+        while (true) {
+            try {
+                $tryName = $attempt === 0 ? $name : $name.' '.($attempt + 1);
+                $trySlug = $attempt === 0 ? $slug : $slug.'_'.($attempt + 1);
+
+                CampaignStatus::firstOrCreate(
+                    ['company_id' => $company->id, 'slug' => $trySlug],
+                    array_merge($statusData, ['name' => $tryName, 'slug' => $trySlug, 'sort_order' => $sortOrder])
+                );
+
+                return;
+            } catch (\Illuminate\Database\QueryException $e) {
+                if (($e->getCode() === '23000' || str_contains($e->getMessage(), 'Duplicate entry')) && $attempt < 99) {
+                    $attempt++;
+                    continue;
+                }
+                throw $e;
+            }
+        }
+    }
+
+    private function createCampaignChannelOnce(Company $company, CampaignType $campaignType, array $channelData, int $sortOrder): void
+    {
+        $attempt = 0;
+        $name = $channelData['name'];
+        $slug = $channelData['slug'];
+
+        while (true) {
+            try {
+                $tryName = $attempt === 0 ? $name : $name.' '.($attempt + 1);
+                $trySlug = $attempt === 0 ? $slug : $slug.'_'.($attempt + 1);
+
+                CampaignChannel::firstOrCreate(
+                    [
+                        'company_id' => $company->id,
+                        'campaign_type_id' => $campaignType->id,
+                        'slug' => $trySlug,
+                    ],
+                    array_merge($channelData, ['name' => $tryName, 'slug' => $trySlug, 'sort_order' => $sortOrder])
+                );
+
+                return;
+            } catch (\Illuminate\Database\QueryException $e) {
+                if (($e->getCode() === '23000' || str_contains($e->getMessage(), 'Duplicate entry')) && $attempt < 99) {
+                    $attempt++;
+                    continue;
+                }
+                throw $e;
             }
         }
     }

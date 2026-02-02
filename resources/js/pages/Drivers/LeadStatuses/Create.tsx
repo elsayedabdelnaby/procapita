@@ -50,7 +50,7 @@ export default function LeadStatusesCreate({ companies }: LeadStatusesCreateProp
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold">Create Lead Status</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Add a new lead status for tracking driver progress
+                        Add a new lead status for tracking lead progress
                     </p>
                 </div>
 

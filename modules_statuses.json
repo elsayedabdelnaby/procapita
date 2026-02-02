@@ -1,7 +1,7 @@
 {
     "Core": true,
     "Marketing": true,
-    "RidingCarCompanies": true,
+    "RidingCarCompanies": false,
     "Drivers": true,
     "RecycleBin": true,
     "WhatsApp": true

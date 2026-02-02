@@ -86,7 +86,7 @@ export function CompanyDeleteDialog({
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/20">
                             <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
                         </div>
-                        <DialogTitle>Delete Company</DialogTitle>
+                        <DialogTitle>Delete Reseller</DialogTitle>
                     </div>
                     <DialogDescription className="pt-2">
                         {hasRidingCompanies ? (

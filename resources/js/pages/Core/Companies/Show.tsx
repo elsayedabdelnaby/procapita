@@ -208,7 +208,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                     <div>
                         <h1 className="text-2xl font-bold">{company.name}</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Company Management
+                            Reseller Management
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -586,7 +586,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                                 Mobile 2
                                             </th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                                Riding Company
+                                                Reseller
                                             </th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
                                                 Roles
@@ -863,7 +863,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                             Mobile 2
                                         </th>
                                         <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                            Riding Company
+                                            Reseller
                                         </th>
                                         <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
                                             Roles

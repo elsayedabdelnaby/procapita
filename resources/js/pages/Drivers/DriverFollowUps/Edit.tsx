@@ -44,7 +44,6 @@ export default function DriverFollowUpsEdit({
         created_time: followUp.created_time
             ? new Date(followUp.created_time).toISOString().slice(0, 16)
             : new Date().toISOString().slice(0, 16),
-        riding_company: followUp.riding_company || '',
         lead_stage: followUp.lead_stage || '',
         notes: followUp.notes || '',
     });
@@ -115,15 +114,6 @@ export default function DriverFollowUpsEdit({
                                     <p className="text-sm text-red-500">{errors.created_time}</p>
                                 )}
                             </div>
-
-                            <FormField
-                                label="Riding Company"
-                                name="riding_company"
-                                value={data.riding_company}
-                                onChange={(e) => setData('riding_company', e.target.value)}
-                                error={errors.riding_company}
-                                placeholder="Enter riding company name"
-                            />
 
                             <FormField
                                 label="Lead Stage"

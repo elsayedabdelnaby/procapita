@@ -17,7 +17,6 @@ use Modules\Drivers\app\Http\Requests\DriverUpdateRequest;
 use Modules\Drivers\app\Models\Driver;
 use Modules\Drivers\app\Models\DriverDocument;
 use Modules\Drivers\app\Models\DriverFollowUp;
-use Modules\Drivers\app\Models\DriverStage;
 use Modules\Drivers\app\Models\LeadSource;
 use Modules\Drivers\app\Models\LeadStage;
 use Modules\Drivers\app\Models\LeadStatus;
@@ -39,23 +38,15 @@ class DriverController extends Controller
             $user = Auth::user();
             $companyId = $this->getCompanyId();
 
-            // Get selected riding company from session (for admins)
-            $selectedRidingCompanyId = null;
-            if (($user->isSuperAdmin() || $user->is_company_admin) && ! $user->riding_company_id) {
-                $selectedRidingCompanyId = session('selected_riding_company_id');
-            }
-
-            $drivers = $this->driverService->getAllDrivers($companyId, $user, $selectedRidingCompanyId);
+            $drivers = $this->driverService->getAllDrivers($companyId, $user);
 
             // Prepare import available fields with types and options
             $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get(['id', 'name']) : collect();
 
-            // Filter riding companies based on user access
-            $ridingCompanies = $this->getRidingCompaniesForUser($user, $companyId);
-
             $campaigns = Campaign::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get(['id', 'name']);
             $leadSources = LeadSource::active()->orderBy('name')->get(['id', 'name']);
             $leadStatuses = LeadStatus::active()->ordered()->get(['id', 'name']);
+            $ridingCompanies = $this->getRidingCompaniesForUser($user, $companyId);
             // Get users - for non-super admin, only show subordinate users
             if ($user->isSuperAdmin()) {
                 $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
@@ -77,12 +68,6 @@ class DriverController extends Controller
                     'label' => 'Company',
                     'type' => 'picklist',
                     'options' => $companies->map(fn ($c) => ['value' => $c->id, 'label' => $c->name])->toArray(),
-                ],
-                [
-                    'value' => 'riding_company_id',
-                    'label' => 'Riding Company',
-                    'type' => 'picklist',
-                    'options' => $ridingCompanies->map(fn ($rc) => ['value' => $rc->id, 'label' => $rc->name])->toArray(),
                 ],
                 [
                     'value' => 'campaign_id',
@@ -132,9 +117,10 @@ class DriverController extends Controller
 
             if (Schema::hasTable('document_names')) {
                 $documentNamesQuery = \Modules\Drivers\app\Models\DocumentName::query();
+                $hasRidingCompanyIdsColumn = Schema::hasColumn('document_names', 'riding_company_ids');
 
-                // Filter by company if not super admin
-                if ($companyId) {
+                // Filter by company if not super admin (only when riding_company_ids column exists)
+                if ($companyId && $hasRidingCompanyIdsColumn) {
                     // Get riding company IDs for this company
                     $ridingCompanyIds = RidingCompany::where('company_id', $companyId)->pluck('id')->toArray();
 
@@ -154,19 +140,21 @@ class DriverController extends Controller
                 // Get all unique document names
                 $allDocumentNames = $documentNames->pluck('name')->unique()->sort()->values()->toArray();
 
-                // Group documents by riding company
-                foreach ($documentNames as $docName) {
-                    $ridingCompanyIds = $docName->riding_company_ids ?? [];
-                    if (! empty($ridingCompanyIds)) {
-                        // Convert to integers
-                        $ridingCompanyIds = array_map('intval', $ridingCompanyIds);
+                // Group documents by riding company (only when riding_company_ids column exists)
+                if ($hasRidingCompanyIdsColumn) {
+                    foreach ($documentNames as $docName) {
+                        $ridingCompanyIds = $docName->riding_company_ids ?? [];
+                        if (! empty($ridingCompanyIds)) {
+                            // Convert to integers
+                            $ridingCompanyIds = array_map('intval', $ridingCompanyIds);
 
-                        foreach ($ridingCompanyIds as $ridingCompanyId) {
-                            if (! isset($documentsByRidingCompany[$ridingCompanyId])) {
-                                $documentsByRidingCompany[$ridingCompanyId] = [];
-                            }
-                            if (! in_array($docName->name, $documentsByRidingCompany[$ridingCompanyId])) {
-                                $documentsByRidingCompany[$ridingCompanyId][] = $docName->name;
+                            foreach ($ridingCompanyIds as $ridingCompanyId) {
+                                if (! isset($documentsByRidingCompany[$ridingCompanyId])) {
+                                    $documentsByRidingCompany[$ridingCompanyId] = [];
+                                }
+                                if (! in_array($docName->name, $documentsByRidingCompany[$ridingCompanyId])) {
+                                    $documentsByRidingCompany[$ridingCompanyId][] = $docName->name;
+                                }
                             }
                         }
                     }
@@ -313,14 +301,6 @@ class DriverController extends Controller
                             'name' => $driver->leadStage->name,
                             'color' => $driver->leadStage->color,
                         ] : null,
-                        'driver_stage' => $driver->driverStage ? [
-                            'id' => $driver->driverStage->id,
-                            'name' => $driver->driverStage->name,
-                        ] : null,
-                        'current_stage' => $driver->currentStage ? [
-                            'id' => $driver->currentStage->id,
-                            'name' => $driver->currentStage->name,
-                        ] : null,
                         'last_assigned_time' => $driver->last_assigned_time?->format('d-m-Y h:i A'),
                         'last_assigned_by' => $driver->lastAssignedByUser ? [
                             'id' => $driver->lastAssignedByUser->id,
@@ -386,7 +366,7 @@ class DriverController extends Controller
         }
 
         // Get only deleted drivers
-        $query = Driver::onlyTrashed()->with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'teamLeader', 'accountManager', 'assignedUsers', 'leadStatus', 'leadStage', 'currentStage', 'lastAssignedByUser']);
+        $query = Driver::onlyTrashed()->with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'teamLeader', 'accountManager', 'assignedUsers', 'leadStatus', 'leadStage', 'lastAssignedByUser']);
 
         if ($companyId) {
             $query->where('company_id', $companyId);
@@ -490,10 +470,6 @@ class DriverController extends Controller
                     'name' => $driver->leadStage->name,
                     'color' => $driver->leadStage->color,
                 ] : null,
-                'current_stage' => $driver->currentStage ? [
-                    'id' => $driver->currentStage->id,
-                    'name' => $driver->currentStage->name,
-                ] : null,
                 'last_assigned_time' => $driver->last_assigned_time?->format('d-m-Y h:i A'),
                 'last_assigned_by' => $driver->lastAssignedByUser ? [
                     'id' => $driver->lastAssignedByUser->id,
@@ -530,44 +506,10 @@ class DriverController extends Controller
         $leadSources = LeadSource::active()->orderBy('name')->get();
         $leadStatuses = LeadStatus::active()->ordered()->get();
         $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
-        
-        // Get driver stages (templates) - filter by company's riding companies
-        $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
-        
-        // Check if columns exist
-        $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('driver_stages', 'riding_company_id');
-        $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('driver_stages', 'riding_company_ids');
-        
-        // Build select columns based on what exists
-        $driverSelectColumns = ['id', 'name', 'stage_order', 'status', 'notes'];
-        if ($hasRidingCompanyId) {
-            $driverSelectColumns[] = 'riding_company_id';
-        }
-        if ($hasRidingCompanyIds) {
-            $driverSelectColumns[] = 'riding_company_ids';
-        }
-        
-        $driverStages = DriverStage::whereNull('driver_id')
-            ->where(function ($q) use ($ridingCompanyIds, $hasRidingCompanyId, $hasRidingCompanyIds) {
-                if ($hasRidingCompanyId) {
-                    $q->whereIn('riding_company_id', $ridingCompanyIds);
-                }
-                if ($hasRidingCompanyIds) {
-                    $q->orWhere(function ($q2) use ($ridingCompanyIds) {
-                        foreach ($ridingCompanyIds as $rcId) {
-                            $q2->orWhereJsonContains('riding_company_ids', $rcId);
-                        }
-                    });
-                }
-            })
-            ->orderBy('stage_order')
-            ->get($driverSelectColumns);
 
-        // Get lead stages - filter by company's riding companies
+        $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
         $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_id');
         $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_ids');
-        
-        // Build select columns based on what exists
         $selectColumns = ['id', 'name', 'order', 'color'];
         if ($hasRidingCompanyId) {
             $selectColumns[] = 'riding_company_id';
@@ -575,7 +517,6 @@ class DriverController extends Controller
         if ($hasRidingCompanyIds) {
             $selectColumns[] = 'riding_company_ids';
         }
-        
         $leadStages = LeadStage::active()
             ->where(function ($q) use ($ridingCompanyIds, $hasRidingCompanyId, $hasRidingCompanyIds) {
                 if ($hasRidingCompanyId) {
@@ -600,7 +541,6 @@ class DriverController extends Controller
             'leadSources' => $leadSources,
             'leadStatuses' => $leadStatuses,
             'users' => $users,
-            'driverStages' => $driverStages,
             'leadStages' => $leadStages,
         ]);
     }
@@ -755,10 +695,6 @@ class DriverController extends Controller
                 abort(404, 'Driver not found.');
             }
 
-            $stagesProgress = $driverModel->getStagesProgress();
-            $stagesStatus = $driverModel->getStagesStatus();
-            $nextStage = $driverModel->getNextStage();
-
             // Get next and previous driver IDs
             $companyId = $this->getCompanyId();
             $nextDriver = \Modules\Drivers\app\Models\Driver::where('id', '>', $driverModel->id)
@@ -866,10 +802,6 @@ class DriverController extends Controller
                         'name' => $driverModel->leadStage->name,
                         'color' => $driverModel->leadStage->color,
                     ] : null,
-                    'current_stage' => $driverModel->currentStage ? [
-                        'id' => $driverModel->currentStage->id,
-                        'name' => $driverModel->currentStage->name,
-                    ] : null,
                     'notes' => $driverModel->notes,
                     'cancel_reason' => $driverModel->cancel_reason,
                     'worked_with_us_before' => $driverModel->worked_with_us_before,
@@ -882,24 +814,6 @@ class DriverController extends Controller
                     'feedback_count' => $driverModel->feedback_count ?? 0,
                     'duplicate' => $driverModel->duplicate ?? 0,
                     'confirm_duplicate' => $driverModel->confirm_duplicate ?? false,
-                    'stages_progress' => $stagesProgress,
-                    'stages_status' => $stagesStatus,
-                    'next_stage' => $nextStage ? [
-                        'id' => $nextStage->id,
-                        'name' => $nextStage->name,
-                        'order' => $nextStage->order,
-                    ] : null,
-                    'has_completed_all_stages' => $driverModel->hasCompletedAllStages(),
-                    'stages' => $driverModel->stages->map(fn ($stage) => [
-                        'id' => $stage->id,
-                        'riding_company' => $stage->ridingCompany ? [
-                            'id' => $stage->ridingCompany->id,
-                            'name' => $stage->ridingCompany->name,
-                        ] : null,
-                        'stage_order' => $stage->stage_order,
-                        'status' => $stage->status,
-                        'completed_at' => $stage->completed_at,
-                    ]),
                     'documents' => $driverModel->documents->map(function ($doc) {
                         $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
                         $docName = $hasNameColumn ? ($doc->name ?? null) : ($doc->documentName?->name ?? null);
@@ -993,15 +907,11 @@ class DriverController extends Controller
             return response()->json(['error' => 'Driver not found.'], 404);
         }
 
-        $stagesProgress = $driverModel->getStagesProgress();
-        $stagesStatus = $driverModel->getStagesStatus();
-
         // Get follow-ups for this driver
         $followUps = \Modules\Drivers\app\Models\DriverFollowUp::where('driver_id', $driverModel->id)
             ->with('assignedTo')
             ->orderBy('created_time', 'desc')
             ->get();
-        $nextStage = $driverModel->getNextStage();
 
         // Load activity logs with relationship names
         $activities = \Spatie\Activitylog\Models\Activity::forSubject($driverModel)
@@ -1075,10 +985,6 @@ class DriverController extends Controller
                     'name' => $driverModel->leadStage->name,
                     'color' => $driverModel->leadStage->color,
                 ] : null,
-                'current_stage' => $driverModel->currentStage ? [
-                    'id' => $driverModel->currentStage->id,
-                    'name' => $driverModel->currentStage->name,
-                ] : null,
                 'notes' => $driverModel->notes,
                 'cancel_reason' => $driverModel->cancel_reason,
                 'worked_with_us_before' => $driverModel->worked_with_us_before,
@@ -1091,24 +997,6 @@ class DriverController extends Controller
                 'feedback_count' => $driverModel->feedback_count ?? 0,
                 'duplicate' => $driverModel->duplicate ?? 0,
                 'confirm_duplicate' => $driverModel->confirm_duplicate ?? false,
-                'stages_progress' => $stagesProgress,
-                'stages_status' => $stagesStatus,
-                'next_stage' => $nextStage ? [
-                    'id' => $nextStage->id,
-                    'name' => $nextStage->name,
-                    'order' => $nextStage->order,
-                ] : null,
-                'has_completed_all_stages' => $driverModel->hasCompletedAllStages(),
-                'stages' => $driverModel->stages->map(fn ($stage) => [
-                    'id' => $stage->id,
-                    'riding_company' => $stage->ridingCompany ? [
-                        'id' => $stage->ridingCompany->id,
-                        'name' => $stage->ridingCompany->name,
-                    ] : null,
-                    'stage_order' => $stage->stage_order,
-                    'status' => $stage->status,
-                    'completed_at' => $stage->completed_at,
-                ]),
                 'documents' => $driverModel->documents->map(function ($doc) {
                     $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
                     $docName = $hasNameColumn ? ($doc->name ?? null) : ($doc->documentName?->name ?? null);
@@ -1198,44 +1086,10 @@ class DriverController extends Controller
         $leadSources = LeadSource::active()->orderBy('name')->get();
         $leadStatuses = LeadStatus::active()->ordered()->get();
         $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
-        
-        // Get driver stages (templates) - filter by company's riding companies
-        $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
-        
-        // Check if columns exist
-        $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('driver_stages', 'riding_company_id');
-        $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('driver_stages', 'riding_company_ids');
-        
-        // Build select columns based on what exists
-        $driverSelectColumns = ['id', 'name', 'stage_order', 'status', 'notes'];
-        if ($hasRidingCompanyId) {
-            $driverSelectColumns[] = 'riding_company_id';
-        }
-        if ($hasRidingCompanyIds) {
-            $driverSelectColumns[] = 'riding_company_ids';
-        }
-        
-        $driverStages = DriverStage::whereNull('driver_id')
-            ->where(function ($q) use ($ridingCompanyIds, $hasRidingCompanyId, $hasRidingCompanyIds) {
-                if ($hasRidingCompanyId) {
-                    $q->whereIn('riding_company_id', $ridingCompanyIds);
-                }
-                if ($hasRidingCompanyIds) {
-                    $q->orWhere(function ($q2) use ($ridingCompanyIds) {
-                        foreach ($ridingCompanyIds as $rcId) {
-                            $q2->orWhereJsonContains('riding_company_ids', $rcId);
-                        }
-                    });
-                }
-            })
-            ->orderBy('stage_order')
-            ->get($driverSelectColumns);
 
-        // Get lead stages - filter by company's riding companies
+        $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
         $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_id');
         $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_ids');
-        
-        // Build select columns based on what exists
         $selectColumns = ['id', 'name', 'order', 'color'];
         if ($hasRidingCompanyId) {
             $selectColumns[] = 'riding_company_id';
@@ -1243,7 +1097,6 @@ class DriverController extends Controller
         if ($hasRidingCompanyIds) {
             $selectColumns[] = 'riding_company_ids';
         }
-        
         $leadStages = LeadStage::active()
             ->where(function ($q) use ($ridingCompanyIds, $hasRidingCompanyId, $hasRidingCompanyIds) {
                 if ($hasRidingCompanyId) {
@@ -1280,8 +1133,6 @@ class DriverController extends Controller
                 'next_follow_up' => $driverModel->next_follow_up ? $driverModel->next_follow_up->format('Y-m-d H:i:s') : null,
                 'last_follow_up' => $driverModel->last_follow_up ? $driverModel->last_follow_up->format('Y-m-d H:i:s') : null,
                 'lead_stage_id' => $driverModel->lead_stage_id,
-                'driver_stage_id' => $driverModel->driver_stage_id,
-                'current_stage_id' => $driverModel->current_stage_id,
                 'notes' => $driverModel->notes,
                 'cancel_reason' => $driverModel->cancel_reason,
                 'next_time' => $driverModel->next_time,
@@ -1294,7 +1145,6 @@ class DriverController extends Controller
             'leadSources' => $leadSources,
             'leadStatuses' => $leadStatuses,
             'users' => $users,
-            'driverStages' => $driverStages,
             'leadStages' => $leadStages,
         ]);
     }
@@ -1538,16 +1388,23 @@ class DriverController extends Controller
         // Check if specific IDs are requested
         $ids = $request->input('ids');
         if ($ids) {
-            // Export selected drivers only
-            $idsArray = is_array($ids) ? $ids : explode(',', $ids);
-            $drivers = Driver::whereIn('id', $idsArray)
+            // Export selected drivers only (scoped to user's company)
+            $idsArray = is_array($ids) ? $ids : explode(',', (string) $ids);
+            $idsArray = array_filter(array_map('intval', $idsArray));
+            $query = Driver::whereIn('id', $idsArray);
+            if ($companyId !== null) {
+                $query->where('company_id', $companyId);
+            } else {
+                $query->whereNull('company_id');
+            }
+            $drivers = $query
                 ->with(['ridingCompany', 'campaign', 'leadSource', 'leadStatus', 'assignedTo', 'documents'])
                 ->get();
         } else {
             // Export all visible drivers
             $drivers = $this->driverService->getAllDrivers($companyId, $user);
             // Ensure all relationships are loaded
-            $drivers->load(['documents', 'assignedTo', 'teamLeader', 'accountManager', 'lastAssignedByUser', 'currentStage', 'leadStage']);
+            $drivers->load(['documents', 'assignedTo', 'teamLeader', 'accountManager', 'lastAssignedByUser', 'leadStage']);
         }
 
         // Get ALL document names from document_names table (system-wide, regardless of company)
@@ -1640,7 +1497,7 @@ class DriverController extends Controller
             'Phone',
             'WhatsApp',
             'Email',
-            'Riding Company',
+            'Reseller',
             'Campaign',
             'Next Time',
             'Assigned To',
@@ -1700,9 +1557,6 @@ class DriverController extends Controller
             if (! $driver->relationLoaded('lastAssignedByUser')) {
                 $driver->load('lastAssignedByUser');
             }
-            if (! $driver->relationLoaded('currentStage')) {
-                $driver->load('currentStage');
-            }
             if (! $driver->relationLoaded('leadStage')) {
                 $driver->load('leadStage');
             }
@@ -1741,7 +1595,7 @@ class DriverController extends Controller
                 $driver->accountManager?->name ?? '',
                 $driver->resigned_leads ?? '',
                 $driver->leadSource?->name ?? '',
-                $driver->currentStage?->name ?? '',
+                $driver->leadStage?->name ?? '', // Current Stage (uses lead stage after driver_stages removal)
                 $driver->leadStatus?->name ?? '',
                 $driver->last_assigned_time ? $driver->last_assigned_time->format('d-m-Y h:i A') : '',
                 $driver->last_assigned_time ? $driver->last_assigned_time->format('d-m-Y') : '',
@@ -1780,14 +1634,15 @@ class DriverController extends Controller
                 $isRequired = false;
                 
                 if ($driverRidingCompanyId) {
-                    // First check document_names table
-                    if ($documentNamesForCheck->has($docName)) {
+                    // First check document_names table (only when riding_company_ids column exists)
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('document_names', 'riding_company_ids')
+                        && $documentNamesForCheck->has($docName)) {
                         $docNameModel = $documentNamesForCheck->get($docName);
                         $ridingCompanyIds = $docNameModel->riding_company_ids ?? [];
-                        if (!empty($ridingCompanyIds)) {
+                        if (! empty($ridingCompanyIds)) {
                             // Convert to integers for comparison
                             $ridingCompanyIds = array_map('intval', $ridingCompanyIds);
-                            $isRequired = in_array((int)$driverRidingCompanyId, $ridingCompanyIds, true);
+                            $isRequired = in_array((int) $driverRidingCompanyId, $ridingCompanyIds, true);
                         }
                     }
                     
@@ -2421,7 +2276,7 @@ class DriverController extends Controller
                 case 'riding_company_id':
                     if (is_numeric($value)) {
                         $ridingCompany = RidingCompany::find($value);
-                        $resolved[$key] = $ridingCompany ? $ridingCompany->name : "Riding Company #{$value}";
+                        $resolved[$key] = $ridingCompany ? $ridingCompany->name : "Reseller #{$value}";
                     } else {
                         $resolved[$key] = $value;
                     }
@@ -2548,7 +2403,7 @@ class DriverController extends Controller
         $output = fopen('php://temp', 'r+');
 
         // Headers
-        fputcsv($output, ['Row', 'Full Name', 'Phone', 'Email', 'Riding Company', 'Campaign', 'Lead Source', 'Lead Status', 'Assigned To', 'Driver ID']);
+        fputcsv($output, ['Row', 'Full Name', 'Phone', 'Email', 'Reseller', 'Campaign', 'Lead Source', 'Lead Status', 'Assigned To', 'Driver ID']);
 
         // Data
         foreach ($records as $record) {
@@ -2811,7 +2666,7 @@ class DriverController extends Controller
         $count = $drivers->count();
 
         return redirect()
-            ->route('drivers.drivers.index')
+            ->route('drivers.drivers.index', ['updated' => now()->timestamp])
             ->with('success', "{$count} driver(s) updated successfully.");
     }
 
@@ -2933,12 +2788,6 @@ class DriverController extends Controller
                     ->update(['driver_id' => $primaryDriver->id]);
             }
 
-            // Merge driver stages from all other drivers
-            foreach ($otherDrivers as $otherDriver) {
-                DriverStage::where('driver_id', $otherDriver->id)
-                    ->update(['driver_id' => $primaryDriver->id]);
-            }
-
             // Log merge activity
             $mergedDriverIds = $otherDrivers->pluck('id')->toArray();
             activity()
@@ -3016,7 +2865,6 @@ class DriverController extends Controller
             'last_follow_up' => 'last_follow_up',
             'assigned_to' => 'assigned_to',
             'cancel_reason' => 'cancel_reason',
-            'current_stage_id' => 'current_stage',
             'last_assigned_by' => 'last_assigned_by',
             'notes' => 'notes',
             'vehicle_type' => 'vehicle_type',

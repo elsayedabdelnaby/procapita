@@ -81,7 +81,7 @@ export default function DriversMassEdit({
     const [loadingLeadStatuses, setLoadingLeadStatuses] = useState(false);
     const [loadingUsers, setLoadingUsers] = useState(false);
 
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, transform, post, processing, errors } = useForm({
         ids: ids,
         company_id: '',
         riding_company_id: '',
@@ -92,6 +92,7 @@ export default function DriversMassEdit({
         lead_status_comment: '',
         next_follow_up: '',
         notes: '',
+        clear_fields: [] as string[],
     });
 
     const [clearFields, setClearFields] = useState<Set<string>>(new Set());
@@ -200,26 +201,25 @@ export default function DriversMassEdit({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post('/drivers/drivers/mass-update', {
-            clear_fields: Array.from(clearFields),
-        });
+        transform((payload) => ({ ...payload, clear_fields: Array.from(clearFields) }));
+        post('/drivers/drivers/mass-update', { preserveState: false });
     };
 
     return (
         <AppLayout>
-            <Head title="Mass Edit Drivers" />
+            <Head title="Mass Edit Leads" />
 
             <div className="p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold mb-2">Mass Edit Drivers</h1>
+                    <h1 className="text-2xl font-bold mb-2">Mass Edit Leads</h1>
                     <p className="text-sm text-muted-foreground">
-                        Update {drivers.length} selected driver(s). Leave fields empty to keep existing values.
+                        Update {drivers.length} selected lead(s). Leave fields empty to keep existing values.
                     </p>
                 </div>
 
-                {/* Selected Drivers List */}
+                {/* Selected Leads List */}
                 <Card className="p-4 mb-6">
-                    <Label className="mb-2 block">Selected Drivers ({drivers.length})</Label>
+                    <Label className="mb-2 block">Selected Leads ({drivers.length})</Label>
                     <div className="flex flex-wrap gap-2">
                         {drivers.map((driver) => (
                             <Badge key={driver.id} variant="outline">
@@ -240,7 +240,7 @@ export default function DriversMassEdit({
                                             onCheckedChange={(checked) => handleClearField('company_id', checked as boolean)}
                                         />
                                         <Label htmlFor="company_id" className="text-sm font-medium">
-                                            Company
+                                            Reseller
                                         </Label>
                                     </div>
                                     <select
@@ -270,7 +270,7 @@ export default function DriversMassEdit({
                                         onCheckedChange={(checked) => handleClearField('riding_company_id', checked as boolean)}
                                     />
                                     <Label htmlFor="riding_company_id" className="text-sm font-medium">
-                                        Riding Company
+                                        Reseller
                                     </Label>
                                 </div>
                                 <select

@@ -202,7 +202,7 @@ class DriverListService
             ['value' => 'whatsapp_phone', 'label' => 'WhatsApp Phone', 'type' => 'text'],
             ['value' => 'email', 'label' => 'Email', 'type' => 'email'],
             ['value' => 'company_id', 'label' => 'Company', 'type' => 'picklist'],
-            ['value' => 'riding_company_id', 'label' => 'Riding Company', 'type' => 'picklist'],
+            ['value' => 'riding_company_id', 'label' => 'Reseller', 'type' => 'picklist'],
             ['value' => 'campaign_id', 'label' => 'Campaign', 'type' => 'picklist'],
             ['value' => 'lead_source_id', 'label' => 'Lead Source', 'type' => 'picklist'],
             ['value' => 'lead_status_id', 'label' => 'Lead Status', 'type' => 'picklist'],

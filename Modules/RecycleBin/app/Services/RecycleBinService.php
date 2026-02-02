@@ -75,12 +75,6 @@ class RecycleBinService
                 'module' => 'drivers',
                 'display_field' => 'name',
             ],
-            'driver_stages' => [
-                'model' => \Modules\Drivers\app\Models\DriverStage::class,
-                'name' => 'Driver Stages',
-                'module' => 'drivers',
-                'display_field' => 'status', // Using status as display field
-            ],
             'driver_documents' => [
                 'model' => \Modules\Drivers\app\Models\DriverDocument::class,
                 'name' => 'Driver Documents',

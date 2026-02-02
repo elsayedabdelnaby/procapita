@@ -11,7 +11,6 @@ use Inertia\Response;
 use Modules\Drivers\app\Http\Requests\LeadStageStoreRequest;
 use Modules\Drivers\app\Http\Requests\LeadStageUpdateRequest;
 use Modules\Drivers\app\Services\LeadStageService;
-use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
 class LeadStageController extends Controller
 {
@@ -32,28 +31,7 @@ class LeadStageController extends Controller
 
     public function index(): Response
     {
-        $user = Auth::user();
-        $companyId = $this->getCompanyId();
-        $ridingCompanyId = request()->get('riding_company_id');
-
-        $leadStages = $this->leadStageService->getAllLeadStages($ridingCompanyId, $companyId);
-
-        // Load riding companies for each lead stage
-        $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_id');
-        $leadStages = $leadStages->map(function ($stage) use ($hasRidingCompanyId) {
-            if ($hasRidingCompanyId) {
-                $stage->load('ridingCompany');
-            }
-            // Get riding companies from riding_company_ids
-            if (!empty($stage->riding_company_ids)) {
-                $stage->ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::whereIn('id', $stage->riding_company_ids)->get();
-            } elseif ($hasRidingCompanyId && $stage->riding_company_id) {
-                $stage->ridingCompanies = collect([$stage->ridingCompany])->filter();
-            } else {
-                $stage->ridingCompanies = collect();
-            }
-            return $stage;
-        });
+        $leadStages = $this->leadStageService->getAllLeadStages();
 
         return Inertia::render('Drivers/LeadStages/Index', [
             'leadStages' => $leadStages,
@@ -62,101 +40,24 @@ class LeadStageController extends Controller
 
     public function recycleBin(): Response
     {
-        $user = Auth::user();
-        $companyId = $this->getCompanyId();
-        
-        $query = \Modules\Drivers\app\Models\LeadStage::onlyTrashed();
-
-        // Filter by company if applicable
-        if ($companyId) {
-            // Get riding company IDs for this company
-            $ridingCompanyIds = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $companyId)->pluck('id')->toArray();
-            
-            if (!empty($ridingCompanyIds)) {
-                $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_ids');
-                $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_id');
-                
-                $query->where(function ($q) use ($ridingCompanyIds, $hasRidingCompanyIds, $hasRidingCompanyId) {
-                    if ($hasRidingCompanyIds) {
-                        foreach ($ridingCompanyIds as $rcId) {
-                            $q->orWhereJsonContains('riding_company_ids', $rcId);
-                        }
-                    }
-                    if ($hasRidingCompanyId) {
-                        $q->orWhereIn('riding_company_id', $ridingCompanyIds);
-                    }
-                });
-            } else {
-                $query->whereRaw('1 = 0');
-            }
-        }
-
-        $leadStages = $query->orderBy('deleted_at', 'desc')->get();
-
-        // Load riding companies for each lead stage
-        $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_id');
-        $leadStagesData = $leadStages->map(function ($stage) use ($hasRidingCompanyId) {
-            $stageData = $stage->toArray();
-            
-            // Get riding companies from riding_company_ids or riding_company_id
-            $ridingCompanyIds = $stage->riding_company_ids ?? [];
-            if (empty($ridingCompanyIds) && $hasRidingCompanyId && $stage->riding_company_id) {
-                $ridingCompanyIds = [$stage->riding_company_id];
-            }
-            
-            if (!empty($ridingCompanyIds)) {
-                $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::whereIn('id', $ridingCompanyIds)->get(['id', 'name']);
-                $stageData['ridingCompanies'] = $ridingCompanies->toArray();
-            } else {
-                $stageData['ridingCompanies'] = [];
-            }
-            
-            return $stageData;
-        });
+        $leadStages = \Modules\Drivers\app\Models\LeadStage::onlyTrashed()
+            ->orderBy('deleted_at', 'desc')
+            ->get();
 
         return Inertia::render('Drivers/LeadStages/RecycleBin', [
-            'leadStages' => $leadStagesData,
+            'leadStages' => $leadStages->toArray(),
         ]);
     }
 
     public function create(): Response
     {
-        $user = Auth::user();
-        $companyId = $this->getCompanyId();
-        
-        $ridingCompanies = RidingCompany::when($companyId, fn($q) => $q->where('company_id', $companyId))
-                ->active()
-                ->orderBy('name')
-                ->get();
-
-        return Inertia::render('Drivers/LeadStages/Create', [
-            'ridingCompanies' => $ridingCompanies,
-        ]);
+        return Inertia::render('Drivers/LeadStages/Create');
     }
 
     public function store(LeadStageStoreRequest $request): RedirectResponse
     {
         try {
             $data = $request->validated();
-            $user = Auth::user();
-            $companyId = $this->getCompanyId();
-
-            // Validate that all selected riding companies belong to the current company
-            if ($companyId && isset($data['riding_company_ids']) && is_array($data['riding_company_ids'])) {
-                $selectedRidingCompanyIds = array_map('intval', $data['riding_company_ids']);
-                $validRidingCompanyIds = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $companyId)
-                    ->whereIn('id', $selectedRidingCompanyIds)
-                    ->pluck('id')
-                    ->toArray();
-                
-                if (count($selectedRidingCompanyIds) !== count($validRidingCompanyIds)) {
-                    return redirect()
-                        ->back()
-                        ->withInput()
-                        ->with('error', 'One or more selected riding companies do not belong to your company.');
-                }
-            }
-
             $data['active'] = $data['active'] ?? true;
             $data['order'] = $data['order'] ?? 0;
             $data['requires_all_documents_approved'] = $data['requires_all_documents_approved'] ?? false;
@@ -216,21 +117,8 @@ class LeadStageController extends Controller
             abort(404, 'Lead stage not found.');
         }
 
-        $companyId = $this->getCompanyId();
-        $ridingCompanies = RidingCompany::when($companyId, fn($q) => $q->where('company_id', $companyId))
-                ->active()
-                ->orderBy('name')
-                ->get();
-
-        // Prepare leadStageData with riding_company_ids for multi-select
-        $leadStageData = $leadStageModel->toArray();
-        if (empty($leadStageData['riding_company_ids']) && $leadStageModel->riding_company_id) {
-            $leadStageData['riding_company_ids'] = [$leadStageModel->riding_company_id];
-        }
-
         return Inertia::render('Drivers/LeadStages/Edit', [
-            'leadStage' => $leadStageData,
-            'ridingCompanies' => $ridingCompanies,
+            'leadStage' => $leadStageModel->toArray(),
         ]);
     }
 
@@ -282,10 +170,7 @@ class LeadStageController extends Controller
 
     public function export(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $user = Auth::user();
-        $companyId = $this->getCompanyId();
-        $ridingCompanyId = request()->get('riding_company_id');
-        $leadStages = $this->leadStageService->getAllLeadStages($ridingCompanyId, $companyId);
+        $leadStages = $this->leadStageService->getAllLeadStages();
 
         $filename = 'lead_stages_export_' . date('Y-m-d_His') . '.csv';
         
@@ -295,14 +180,13 @@ class LeadStageController extends Controller
         // Open output stream
         $output = fopen('php://temp', 'r+');
 
-        fputcsv($output, ['ID', 'Name', 'Slug', 'Riding Company', 'Color', 'Order', 'Requires Documents Approved', 'Active', 'Created At']);
+        fputcsv($output, ['ID', 'Name', 'Slug', 'Color', 'Order', 'Requires Documents Approved', 'Active', 'Created At']);
 
         foreach ($leadStages as $stage) {
             fputcsv($output, [
                 $stage->id,
                 $stage->name,
                 $stage->slug,
-                $stage->ridingCompany?->name ?? '',
                 $stage->color ?? '',
                 $stage->order,
                 $stage->requires_all_documents_approved ? 'Yes' : 'No',

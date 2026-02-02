@@ -58,7 +58,7 @@ export default function LeadSourcesIndex({
                     <div>
                         <h1 className="text-2xl font-bold">Lead Sources</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Manage lead sources for tracking driver origins
+                            Manage lead sources for tracking lead origins
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -145,7 +145,7 @@ export default function LeadSourcesIndex({
                                     ),
                                 },
                                 {
-                                    header: 'Drivers',
+                                    header: 'Leads',
                                     accessor: (row) => driversCounts[row.id] || 0,
                                 },
                             ]}

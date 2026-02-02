@@ -34,7 +34,6 @@ class User extends Authenticatable
         'mobile1',
         'mobile2',
         'company_id',
-        'riding_company_id',
         'team_leader_id',
         'account_manager_id',
         'is_super_admin',
@@ -74,7 +73,7 @@ class User extends Authenticatable
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'email', 'company_id', 'riding_company_id', 'is_super_admin', 'is_company_admin', 'is_active'])
+            ->logOnly(['name', 'email', 'company_id', 'is_super_admin', 'is_company_admin', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -82,11 +81,6 @@ class User extends Authenticatable
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
-    }
-
-    public function ridingCompany(): BelongsTo
-    {
-        return $this->belongsTo(RidingCompany::class);
     }
 
     public function teamLeader(): BelongsTo
@@ -107,6 +101,15 @@ class User extends Authenticatable
     public function accountManagedUsers(): HasMany
     {
         return $this->hasMany(User::class, 'account_manager_id');
+    }
+
+    /**
+     * Riding company (legacy). Column may have been removed by migration;
+     * relationship is kept for backward compatibility and resolves to null when column is absent.
+     */
+    public function ridingCompany(): BelongsTo
+    {
+        return $this->belongsTo(RidingCompany::class, 'riding_company_id');
     }
 
     public function isSuperAdmin(): bool
@@ -135,11 +138,6 @@ class User extends Authenticatable
         }
 
         if ($this->isCompanyAdmin()) {
-            // Company Admin has access to RidingCarCompanies module by default
-            if ($moduleName === 'ridingcarcompanies') {
-                return true;
-            }
-
             return $this->company?->hasModule($moduleName) ?? false;
         }
 

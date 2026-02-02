@@ -127,13 +127,13 @@ class CompanyController extends Controller
         // Set team context for Spatie Permission to load roles correctly
         setPermissionsTeamId($id);
 
-        // Load company users with roles and riding company
-        $users = $company->users()->with('roles', 'ridingCompany')->get();
-        
+        // Load company users with roles
+        $users = $company->users()->with('roles')->get();
+
         // Load deleted users
         $deletedUsers = \App\Models\User::onlyTrashed()
             ->where('company_id', $id)
-            ->with('roles', 'ridingCompany')
+            ->with('roles')
             ->orderBy('deleted_at', 'desc')
             ->get();
 
@@ -196,37 +196,40 @@ class CompanyController extends Controller
         // Load document names (document requirements) for this company
         $documentRequirements = [];
         if (\Illuminate\Support\Facades\Schema::hasTable('document_names')) {
-            $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
-            
-            if (!empty($ridingCompanyIds)) {
-                $documentNames = \Modules\Drivers\app\Models\DocumentName::query()
-                    ->where(function ($q) use ($ridingCompanyIds) {
-                        foreach ($ridingCompanyIds as $ridingCompanyId) {
-                            $q->orWhereJsonContains('riding_company_ids', $ridingCompanyId)
-                              ->orWhereJsonContains('riding_company_ids', (string) $ridingCompanyId);
-                        }
-                    })
-                    ->orderBy('name')
-                    ->get();
+            $documentNamesQuery = \Modules\Drivers\app\Models\DocumentName::query();
+            $hasRidingCompanyIdsColumn = \Illuminate\Support\Facades\Schema::hasColumn('document_names', 'riding_company_ids');
 
-                $documentRequirements = $documentNames->map(function ($docName) {
-                    $ridingCompanyIds = $docName->riding_company_ids ?? [];
-                    $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::whereIn('id', $ridingCompanyIds)
-                        ->get(['id', 'name'])
-                        ->map(fn($rc) => ['id' => $rc->id, 'name' => $rc->name])
-                        ->toArray();
-
-                    return [
-                        'id' => $docName->id,
-                        'name' => $docName->name,
-                        'type' => $docName->type,
-                        'required' => $docName->required,
-                        'active' => $docName->active,
-                        'status' => $docName->status,
-                        'riding_companies' => $ridingCompanies,
-                    ];
-                })->toArray();
+            if ($hasRidingCompanyIdsColumn && ! empty($ridingCompanies->all())) {
+                $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
+                $documentNamesQuery->where(function ($q) use ($ridingCompanyIds) {
+                    foreach ($ridingCompanyIds as $ridingCompanyId) {
+                        $q->orWhereJsonContains('riding_company_ids', $ridingCompanyId)
+                          ->orWhereJsonContains('riding_company_ids', (string) $ridingCompanyId);
+                    }
+                });
             }
+
+            $documentNames = $documentNamesQuery->orderBy('name')->get();
+
+            $documentRequirements = $documentNames->map(function ($docName) use ($hasRidingCompanyIdsColumn) {
+                $ridingCompanyIds = ($hasRidingCompanyIdsColumn ? ($docName->riding_company_ids ?? []) : []);
+                $ridingCompanies = ! empty($ridingCompanyIds)
+                    ? \Modules\RidingCarCompanies\app\Models\RidingCompany::whereIn('id', $ridingCompanyIds)
+                        ->get(['id', 'name'])
+                        ->map(fn ($rc) => ['id' => $rc->id, 'name' => $rc->name])
+                        ->toArray()
+                    : [];
+
+                return [
+                    'id' => $docName->id,
+                    'name' => $docName->name,
+                    'type' => $docName->type,
+                    'required' => $docName->required,
+                    'active' => $docName->active,
+                    'status' => $docName->status,
+                    'riding_companies' => $ridingCompanies,
+                ];
+            })->toArray();
         }
 
         // Get all available companies for transfer (exclude current company)

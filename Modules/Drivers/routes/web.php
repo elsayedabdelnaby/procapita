@@ -5,7 +5,6 @@ use Modules\Drivers\app\Http\Controllers\DriverController;
 use Modules\Drivers\app\Http\Controllers\DriverDocumentController;
 use Modules\Drivers\app\Http\Controllers\DriverFollowUpController;
 use Modules\Drivers\app\Http\Controllers\DriverListController;
-use Modules\Drivers\app\Http\Controllers\DriverStageController;
 use Modules\Drivers\app\Http\Controllers\LeadSourceController;
 use Modules\Drivers\app\Http\Controllers\LeadStageController;
 use Modules\Drivers\app\Http\Controllers\LeadStatusController;
@@ -193,42 +192,6 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
         Route::post('lead-stages/{leadStage}/move-up', [LeadStageController::class, 'moveUp'])->name('leadstages.move-up');
         Route::post('lead-stages/{leadStage}/move-down', [LeadStageController::class, 'moveDown'])->name('leadstages.move-down');
         Route::post('lead-stages/reorder', [LeadStageController::class, 'reorder'])->name('leadstages.reorder');
-    });
-
-    // Driver Stages Management
-    Route::middleware(['permission:drivers.driverstages.create'])->group(function () {
-        Route::get('driver-stages/create', [DriverStageController::class, 'create'])->name('driverstages.create');
-        Route::post('driver-stages', [DriverStageController::class, 'store'])->name('driverstages.store');
-    });
-
-    Route::middleware(['permission:drivers.driverstages.read'])->group(function () {
-        Route::get('driver-stages', [DriverStageController::class, 'index'])->name('driverstages.index');
-        Route::get('driver-stages/recycle-bin', [DriverStageController::class, 'recycleBin'])->name('driverstages.recycle-bin');
-    });
-
-    Route::middleware(['permission:drivers.driverstages.export'])->group(function () {
-        Route::get('driver-stages/export', [DriverStageController::class, 'export'])->name('driverstages.export');
-    });
-
-    Route::middleware(['permission:drivers.driverstages.read'])->group(function () {
-        Route::get('driver-stages/{driverStage}', [DriverStageController::class, 'show'])->name('driverstages.show');
-    });
-
-    Route::middleware(['permission:drivers.driverstages.update'])->group(function () {
-        Route::get('driver-stages/{driverStage}/edit', [DriverStageController::class, 'edit'])->name('driverstages.edit');
-        Route::put('driver-stages/{driverStage}', [DriverStageController::class, 'update'])->name('driverstages.update');
-    });
-
-    Route::middleware(['permission:drivers.driverstages.delete'])->group(function () {
-        Route::delete('driver-stages/{driverStage}', [DriverStageController::class, 'destroy'])->name('driverstages.destroy');
-    });
-
-    Route::middleware(['permission:drivers.driverstages.complete'])->group(function () {
-        Route::post('driver-stages/{driverStage}/complete', [DriverStageController::class, 'complete'])->name('driverstages.complete');
-    });
-
-    Route::middleware(['permission:drivers.driverstages.reject'])->group(function () {
-        Route::post('driver-stages/{driverStage}/reject', [DriverStageController::class, 'reject'])->name('driverstages.reject');
     });
 
     // Driver Documents Management

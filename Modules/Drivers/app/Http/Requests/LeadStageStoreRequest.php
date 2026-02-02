@@ -15,8 +15,6 @@ class LeadStageStoreRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('lead_stages', 'name')->whereNull('deleted_at')],
-            'riding_company_ids' => ['required', 'array', 'min:1'],
-            'riding_company_ids.*' => ['required', 'exists:riding_companies,id'],
             'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'color' => ['nullable', 'string', 'max:50'],
@@ -31,8 +29,6 @@ class LeadStageStoreRequest extends FormRequest
         return [
             'name.required' => 'Lead stage name is required.',
             'name.unique' => 'This lead stage name is already taken.',
-            'riding_company_ids.required' => 'At least one riding company is required.',
-            'riding_company_ids.min' => 'At least one riding company is required.',
         ];
     }
 }

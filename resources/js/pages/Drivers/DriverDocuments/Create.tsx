@@ -35,13 +35,13 @@ export default function DriverDocumentsCreate({
 
     return (
         <AppLayout>
-            <Head title="Create Driver Document" />
+            <Head title="Create Lead Document" />
 
             <div className="p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold">Create Driver Document</h1>
+                    <h1 className="text-2xl font-bold">Create Lead Document</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Add a new document requirement for a driver
+                        Add a new document requirement for a lead
                     </p>
                 </div>
 
@@ -215,7 +215,7 @@ export default function DriverDocumentsCreate({
                                     <p className="text-sm text-red-500">{errors.notes}</p>
                                 )}
                                 <p className="mt-1 text-xs text-neutral-500">
-                                    Additional notes or instructions that will be copied to driver documents.
+                                    Additional notes or instructions that will be copied to lead documents.
                                 </p>
                             </div>
                         </div>
@@ -228,7 +228,7 @@ export default function DriverDocumentsCreate({
                             </Button>
                         </Link>
                         <Button type="submit" disabled={processing}>
-                            {processing ? 'Creating...' : 'Create Driver Document'}
+                            {processing ? 'Creating...' : 'Create Lead Document'}
                         </Button>
                     </div>
                 </form>

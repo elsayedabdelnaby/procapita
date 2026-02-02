@@ -20,8 +20,6 @@ return Application::configure(basePath: dirname(__DIR__))
         // Exclude webhook routes from CSRF protection
         $middleware->validateCsrfTokens(except: [
             'whatsapp/webhook/*',
-            'ridingcarcompanies/facebook/callback',
-            'ridingcarcompanies/facebook/data-deletion-callback',
         ]);
 
         $middleware->web(append: [

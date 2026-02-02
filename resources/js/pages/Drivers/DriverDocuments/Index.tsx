@@ -58,7 +58,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
 
     const confirmDelete = () => {
         if (deleteDialog.document && deleteDialog.document.id) {
-            // Delete the document name (which will cascade delete all related driver documents)
+            // Delete the document name (which will cascade delete all related lead documents)
             router.delete(`/drivers/driver-documents/${deleteDialog.document.id}`, {
                 onSuccess: () => {
                     setDeleteDialog({ open: false, document: null });
@@ -125,14 +125,14 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
 
     return (
         <AppLayout>
-            <Head title="Driver Documents" />
+            <Head title="Lead Documents" />
 
             <div className="p-6">
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold">Driver Documents</h1>
+                        <h1 className="text-2xl font-bold">Lead Documents</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Manage driver documents and approvals
+                            Manage lead documents and approvals
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -155,7 +155,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                             Export
                         </Button>
                         <Link href="/drivers/driver-documents/create">
-                            <Button>Create Driver Document</Button>
+                            <Button>Create Lead Document</Button>
                         </Link>
                     </div>
                 </div>
@@ -169,7 +169,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-500" />
                                     <Input
                                         type="text"
-                                        placeholder="Search by Document Name, Riding Company..."
+                                        placeholder="Search by Document Name, Reseller..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         className="pl-10 w-full"
@@ -286,12 +286,12 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                         </>
                     ) : (
                         <div className="py-12 text-center">
-                            <p className="text-neutral-500">No driver documents found.</p>
+                            <p className="text-neutral-500">No lead documents found.</p>
                             <Link
                                 href="/drivers/driver-documents/create"
                                 className="mt-4 inline-block"
                             >
-                                <Button>Create First Driver Document</Button>
+                                <Button>Create First Lead Document</Button>
                             </Link>
                         </div>
                     )}
@@ -303,7 +303,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                     onConfirm={confirmDelete}
                     title="Delete Document"
                     description={
-                        `Are you sure you want to delete the document "${deleteDialog.document?.name}"? This will delete this document name and all associated driver documents for all riding companies. This action cannot be undone.`
+                        `Are you sure you want to delete the document "${deleteDialog.document?.name}"? This will delete this document name and all associated lead documents for all riding companies. This action cannot be undone.`
                     }
                 />
 
@@ -311,8 +311,8 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                     open={deleteAllDialog}
                     onOpenChange={(open) => setDeleteAllDialog(open)}
                     onConfirm={confirmDeleteAll}
-                    title="Delete All Driver Documents"
-                    description={`Are you sure you want to delete all ${driverDocuments.length} driver document(s)? This action cannot be undone and will also delete all associated files.`}
+                    title="Delete All Lead Documents"
+                    description={`Are you sure you want to delete all ${driverDocuments.length} lead document(s)? This action cannot be undone and will also delete all associated files.`}
                 />
             </div>
         </AppLayout>

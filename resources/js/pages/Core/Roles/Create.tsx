@@ -206,7 +206,7 @@ export default function RoleCreate({
         'current_stage': 'Current Stage',
         'email': 'Email',
         'lead_status_comment': 'Feedback Comment',
-        'has_worked_before': 'Has the driver worked before?',
+        'has_worked_before': 'Has the lead worked before?',
         'lead_source': 'Lead Source',
         'lead_stage': 'Lead Stage',
         'lead_status': 'Lead Status',
@@ -578,7 +578,7 @@ export default function RoleCreate({
                                                             toggleModule(moduleName);
                                                         }}
                                                     >
-                                                        {moduleName} Module
+                                                        {(moduleName === 'drivers' ? 'Leads' : moduleName.charAt(0).toUpperCase() + moduleName.slice(1))} Module
                                                     </Label>
                                                     <span className="text-xs text-neutral-500">
                                                         ({modulePermissions.length} permissions)
@@ -673,7 +673,7 @@ export default function RoleCreate({
                                                                                     );
                                                                                 }}
                                                                             >
-                                                                                {entityName}
+                                                                                {moduleName === 'drivers' && entityName === 'drivers' ? 'Leads' : (moduleName === 'drivers' && entityName === 'driverfields' ? 'Lead Fields' : entityName)}
                                                                             </Label>
                                                                             <span className="text-xs text-neutral-500">
                                                                                 ({entityPermissionIds.length}{' '}
@@ -683,7 +683,7 @@ export default function RoleCreate({
 
                                                                         {isEntityExpanded && (
                                                                             <>
-                                                                                {/* Special handling for Drivers Fields */}
+                                                                                {/* Special handling for Lead Fields */}
                                                                                 {moduleName === 'drivers' && entityName === 'driverfields' ? (
                                                                                     <div className="p-4 space-y-4">
                                                                                         <div className="rounded-md bg-blue-50 p-3 dark:bg-blue-900/20 mb-4">

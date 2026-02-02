@@ -39,19 +39,19 @@ export default function CompaniesIndex({ companies }: CompaniesIndexProps) {
 
     return (
         <AppLayout>
-            <Head title="Companies" />
+            <Head title="Resellers" />
             <div className="p-6">
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold">Companies</h1>
+                        <h1 className="text-2xl font-bold">Resellers</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Manage all companies in the system
+                            Manage all resellers in the system
                         </p>
                     </div>
                     {/* Only show create button if user has create permission */}
                     {can('core', 'companies', 'create') && (
                     <Link href="/core/companies/create">
-                        <Button>Create Company</Button>
+                        <Button>Create Reseller</Button>
                     </Link>
                     )}
                 </div>

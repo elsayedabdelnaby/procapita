@@ -289,7 +289,7 @@ export default function ImportResults({ importResults }: ImportResultsProps) {
                                             accessor: (row) => row.data?.email || '-',
                                         },
                                         {
-                                            header: 'Driver ID',
+                                            header: 'Lead ID',
                                             accessor: (row) => row.driver_id || row.existing_id || '-',
                                         },
                                         ...(detailsDialog.type === 'skipped' ? [{

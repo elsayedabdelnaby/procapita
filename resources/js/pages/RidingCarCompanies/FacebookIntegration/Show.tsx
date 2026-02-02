@@ -937,9 +937,9 @@ export default function FacebookIntegrationShow({ ridingCompany, integration }: 
                                     </div>
                                 </div>
 
-                                {/* CRM Driver Fields Mapping */}
+                                {/* CRM Lead Fields Mapping */}
                                 <div>
-                                    <Label className="text-base font-medium mb-3 block">Map to CRM Driver Fields</Label>
+                                    <Label className="text-base font-medium mb-3 block">Map to CRM Lead Fields</Label>
                                     <div className="space-y-3">
                                         {!currentFormId ? (
                                             <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 text-center">

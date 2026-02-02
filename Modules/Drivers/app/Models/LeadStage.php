@@ -4,7 +4,6 @@ namespace Modules\Drivers\app\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
@@ -24,25 +23,16 @@ class LeadStage extends Model
         'active',
         'requires_all_documents_approved',
         'commission_value',
-        'riding_company_id',
-        'riding_company_ids',
     ];
 
     protected function casts(): array
     {
-        $casts = [
+        return [
             'order' => 'integer',
             'active' => 'boolean',
             'requires_all_documents_approved' => 'boolean',
             'commission_value' => 'decimal:2',
         ];
-        
-        // Only add riding_company_ids cast if column exists
-        if (\Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_ids')) {
-            $casts['riding_company_ids'] = 'array';
-        }
-        
-        return $casts;
     }
 
     protected static function boot(): void
@@ -116,28 +106,6 @@ class LeadStage extends Model
     public function drivers(): HasMany
     {
         return $this->hasMany(Driver::class, 'lead_stage_id');
-    }
-
-    public function ridingCompany(): BelongsTo
-    {
-        return $this->belongsTo(\Modules\RidingCarCompanies\app\Models\RidingCompany::class);
-    }
-
-    public function getRidingCompaniesAttribute()
-    {
-        $hasRidingCompanyIds = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_ids');
-        $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_id');
-        
-        if ($hasRidingCompanyIds && !empty($this->riding_company_ids)) {
-            return \Modules\RidingCarCompanies\app\Models\RidingCompany::whereIn('id', $this->riding_company_ids)->get();
-        }
-        
-        // Fallback to single riding_company_id if riding_company_ids is empty or doesn't exist
-        if ($hasRidingCompanyId && $this->riding_company_id) {
-            return collect([$this->ridingCompany])->filter();
-        }
-        
-        return collect();
     }
 
     public function scopeActive($query)

@@ -29,7 +29,7 @@ export default function AuthCardLayout({
                     <img 
                         src="/logos/procapita_logo.svg" 
                         alt="ProCapita Logo" 
-                        className="h-9 w-auto"
+                        className="h-[calc(2.25rem-2mm)] w-auto"
                     />
                 </Link>
 

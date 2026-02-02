@@ -193,17 +193,17 @@ export default function CompaniesRecycleBin({ companies = [] }: CompaniesRecycle
 
     return (
         <AppLayout>
-            <Head title="Deleted Companies - Recycle Bin" />
+            <Head title="Deleted Resellers - Recycle Bin" />
             <div className="p-6">
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold">Deleted Companies</h1>
+                        <h1 className="text-2xl font-bold">Deleted Resellers</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
                             Deleted records that can be restored
                         </p>
                     </div>
                     <Link href="/core/companies">
-                        <Button variant="outline">Back to Companies</Button>
+                        <Button variant="outline">Back to Resellers</Button>
                     </Link>
                 </div>
 
@@ -214,7 +214,7 @@ export default function CompaniesRecycleBin({ companies = [] }: CompaniesRecycle
                             {selectedCompanies.size > 0 && (
                                 <div className="mb-4 p-3 bg-muted rounded-md flex items-center justify-between">
                                     <span className="text-sm font-medium">
-                                        {selectedCompanies.size} company(ies) selected
+                                        {selectedCompanies.size} reseller(s) selected
                                     </span>
                                     <div className="flex gap-2">
                                         <Button
@@ -243,7 +243,7 @@ export default function CompaniesRecycleBin({ companies = [] }: CompaniesRecycle
                             <div className="mb-4">
                                 <input
                                     type="text"
-                                    placeholder="Search companies..."
+                                    placeholder="Search resellers..."
                                     value={searchTerm}
                                     onChange={(e) => {
                                         setSearchTerm(e.target.value);
@@ -299,7 +299,7 @@ export default function CompaniesRecycleBin({ companies = [] }: CompaniesRecycle
                                         {paginatedCompanies.length === 0 ? (
                                             <tr>
                                                 <td colSpan={6} className="px-4 py-8 text-center text-sm text-neutral-500">
-                                                    No companies found
+                                                    No resellers found
                                                 </td>
                                             </tr>
                                         ) : (
@@ -410,7 +410,7 @@ export default function CompaniesRecycleBin({ companies = [] }: CompaniesRecycle
                         </>
                     ) : (
                         <div className="py-12 text-center">
-                            <p className="text-neutral-500">No deleted companies found.</p>
+                            <p className="text-neutral-500">No deleted resellers found.</p>
                         </div>
                     )}
                 </Card>
@@ -419,7 +419,7 @@ export default function CompaniesRecycleBin({ companies = [] }: CompaniesRecycle
                     open={deleteDialog.open}
                     onOpenChange={(open) => setDeleteDialog({ open, company: null })}
                     onConfirm={confirmDelete}
-                    title="Permanently Delete Company"
+                    title="Permanently Delete Reseller"
                     description={`Are you sure you want to permanently delete "${deleteDialog.company?.name}"? This action cannot be undone.`}
                 />
 
@@ -427,8 +427,8 @@ export default function CompaniesRecycleBin({ companies = [] }: CompaniesRecycle
                     open={massDeleteDialog}
                     onOpenChange={setMassDeleteDialog}
                     onConfirm={confirmMassDelete}
-                    title="Permanently Delete Selected Companies"
-                    description={`Are you sure you want to permanently delete ${selectedCompanies.size} company(ies)? This action cannot be undone.`}
+                    title="Permanently Delete Selected Resellers"
+                    description={`Are you sure you want to permanently delete ${selectedCompanies.size} reseller(s)? This action cannot be undone.`}
                 />
             </div>
         </AppLayout>

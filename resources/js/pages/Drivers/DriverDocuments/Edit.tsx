@@ -54,13 +54,13 @@ export default function DriverDocumentsEdit({
 
     return (
         <AppLayout>
-            <Head title="Edit Driver Document" />
+            <Head title="Edit Lead Document" />
 
             <div className="p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold">Edit Driver Document</h1>
+                    <h1 className="text-2xl font-bold">Edit Lead Document</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Update driver document information
+                        Update lead document information
                     </p>
                 </div>
 

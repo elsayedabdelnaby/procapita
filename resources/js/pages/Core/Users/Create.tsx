@@ -320,7 +320,7 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                                 )}
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="riding_company_id">Riding Company</Label>
+                                    <Label htmlFor="riding_company_id">Reseller</Label>
                                     <select
                                         id="riding_company_id"
                                         name="riding_company_id"
@@ -334,7 +334,7 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                                                 ? 'Loading...'
                                                 : !data.company_id
                                                   ? 'Select company first'
-                                                  : 'Select a riding company (optional)'}
+                                                  : 'Select a reseller (optional)'}
                                         </option>
                                         {ridingCompanies.map((ridingCompany) => (
                                             <option key={ridingCompany.id} value={ridingCompany.id}>
@@ -366,7 +366,7 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                                             {loadingTeamLeaders
                                                 ? 'Loading...'
                                                 : !data.riding_company_id
-                                                  ? 'Select riding company first'
+                                                  ? 'Select reseller first'
                                                   : 'Select a team leader (optional)'}
                                         </option>
                                         {teamLeaders.map((teamLeader) => (
@@ -380,7 +380,7 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                                     )}
                                     {!loadingTeamLeaders && data.riding_company_id && teamLeaders.length === 0 && (
                                         <p className="text-xs text-neutral-500">
-                                            No team leaders available for this riding company
+                                            No team leaders available for this reseller
                                         </p>
                                     )}
                                 </div>
@@ -411,7 +411,7 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                                     )}
                                     {!loadingAccountManagers && accountManagers.length === 0 && (
                                         <p className="text-xs text-neutral-500">
-                                            No account managers available (users without riding company)
+                                            No account managers available (users without reseller)
                                         </p>
                                     )}
                                 </div>

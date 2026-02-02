@@ -1,0 +1,39 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('report_folders', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->foreignId('company_id')->nullable()->constrained('companies')->nullOnDelete();
+            $table->unsignedSmallInteger('sort_order')->default(0);
+            $table->timestamps();
+        });
+
+        DB::table('report_folders')->insert([
+            'name' => 'General',
+            'company_id' => null,
+            'sort_order' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('report_folders');
+    }
+};

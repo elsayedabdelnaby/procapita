@@ -12,7 +12,6 @@ class DocumentName extends Model
 
     protected $fillable = [
         'name',
-        'riding_company_ids',
         'type',
         'required',
         'notes',
@@ -21,7 +20,6 @@ class DocumentName extends Model
     ];
 
     protected $casts = [
-        'riding_company_ids' => 'array',
         'required' => 'boolean',
         'active' => 'boolean',
     ];
@@ -30,16 +28,6 @@ class DocumentName extends Model
     public function driverDocuments(): HasMany
     {
         return $this->hasMany(DriverDocument::class);
-    }
-
-    // Helper methods
-    public function getRidingCompaniesAttribute()
-    {
-        if (empty($this->riding_company_ids)) {
-            return collect();
-        }
-
-        return \Modules\RidingCarCompanies\app\Models\RidingCompany::whereIn('id', $this->riding_company_ids)->get();
     }
 
     protected static function boot(): void

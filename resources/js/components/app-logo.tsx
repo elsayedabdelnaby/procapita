@@ -87,16 +87,14 @@ export default function AppLogo() {
                 <img 
                     src={logoPath} 
                     alt={companyName || 'Company Logo'} 
-                    className="h-[52px] w-auto max-w-[234px] object-contain"
+                    className="h-[calc(52px-2mm)] w-full max-w-full object-contain"
                     onError={() => {
                         console.log('Logo failed to load:', logoPath);
                         setImageError(true);
                     }}
                 />
             ) : (
-                <>
-                <img src="/logos/procapita_logo.svg" alt="ProCapita Logo" className="h-[45px] w-auto" />
-                </>
+                <img src="/logos/procapita_logo.svg" alt="ProCapita Logo" className="h-[calc(45px-2mm)] w-full max-w-full object-contain" />
             )}
         </>
     );

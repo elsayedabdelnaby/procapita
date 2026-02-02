@@ -14,21 +14,14 @@ import {
     SidebarMenuSubItem,
     useSidebar,
 } from '@/components/ui/sidebar';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveUrl } from '@/lib/utils';
 import { type SharedData } from '@/types';
-import { Link, usePage, router } from '@inertiajs/react';
-import { ChevronRight, Car } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import { ChevronRight } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { type NavigationItem } from '@/types';
 import { usePermissions } from '@/hooks/use-permissions';
-
-interface RidingCompany {
-    id: number;
-    name: string;
-    logo_url?: string;
-}
 
 interface NavMainProps {
     navigation: NavigationItem[];
@@ -41,29 +34,6 @@ export function NavMain({ navigation }: NavMainProps) {
     const { hasEntityPermission } = usePermissions();
     const { state } = useSidebar();
     const isCollapsed = state === 'collapsed';
-    
-    // Riding company selector for admins
-    const ridingCompanies = ((page.props as any).ridingCompanies || []) as RidingCompany[];
-    const selectedRidingCompany = (page.props as any).selectedRidingCompany as RidingCompany | null;
-    const auth = page.props.auth;
-    const isSuperAdmin = auth?.user?.is_super_admin;
-    const isCompanyAdmin = auth?.user?.is_company_admin;
-    const userRidingCompanyId = (auth?.user as any)?.riding_company_id;
-    const userRidingCompany = (auth?.user as any)?.riding_company as RidingCompany | null;
-    
-    // Show riding company selector for admins who don't have a specific riding company assigned
-    const showRidingCompanySelector = (isSuperAdmin || isCompanyAdmin) && !userRidingCompanyId && ridingCompanies.length > 0;
-    
-    // Show view-only riding company display for users with assigned riding company
-    const showRidingCompanyViewOnly = !!userRidingCompanyId && !!userRidingCompany;
-
-    const handleRidingCompanySelect = (ridingCompanyId: string) => {
-        router.post('/ridingcarcompanies/riding-companies/select', {
-            riding_company_id: parseInt(ridingCompanyId),
-        }, {
-            preserveScroll: true,
-        });
-    };
 
     // Filter navigation items based on permissions
     const filteredNavigation = useMemo(() => {
@@ -208,58 +178,6 @@ export function NavMain({ navigation }: NavMainProps) {
                                                     <span>{item.title}</span>
                                                 </Link>
                                             </SidebarMenuButton>
-                                            {/* Show Riding Company Selector after "Riding Companies" item - for admins - in collapsed state */}
-                                            {item.title === 'Riding Companies' && showRidingCompanySelector && (
-                                                <div className="mt-1 px-2">
-                                                    <Select
-                                                        value={selectedRidingCompany ? selectedRidingCompany.id.toString() : '0'}
-                                                        onValueChange={handleRidingCompanySelect}
-                                                    >
-                                                        <SelectTrigger className={`w-full text-xs h-7 bg-muted/50 ${isCollapsed ? 'w-8 h-8 p-0 justify-center' : ''}`}>
-                                                            <Car className={`h-3 w-3 ${isCollapsed ? 'mr-0' : 'mr-1'}`} />
-                                                            {!isCollapsed && (
-                                                                <SelectValue>
-                                                                    {selectedRidingCompany ? selectedRidingCompany.name : 'All'}
-                                                                </SelectValue>
-                                                            )}
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="0">All Riding Companies</SelectItem>
-                                                            {ridingCompanies.map((rc) => (
-                                                                <SelectItem key={rc.id} value={rc.id.toString()}>
-                                                                    {rc.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            )}
-                                            {/* Show View-Only Riding Company for users with assigned riding company - in collapsed state */}
-                                            {item.title === 'Riding Companies' && showRidingCompanyViewOnly && (
-                                                <>
-                                                    <div className="mt-1 px-2">
-                                                        <div className={`flex items-center gap-2 w-full text-xs h-7 bg-muted/50 rounded-md px-2 border ${isCollapsed ? 'w-8 h-8 p-0 justify-center' : ''}`}>
-                                                            <Car className={`h-3 w-3 text-muted-foreground ${isCollapsed ? 'mr-0' : ''}`} />
-                                                            {!isCollapsed && (
-                                                                <span className="text-muted-foreground">{userRidingCompany?.name}</span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    {/* Show Riding Company Logo for users with assigned riding company - in collapsed state */}
-                                                    {!isCollapsed && userRidingCompany?.logo_url && (
-                                                        <div className="flex items-center gap-2 mt-1 px-2">
-                                                            <img
-                                                                src={userRidingCompany.logo_url}
-                                                                alt={userRidingCompany.name || 'Logo'}
-                                                                className="h-10 w-40 object-contain"
-                                                                onError={(e) => {
-                                                                    e.currentTarget.style.display = 'none';
-                                                                }}
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </>
-                                            )}
                                         </SidebarMenuItem>
                                     ))}
                                 </SidebarMenu>
@@ -310,79 +228,6 @@ export function NavMain({ navigation }: NavMainProps) {
                                                                 <span>{item.title}</span>
                                                             </Link>
                                                         </SidebarMenuSubButton>
-                                                        {/* Show Riding Company Logo - inside group/menu-sub-item relative */}
-                                                        {item.title === 'Riding Companies' && (selectedRidingCompany || userRidingCompany) && (
-                                                            <div className="group/menu-sub-item relative mt-2 px-2">
-                                                                {(() => {
-                                                                    const logoUrl = selectedRidingCompany?.logo_url || userRidingCompany?.logo_url;
-                                                                    const companyName = selectedRidingCompany?.name || userRidingCompany?.name;
-                                                                    
-                                                                    if (logoUrl) {
-                                                                        return (
-                                                                            <div className="flex items-center justify-center">
-                                                                                <img
-                                                                                    src={logoUrl}
-                                                                                    alt={companyName || 'Logo'}
-                                                                                    className="h-10 w-40 object-contain"
-                                                                                    onError={(e) => {
-                                                                                        e.currentTarget.style.display = 'none';
-                                                                                    }}
-                                                                                />
-                                                                            </div>
-                                                                        );
-                                                                    }
-                                                                    return null;
-                                                                })()}
-                                                            </div>
-                                                        )}
-                                                        {/* Show Riding Company Selector after "Riding Companies" item - for admins */}
-                                                        {item.title === 'Riding Companies' && showRidingCompanySelector && (
-                                                            <div className="mt-1 px-2">
-                                                                <Select
-                                                                    value={selectedRidingCompany ? selectedRidingCompany.id.toString() : '0'}
-                                                                    onValueChange={handleRidingCompanySelect}
-                                                                >
-                                                                    <SelectTrigger className="w-full text-xs h-7 bg-muted/50">
-                                                                        <Car className="mr-1 h-3 w-3" />
-                                                                        <SelectValue>
-                                                                            {selectedRidingCompany ? selectedRidingCompany.name : 'All'}
-                                                                        </SelectValue>
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        <SelectItem value="0">All Riding Companies</SelectItem>
-                                                                        {ridingCompanies.map((rc) => (
-                                                                            <SelectItem key={rc.id} value={rc.id.toString()}>
-                                                                                {rc.name}
-                                                                            </SelectItem>
-                                                                        ))}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            </div>
-                                                        )}
-                                                        {/* Show View-Only Riding Company for users with assigned riding company */}
-                                                        {item.title === 'Riding Companies' && showRidingCompanyViewOnly && (
-                                                            <>
-                                                                <div className="mt-1 px-2">
-                                                                    <div className="flex items-center gap-2 w-full text-xs h-7 bg-muted/50 rounded-md px-2 border">
-                                                                        <Car className="h-3 w-3 text-muted-foreground" />
-                                                                        <span className="text-muted-foreground">{userRidingCompany?.name}</span>
-                                                                    </div>
-                                                                </div>
-                                                                {/* Show Riding Company Logo for users with assigned riding company */}
-                                                                {userRidingCompany?.logo_url && (
-                                                                    <div className="flex items-center gap-2 mt-1 px-2">
-                                                                        <img
-                                                                            src={userRidingCompany.logo_url}
-                                                                            alt={userRidingCompany.name || 'Logo'}
-                                                                            className="h-10 w-40 object-contain"
-                                                                            onError={(e) => {
-                                                                                e.currentTarget.style.display = 'none';
-                                                                            }}
-                                                                        />
-                                                                    </div>
-                                                                )}
-                                                            </>
-                                                        )}
                                                     </SidebarMenuSubItem>
                                                 ))}
                                             </SidebarMenuSub>

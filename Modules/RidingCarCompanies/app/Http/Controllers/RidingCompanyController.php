@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -263,12 +264,13 @@ class RidingCompanyController extends Controller
         $ridingCompany->load(['company', 'creator', 'defaultDriverUser', 'stageTemplates', 'documentRequirements', 'integrations', 'integrationSettings']);
 
         // Load users for this riding company (for Users tab)
-        // Show only users that belong to this specific riding company
-        $users = \App\Models\User::query()
-            ->where('riding_company_id', $ridingCompany->id);
+        $usersQuery = \App\Models\User::query()->where('company_id', $ridingCompany->company_id);
+        if (Schema::hasColumn('users', 'riding_company_id')) {
+            $usersQuery->where('riding_company_id', $ridingCompany->id);
+        }
 
-        $users = $users
-            ->with('roles', 'company', 'ridingCompany')
+        $users = $usersQuery
+            ->with('roles', 'company')
             ->get()
             ->map(function ($user) {
                 return [
@@ -285,11 +287,8 @@ class RidingCompanyController extends Controller
                         'id' => $user->company->id,
                         'name' => $user->company->name,
                     ] : null,
-                    'riding_company_id' => $user->riding_company_id,
-                    'ridingCompany' => $user->ridingCompany ? [
-                        'id' => $user->ridingCompany->id,
-                        'name' => $user->ridingCompany->name,
-                    ] : null,
+                    'riding_company_id' => Schema::hasColumn('users', 'riding_company_id') ? $user->riding_company_id : null,
+                    'ridingCompany' => null,
                     'roles' => $user->roles->map(fn ($role) => [
                         'id' => $role->id,
                         'name' => $role->name,
@@ -297,21 +296,19 @@ class RidingCompanyController extends Controller
                 ];
             });
 
-        // Load users from the same company for availableUsers (for distribution scenarios)
-        // Show all users in the same company, but exclude users from other riding companies
-        // Include: users with no riding_company_id (company-level users), users from this riding company, and fresh-Leads for this riding company
         $availableUsers = collect();
         if ($ridingCompany->company_id) {
-            $availableUsers = \App\Models\User::query()
+            $availableUsersQuery = \App\Models\User::query()
                 ->where('company_id', $ridingCompany->company_id)
-                ->where('is_active', true)
-                ->where(function ($query) use ($ridingCompany) {
-                    // Include users with no riding_company_id (company-level users)
+                ->where('is_active', true);
+            if (Schema::hasColumn('users', 'riding_company_id')) {
+                $availableUsersQuery->where(function ($query) use ($ridingCompany) {
                     $query->whereNull('riding_company_id')
-                        // Include users from this specific riding company
                         ->orWhere('riding_company_id', $ridingCompany->id);
-                })
-                ->with('roles', 'company', 'ridingCompany')
+                });
+            }
+            $availableUsers = $availableUsersQuery
+                ->with('roles', 'company')
                 ->orderBy('name')
                 ->get()
                 ->map(function ($user) {
@@ -355,8 +352,12 @@ class RidingCompanyController extends Controller
             $availableRidingCompanies = collect();
         }
 
-        // Get users count for this riding company
-        $usersCount = \App\Models\User::where('riding_company_id', $ridingCompany->id)->count();
+        $usersCount = 0;
+        if (Schema::hasColumn('users', 'riding_company_id')) {
+            $usersCount = \App\Models\User::where('riding_company_id', $ridingCompany->id)->count();
+        } else {
+            $usersCount = \App\Models\User::where('company_id', $ridingCompany->company_id)->count();
+        }
 
         return Inertia::render('RidingCarCompanies/RidingCompanies/Show', [
             'ridingCompany' => [
@@ -674,13 +675,14 @@ class RidingCompanyController extends Controller
             return [];
         }
 
-        $documentNames = \Modules\Drivers\app\Models\DocumentName::query()
-            ->where(function ($q) use ($ridingCompanyId) {
+        $query = \Modules\Drivers\app\Models\DocumentName::query();
+        if (\Illuminate\Support\Facades\Schema::hasColumn('document_names', 'riding_company_ids')) {
+            $query->where(function ($q) use ($ridingCompanyId) {
                 $q->whereJsonContains('riding_company_ids', $ridingCompanyId)
                   ->orWhereJsonContains('riding_company_ids', (string) $ridingCompanyId);
-            })
-            ->orderBy('name')
-            ->get();
+            });
+        }
+        $documentNames = $query->orderBy('name')->get();
 
         return $documentNames->map(function ($docName) {
             return [

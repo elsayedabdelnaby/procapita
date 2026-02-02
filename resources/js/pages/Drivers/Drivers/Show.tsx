@@ -99,7 +99,6 @@ const getFieldLabel = (fieldName: string): string => {
         'phone': 'Phone',
         'whatsapp_phone': 'WhatsApp Phone',
         'email': 'Email',
-        'riding_company_id': 'Riding Company',
         'campaign_id': 'Campaign',
         'lead_source_id': 'Lead Source',
         'assigned_to': 'Assigned To',
@@ -109,7 +108,6 @@ const getFieldLabel = (fieldName: string): string => {
         'next_follow_up': 'Next Follow-up',
         'last_follow_up': 'Last Follow-up',
         'lead_stage_id': 'Lead Stage',
-        'current_stage_id': 'Current Stage',
         'notes': 'Notes',
     };
     return fieldLabels[fieldName] || fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -146,10 +144,6 @@ interface Driver {
         name: string;
         color?: string;
     };
-    current_stage?: {
-        id: number;
-        name: string;
-    };
     notes?: string;
     cancel_reason?: string;
     city?: string;
@@ -157,29 +151,6 @@ interface Driver {
     feedback_count?: number;
     duplicate?: number;
     confirm_duplicate?: boolean;
-    stages_progress?: {
-        total: number;
-        completed: number;
-        pending: number;
-        in_progress: number;
-        rejected: number;
-        percentage: number;
-    };
-    stages_status?: Array<{
-        stage_name: string;
-        status: string;
-        is_completed: boolean;
-        is_pending: boolean;
-        is_in_progress: boolean;
-        is_rejected: boolean;
-    }>;
-    next_stage?: {
-        id: number;
-        name: string;
-        order: number;
-    };
-    has_completed_all_stages?: boolean;
-    stages?: Stage[];
     documents?: Document[];
     created_at: string;
     updated_at: string;
@@ -328,10 +299,6 @@ export default function DriversShow({
 
     const canViewDocuments = () => {
         return hasPermission('drivers.drivers.view-documents') || hasPermission('drivers.driverdocuments.read');
-    };
-
-    const canViewStages = () => {
-        return hasPermission('drivers.drivers.view-stages') || hasPermission('drivers.driverstages.read');
     };
 
     const canEdit = () => {
@@ -493,10 +460,10 @@ export default function DriversShow({
     if (!driver) {
         return (
             <AppLayout>
-                <Head title="Driver Not Found" />
+                <Head title="Lead Not Found" />
                 <div className="p-6">
                     <div className="text-center py-12">
-                        <p className="text-neutral-500">Driver not found.</p>
+                        <p className="text-neutral-500">Lead not found.</p>
                         <Link href="/drivers/drivers" className="mt-4 inline-block">
                             <Button variant="outline">Back to List</Button>
                         </Link>
@@ -718,14 +685,6 @@ export default function DriversShow({
                             <Card className="p-6">
                                 <h2 className="mb-4 text-lg font-semibold">CRM Information</h2>
                                 <div className="space-y-4">
-                                    {canViewDriverField('riding_company') && showRidingCompanyField && (
-                                        <div>
-                                            <p className="text-sm text-neutral-500">Riding Company</p>
-                                            <p className="font-medium">
-                                                {driver.riding_company?.name || <span className="text-neutral-400 italic">Not Set</span>}
-                                            </p>
-                                        </div>
-                                    )}
                                     {canViewDriverField('campaign') && driver.campaign && (
                                         <div>
                                             <p className="text-sm text-neutral-500">Campaign</p>
@@ -737,6 +696,14 @@ export default function DriversShow({
                                             <p className="text-sm text-neutral-500">Lead Source</p>
                                             <p className="font-medium">
                                                 {driver.lead_source?.name || <span className="text-neutral-400 italic">Not Set</span>}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {(canViewDriverField('riding_company') || canViewDriverField('riding_company_id')) && (
+                                        <div>
+                                            <p className="text-sm text-neutral-500">Reseller</p>
+                                            <p className="font-medium">
+                                                {driver.riding_company?.name || <span className="text-neutral-400 italic">Not Set</span>}
                                             </p>
                                         </div>
                                     )}
@@ -817,14 +784,8 @@ export default function DriversShow({
                                     )}
                                     {canViewDriverField('driver_num') && (
                                         <div>
-                                            <p className="text-sm text-neutral-500">Driver Num</p>
+                                            <p className="text-sm text-neutral-500">Lead Num</p>
                                             <p className="font-medium">{driver.driver_num || driver.id}</p>
-                                        </div>
-                                    )}
-                                    {canViewDriverField('current_stage') && driver.current_stage && (
-                                        <div>
-                                            <p className="text-sm text-neutral-500">Current Stage</p>
-                                            <p className="font-medium">{driver.current_stage.name}</p>
                                         </div>
                                     )}
                                 </div>
@@ -901,100 +862,6 @@ export default function DriversShow({
                                 )}
                             </div>
                         )}
-
-                        {/* Stages Progress */}
-                        {canViewStages() && driver.stages_progress && (
-                            <Card className="p-6">
-                                <div className="mb-4 flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold">Stages Progress</h2>
-                                    {driver.has_completed_all_stages && (
-                                        <Badge variant="default" className="gap-2">
-                                            <CheckCircle2 className="h-4 w-4" />
-                                            All Stages Completed
-                                        </Badge>
-                                    )}
-                                </div>
-                                <div className="space-y-4">
-                                    <div>
-                                        <div className="mb-2 flex items-center justify-between text-sm">
-                                            <span>Progress</span>
-                                            <span className="font-medium">
-                                                {driver.stages_progress.completed} / {driver.stages_progress.total} (
-                                                {driver.stages_progress.percentage}%)
-                                            </span>
-                                        </div>
-                                        <Progress value={driver.stages_progress.percentage} />
-                                    </div>
-                                    <div className="grid grid-cols-4 gap-4 text-center">
-                                        <div>
-                                            <p className="text-2xl font-bold text-green-600">
-                                                {driver.stages_progress.completed}
-                                            </p>
-                                            <p className="text-xs text-neutral-500">Completed</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-2xl font-bold text-yellow-600">
-                                                {driver.stages_progress.in_progress}
-                                            </p>
-                                            <p className="text-xs text-neutral-500">In Progress</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-2xl font-bold text-gray-600">
-                                                {driver.stages_progress.pending}
-                                            </p>
-                                            <p className="text-xs text-neutral-500">Pending</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-2xl font-bold text-red-600">
-                                                {driver.stages_progress.rejected}
-                                            </p>
-                                            <p className="text-xs text-neutral-500">Rejected</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </Card>
-                        )}
-
-                        {/* Stages Status */}
-                        {canViewStages() && driver.stages_status && driver.stages_status.length > 0 && (
-                            <Card className="p-6">
-                                <h2 className="mb-4 text-lg font-semibold">Stages Status</h2>
-                                <div className="space-y-3">
-                                    {driver.stages_status.map((stage, index) => (
-                                        <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <span className="font-medium">{stage.stage_name}</span>
-                                                {stage.is_completed && (
-                                                    <Badge variant="default" className="gap-1">
-                                                        <CheckCircle2 className="h-3 w-3" />
-                                                        Completed
-                                                    </Badge>
-                                                )}
-                                                {stage.is_in_progress && (
-                                                    <Badge variant="outline" className="gap-1">
-                                                        <Clock className="h-3 w-3" />
-                                                        In Progress
-                                                    </Badge>
-                                                )}
-                                                {stage.is_pending && (
-                                                    <Badge variant="secondary" className="gap-1">
-                                                        <Clock className="h-3 w-3" />
-                                                        Pending
-                                                    </Badge>
-                                                )}
-                                                {stage.is_rejected && (
-                                                    <Badge variant="destructive" className="gap-1">
-                                                        <XCircle className="h-3 w-3" />
-                                                        Rejected
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </Card>
-                        )}
-
                         {/* Documents */}
                         {canViewDocuments() && (
                             <Card className="p-6">
@@ -1271,7 +1138,6 @@ export default function DriversShow({
                                         <tr>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Feedback Comment</th>
@@ -1300,9 +1166,6 @@ export default function DriversShow({
                                                     {followUp.user_name || 'N/A'}
                                                 </td>
                                                 <td className="px-4 py-3 text-sm">
-                                                    {followUp.riding_company || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
                                                     {followUp.lead_stage || 'N/A'}
                                                 </td>
                                                 <td className="px-4 py-3 text-sm">
@@ -1329,7 +1192,7 @@ export default function DriversShow({
                             </div>
                         ) : (
                             <div className="py-8 text-center text-neutral-500">
-                                No follow-ups found for this driver.
+                                No follow-ups found for this lead.
                             </div>
                         )}
                     </Card>
@@ -1339,9 +1202,9 @@ export default function DriversShow({
                     <Card className="p-6">
                         <div className="mb-4 flex items-center justify-between">
                             <div>
-                                <h2 className="text-lg font-semibold">Duplicate Drivers ({driver.duplicate})</h2>
+                                <h2 className="text-lg font-semibold">Duplicate Leads ({driver.duplicate})</h2>
                                 <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                                    Drivers with the same phone number or WhatsApp number as this driver.
+                                    Leads with the same phone number or WhatsApp number as this lead.
                                 </p>
                             </div>
                             {selectedDuplicates.size > 0 && (
@@ -1377,7 +1240,6 @@ export default function DriversShow({
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">WhatsApp</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Email</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Campaign</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Source</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
@@ -1425,7 +1287,6 @@ export default function DriversShow({
                                                 <td className="px-4 py-3 text-sm">{dup.phone || '-'}</td>
                                                 <td className="px-4 py-3 text-sm">{dup.whatsapp_phone || '-'}</td>
                                                 <td className="px-4 py-3 text-sm">{dup.email || '-'}</td>
-                                                <td className="px-4 py-3 text-sm">{dup.riding_company?.name || '-'}</td>
                                                 <td className="px-4 py-3 text-sm">{dup.campaign?.name || '-'}</td>
                                                 <td className="px-4 py-3 text-sm">{dup.lead_source?.name || '-'}</td>
                                                 <td className="px-4 py-3 text-sm">
@@ -1452,7 +1313,7 @@ export default function DriversShow({
                                 </table>
                             </div>
                         ) : (
-                            <p className="text-neutral-500 dark:text-neutral-400">No duplicate drivers found.</p>
+                            <p className="text-neutral-500 dark:text-neutral-400">No duplicate leads found.</p>
                         )}
                     </Card>
                 )}
@@ -1461,7 +1322,7 @@ export default function DriversShow({
                 <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
                     <DialogContent className="!max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
                         <DialogHeader>
-                            <DialogTitle>Merge Records In &gt; Drivers</DialogTitle>
+                            <DialogTitle>Merge Records In &gt; Leads</DialogTitle>
                             <DialogDescription>
                                 The primary record will be retained after the merge. You can select the column to retain the values. The other record(s) will be deleted but the related information will be merged.
                             </DialogDescription>
@@ -1564,25 +1425,6 @@ export default function DriversShow({
                                                                 className="w-4 h-4"
                                                             />
                                                             <span>{driver.email || '-'}</span>
-                                                        </div>
-                                                    </td>
-                                                ))}
-                                            </tr>
-                                            
-                                            {/* Riding Company */}
-                                            <tr className="border-b hover:bg-muted/50">
-                                                <td className="px-4 py-3 text-sm font-medium">Riding Company</td>
-                                                {mergeDrivers.map((driver) => (
-                                                    <td key={driver.id} className="px-4 py-3 text-sm">
-                                                        <div className="flex items-center gap-2">
-                                                            <input
-                                                                type="radio"
-                                                                name="riding_company_id"
-                                                                value={driver.id}
-                                                                defaultChecked={mergeDrivers[0].id === driver.id}
-                                                                className="w-4 h-4"
-                                                            />
-                                                            <span>{driver.riding_company?.name || '-'}</span>
                                                         </div>
                                                     </td>
                                                 ))}
@@ -1808,7 +1650,7 @@ export default function DriversShow({
                                             
                                             const fieldMappings: { [key: string]: string } = {};
                                             const fieldNames = [
-                                                'full_name', 'phone', 'whatsapp_phone', 'email', 'riding_company_id', 
+                                                'full_name', 'phone', 'whatsapp_phone', 'email', 
                                                 'campaign_id', 'lead_source_id', 'lead_status_id', 'lead_stage_id',
                                                 'assigned_to', 'lead_status_comment', 
                                                 'next_follow_up', 'last_follow_up', 'notes', 'created_at'
@@ -1820,9 +1662,7 @@ export default function DriversShow({
                                                     const selectedDriverId = parseInt(selectedInput.value);
                                                     const selectedDriver = mergeDrivers.find(d => d.id === selectedDriverId);
                                                     if (selectedDriver) {
-                                                        if (fieldName === 'riding_company_id') {
-                                                            fieldMappings[fieldName] = selectedDriver.riding_company?.id?.toString() || '';
-                                                        } else if (fieldName === 'campaign_id') {
+                                                        if (fieldName === 'campaign_id') {
                                                             fieldMappings[fieldName] = selectedDriver.campaign?.id?.toString() || '';
                                                         } else if (fieldName === 'lead_source_id') {
                                                             fieldMappings[fieldName] = selectedDriver.lead_source?.id?.toString() || '';
@@ -1857,12 +1697,12 @@ export default function DriversShow({
                                                     },
                                                     onError: (errors) => {
                                                         console.error('Merge error:', errors);
-                                                        alert('Failed to merge drivers. Please try again.');
+                                                        alert('Failed to merge leads. Please try again.');
                                                     },
                                                 });
                                             } catch (error) {
                                                 console.error('Merge error:', error);
-                                                alert('Failed to merge drivers. Please try again.');
+                                                alert('Failed to merge leads. Please try again.');
                                             }
                                         }}
                                     >

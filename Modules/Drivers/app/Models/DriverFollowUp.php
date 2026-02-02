@@ -21,7 +21,6 @@ class DriverFollowUp extends Model
         'team_leader',
         'account_manager',
         'created_time',
-        'riding_company',
         'lead_stage',
         'lead_status',
         'lead_status_comment',
@@ -45,7 +44,7 @@ class DriverFollowUp extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['assigned_to', 'user_name', 'sales_sign_2', 'team_leader', 'account_manager', 'riding_company', 'lead_stage', 'lead_status', 'lead_status_comment', 'driver_stage', 'notes', 'driver_num'])
+            ->logOnly(['assigned_to', 'user_name', 'sales_sign_2', 'team_leader', 'account_manager', 'lead_stage', 'lead_status', 'lead_status_comment', 'driver_stage', 'notes', 'driver_num'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

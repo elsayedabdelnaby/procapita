@@ -46,7 +46,6 @@ export function AppSidebar() {
     const page = usePage<SharedData>();
     const { navigation, selectedCompany, companies, auth } = page.props;
     const isSuperAdmin = auth?.user?.is_super_admin;
-    const userRidingCompany = (auth?.user as any)?.riding_company;
 
     // Use selectedCompany or fallback to first company or user's company
     const currentCompany = selectedCompany || 
@@ -72,16 +71,11 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href={dashboard()} prefetch>
-                                <AppLogo />
-                            </Link>
-                        </SidebarMenuButton>
-                        {userRidingCompany && (
-                            <div className="px-2 text-xs text-muted-foreground text-center">
-                                {userRidingCompany.name}
-                            </div>
-                        )}
-                    </SidebarMenuItem>
+                                <Link href={dashboard()} prefetch>
+                                    <AppLogo />
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
                 </SidebarMenu>
                 {isSuperAdmin && companies && companies.length > 0 && currentCompany && (
                     <div className="px-2 py-2">

@@ -118,7 +118,6 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'phone', label: 'Phone', defaultVisible: true, defaultOrder: 2 },
     { id: 'whatsapp', label: 'WhatsApp', defaultVisible: true, defaultOrder: 3 },
     { id: 'email', label: 'Email', defaultVisible: true, defaultOrder: 4 },
-    { id: 'riding_company', label: 'ReSeller', defaultVisible: true, defaultOrder: 5 },
     { id: 'campaign', label: 'Campaign', defaultVisible: true, defaultOrder: 6 },
     { id: 'lead_source', label: 'Lead Source', defaultVisible: true, defaultOrder: 7 },
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 8 },
@@ -127,7 +126,6 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'last_follow_up', label: 'Last Follow-up', defaultVisible: false, defaultOrder: 8.7 },
     { id: 'assigned_time', label: 'Assigned Time', defaultVisible: false, defaultOrder: 8.8 },
     { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 9 },
-    { id: 'current_stage', label: 'Current Stage', defaultVisible: false, defaultOrder: 9.5 },
     { id: 'assigned_users', label: 'Assigned Users', defaultVisible: true, defaultOrder: 10 },
     { id: 'last_assigned_time', label: 'Last Assigned Time', defaultVisible: false, defaultOrder: 10.5 },
     { id: 'last_assigned_by', label: 'Last Assigned By', defaultVisible: false, defaultOrder: 10.6 },
@@ -422,7 +420,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
         phone: '',
         whatsapp_phone: '',
         email: '',
-        riding_company_id: null,
         campaign_id: null,
         lead_source_id: null,
         lead_status_id: null,
@@ -470,7 +467,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
         { value: 'whatsapp_phone', label: 'WhatsApp Phone' },
         { value: 'email', label: 'Email' },
         { value: 'company_id', label: 'Company' },
-        { value: 'riding_company_id', label: 'ReSeller' },
         { value: 'campaign_id', label: 'Campaign' },
         { value: 'lead_source_id', label: 'Lead Source' },
         { value: 'lead_status_id', label: 'Lead Status' },
@@ -520,7 +516,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
     };
 
     const handleForceDelete = (driver: Driver) => {
-        if (confirm(`Are you sure you want to permanently delete driver "${driver.full_name}"? This action cannot be undone.`)) {
+        if (confirm(`Are you sure you want to permanently delete lead "${driver.full_name}"? This action cannot be undone.`)) {
             router.delete(`/recyclebin/drivers/${driver.id}`, {
                 preserveScroll: true,
                 onSuccess: () => {
@@ -644,16 +640,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                         return false;
                     }
                 } else if (!driver.email || !driver.email.toLowerCase().includes(String(filters.email).toLowerCase())) {
-                    return false;
-                }
-            }
-            // Riding Company filter (dropdown)
-            if (filters.riding_company_id) {
-                if (filters.riding_company_id === 'is_empty') {
-                    if (driver.riding_company?.id) {
-                        return false;
-                    }
-                } else if (driver.riding_company?.id !== filters.riding_company_id) {
                     return false;
                 }
             }
@@ -1096,10 +1082,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                         aValue = a.email || '';
                         bValue = b.email || '';
                         break;
-                    case 'riding_company':
-                        aValue = a.riding_company?.id || 0;
-                        bValue = b.riding_company?.id || 0;
-                        break;
                     case 'campaign':
                         aValue = a.campaign?.name || '';
                         bValue = b.campaign?.name || '';
@@ -1131,10 +1113,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                     case 'lead_stage':
                         aValue = a.lead_stage?.name || '';
                         bValue = b.lead_stage?.name || '';
-                        break;
-                    case 'current_stage':
-                        aValue = (a as any).current_stage?.name || '';
-                        bValue = (b as any).current_stage?.name || '';
                         break;
                     case 'assigned_to':
                         aValue = a.assigned_to?.name || '';
@@ -1293,7 +1271,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
             phone: '',
             whatsapp_phone: '',
             email: '',
-            riding_company_id: null,
             campaign_id: null,
             lead_source_id: null,
             lead_status_id: null,
@@ -1407,28 +1384,13 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
             phone: driver.phone || '',
             whatsapp_phone: driver.whatsapp_phone || '',
             email: driver.email || '',
-            riding_company_id: driver.riding_company?.id || null,
             campaign_id: driver.campaign?.id || null,
             lead_source_id: driver.lead_source?.id || null,
             lead_status_id: driver.lead_status?.id || null,
             lead_stage_id: driver.lead_stage?.id || null,
             assigned_to: driver.assigned_to?.id || null,
         });
-
-        // Load lead stages for the selected riding company
-        if (driver.riding_company?.id) {
-            axios
-                .get(`/api/drivers/riding-companies/${driver.riding_company.id}/lead-stages`)
-                .then((response) => {
-                    setEditingLeadStages(response.data);
-                })
-                .catch((error) => {
-                    console.error('Error fetching lead stages:', error);
-                    setEditingLeadStages([]);
-                });
-        } else {
-            setEditingLeadStages([]);
-        }
+        setEditingLeadStages([]);
     };
 
     const handleQuickSave = (driverId: number) => {
@@ -1443,7 +1405,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
         // Find the driver to get company_id
         const driver = safeDrivers.find((d) => d.id === driverId);
         if (!driver) {
-            alert('Driver not found.');
+            alert('Lead not found.');
             return;
         }
 
@@ -1464,9 +1426,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
         }
         if (savedData.email) {
             submitData.email = savedData.email;
-        }
-        if (savedData.riding_company_id) {
-            submitData.riding_company_id = savedData.riding_company_id;
         }
         if (savedData.campaign_id) {
             submitData.campaign_id = savedData.campaign_id;
@@ -1495,10 +1454,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
             if (savedData.phone) updatedDriver.phone = savedData.phone;
             if (savedData.whatsapp_phone !== undefined) updatedDriver.whatsapp_phone = savedData.whatsapp_phone || null;
             if (savedData.email !== undefined) updatedDriver.email = savedData.email || null;
-            if (savedData.riding_company_id !== undefined) {
-                const ridingCompany = filterOptions?.ridingCompanies?.find(rc => rc.value === savedData.riding_company_id);
-                updatedDriver.riding_company = ridingCompany ? { id: ridingCompany.value, name: ridingCompany.label } : null;
-            }
             if (savedData.campaign_id !== undefined) {
                 const campaign = filterOptions?.campaigns?.find(c => c.value === savedData.campaign_id);
                 updatedDriver.campaign = campaign ? { id: campaign.value, name: campaign.label } : null;
@@ -1540,7 +1495,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                     setEditingData(savedData);
                     
                     // Extract error messages
-                    let errorMessage = 'Error saving driver. Please try again.';
+                    let errorMessage = 'Error saving lead. Please try again.';
                     if (errors && typeof errors === 'object') {
                         const errorArray = Object.values(errors).flat();
                         if (errorArray.length > 0) {
@@ -1564,23 +1519,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
     const updateEditingData = (field: string, value: string | number | null) => {
         setEditingData((prev) => (prev ? { ...prev, [field]: value } : null));
 
-        // If riding_company_id changes, load lead stages
-        if (field === 'riding_company_id' && value) {
-            axios
-                .get(`/api/drivers/riding-companies/${value}/lead-stages`)
-                .then((response) => {
-                    setEditingLeadStages(response.data);
-                    // Reset lead_stage_id when riding company changes
-                    setEditingData((prev) => (prev ? { ...prev, lead_stage_id: null } : null));
-                })
-                .catch((error) => {
-                    console.error('Error fetching lead stages:', error);
-                    setEditingLeadStages([]);
-                });
-        } else if (field === 'riding_company_id' && !value) {
-            setEditingLeadStages([]);
-            setEditingData((prev) => (prev ? { ...prev, lead_stage_id: null } : null));
-        }
     };
 
     const formatPhoneForWhatsApp = (phone: string): string => {
@@ -1629,12 +1567,12 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                     errorData = { error: errorText || 'Unknown error' };
                 }
                 console.error('Failed to load driver details:', errorData);
-                alert(errorData.error || 'Failed to load driver details. Please try again.');
+                alert(errorData.error || 'Failed to load lead details. Please try again.');
                 setViewDialogOpen(false);
             }
         } catch (error) {
             console.error('Error loading driver details:', error);
-            alert('Error loading driver details. Please try again.');
+            alert('Error loading lead details. Please try again.');
             setViewDialogOpen(false);
         } finally {
             setLoadingDetails(false);
@@ -1828,7 +1766,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                             {selectedDrivers.size > 0 && (
                                 <div className="mb-4 p-3 bg-muted rounded-md flex items-center justify-between">
                                     <span className="text-sm font-medium">
-                                        {selectedDrivers.size} driver(s) selected
+                                        {selectedDrivers.size} lead(s) selected
                                     </span>
                                     <div className="flex gap-2">
                                         <Button
@@ -1867,7 +1805,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                 >
                                     <Users className={`h-5 w-5 ${activeTab === 'all' ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
                                     <span className={`font-medium ${activeTab === 'all' ? 'text-blue-700 dark:text-blue-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
-                                        All Drivers
+                                        All Leads
                                     </span>
                                     {notificationCounts.all > 0 && (
                                         <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
@@ -1893,7 +1831,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                 >
                                     <UserPlus className={`h-5 w-5 ${activeTab === 'new' ? 'text-green-600 dark:text-green-400' : 'text-neutral-600 dark:text-neutral-400'}`} />
                                     <span className={`font-medium ${activeTab === 'new' ? 'text-green-700 dark:text-green-300' : 'text-neutral-700 dark:text-neutral-300'}`}>
-                                        New Drivers
+                                        New Leads
                                     </span>
                                     {notificationCounts.new > 0 && (
                                         <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
@@ -1968,7 +1906,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                             onClick={handleSelectAllVisible}
                                             className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
                                         >
-                                            Select all {sortedAndFilteredDrivers.length} driver(s)
+                                            Select all {sortedAndFilteredDrivers.length} lead(s)
                                         </button>
                                     )}
                                 </div>
@@ -2011,7 +1949,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                         Page {currentPage} of {totalPages}
                                     </div>
                                     <div className="text-sm text-neutral-600 dark:text-neutral-400">
-                                        Total: {sortedAndFilteredDrivers?.length || 0} driver(s)
+                                        Total: {sortedAndFilteredDrivers?.length || 0} lead(s)
                                     </div>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
@@ -2102,7 +2040,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                 const columnDef = ALL_DRIVER_COLUMNS.find(c => c.id === col.id);
                                                 const sortKey = col.id === 'name' ? 'full_name' : 
                                                                col.id === 'whatsapp' ? 'whatsapp_phone' :
-                                                               col.id === 'riding_company' ? 'riding_company' :
                                                                col.id === 'lead_source' ? 'lead_source' :
                                                                col.id === 'lead_status' ? 'lead_status' :
                                                                col.id === 'lead_stage' ? 'lead_stage' :
@@ -2176,7 +2113,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                 }
                                                 const filterKey = col.id === 'name' ? 'full_name' : 
                                                                   col.id === 'whatsapp' ? 'whatsapp_phone' :
-                                                                  col.id === 'riding_company' ? 'riding_company_id' :
                                                                   col.id === 'lead_source' ? 'lead_source_id' :
                                                                   col.id === 'lead_status' ? 'lead_status_id' :
                                                                   col.id === 'lead_status_comment' ? 'lead_status_comment' :
@@ -2483,7 +2419,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                         </th>
                                                     );
                                                 }
-                                                if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to', 'riding_company', 'last_assigned_by'].includes(col.id)) {
+                                                if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to', 'last_assigned_by'].includes(col.id)) {
                                                     return (
                                                         <th key={col.id} className="px-4 py-2">
                                                             <div className="relative">
@@ -2511,8 +2447,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                           col.id === 'lead_status' ? (filterOptions?.leadStatuses || []) :
                                                                           col.id === 'lead_stage' ? ((filterOptions as any)?.leadStages || []) :
                                                                           col.id === 'assigned_to' ? (filterOptions?.users || []) :
-                                                                          col.id === 'last_assigned_by' ? (filterOptions?.users || []) :
-                                                                          col.id === 'riding_company' ? (filterOptions?.ridingCompanies || []) : []).map((option: any) => (
+                                                                          col.id === 'last_assigned_by' ? (filterOptions?.users || []) : []).map((option: any) => (
                                                                             <SelectItem key={option.id} value={String(option.id)}>
                                                                                 {option.name}
                                                                             </SelectItem>
@@ -2575,7 +2510,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                     colSpan={(visibleColumns?.length || 0) + 1}
                                                     className="px-4 py-8 text-center text-sm text-neutral-500"
                                                 >
-                                                    No drivers found
+                                                    No leads found
                                                 </td>
                                             </tr>
                                         ) : (
@@ -2901,9 +2836,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                     </div>
                                                                 ) : '-';
                                                                 break;
-                                                            case 'riding_company':
-                                                                cellContent = driver.riding_company?.name || '-';
-                                                                break;
                                                             case 'campaign':
                                                                 cellContent = driver.campaign?.name || '-';
                                                                 break;
@@ -2935,9 +2867,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                 break;
                                                             case 'lead_stage':
                                                                 cellContent = driver.lead_stage?.name || '-';
-                                                                break;
-                                                            case 'current_stage':
-                                                                cellContent = (driver as any).current_stage?.name || '-';
                                                                 break;
                                                             case 'assigned_to':
                                                                 if (driver.assigned_to) {
@@ -3015,7 +2944,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                         </>
                     ) : (
                         <div className="text-center py-12 text-neutral-500">
-                            No drivers found
+                            No leads found
                         </div>
                     )}
                 </Card>
@@ -3024,7 +2953,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                     open={deleteDialog.open}
                     onOpenChange={(open) => setDeleteDialog({ open, driver: null })}
                     onConfirm={confirmDelete}
-                    title="Delete Driver"
+                    title="Delete Lead"
                     description={`Are you sure you want to delete ${deleteDialog.driver?.full_name}? This action cannot be undone.`}
                 />
 
@@ -3042,15 +2971,15 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                     open={massDeleteDialog}
                     onOpenChange={setMassDeleteDialog}
                     onConfirm={confirmMassDelete}
-                    title="Delete Selected Drivers"
-                    description={`Are you sure you want to delete ${selectedDrivers.size} driver(s)? This action cannot be undone.`}
+                    title="Delete Selected Leads"
+                    description={`Are you sure you want to delete ${selectedDrivers.size} lead(s)? This action cannot be undone.`}
                 />
 
                 {/* Merge Drivers Dialog */}
                 <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
                     <DialogContent className="!max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
                         <DialogHeader>
-                            <DialogTitle>Merge Records In &gt; Drivers</DialogTitle>
+                            <DialogTitle>Merge Records In &gt; Leads</DialogTitle>
                             <DialogDescription>
                                 The primary record will be retained after the merge. You can select the column to retain the values. The other record(s) will be deleted but the related information will be merged.
                             </DialogDescription>
@@ -3153,25 +3082,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                 className="w-4 h-4"
                                                             />
                                                             <span>{driver.email || '-'}</span>
-                                                        </div>
-                                                    </td>
-                                                ))}
-                                            </tr>
-                                            
-                                            {/* Riding Company */}
-                                            <tr className="border-b hover:bg-muted/50">
-                                                <td className="px-4 py-3 text-sm font-medium">Riding Company</td>
-                                                {mergeDrivers.map((driver) => (
-                                                    <td key={driver.id} className="px-4 py-3 text-sm">
-                                                        <div className="flex items-center gap-2">
-                                                            <input
-                                                                type="radio"
-                                                                name="riding_company_id"
-                                                                value={driver.id}
-                                                                defaultChecked={mergeDrivers[0].id === driver.id}
-                                                                className="w-4 h-4"
-                                                            />
-                                                            <span>{driver.riding_company?.name || '-'}</span>
                                                         </div>
                                                     </td>
                                                 ))}
@@ -3401,7 +3311,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                             
                                             const fieldMappings: { [key: string]: string } = {};
                                             const fieldNames = [
-                                                'full_name', 'phone', 'whatsapp_phone', 'email', 'riding_company_id', 
+                                                'full_name', 'phone', 'whatsapp_phone', 'email', 
                                                 'campaign_id', 'lead_source_id', 'lead_status_id', 'lead_stage_id',
                                                 'assigned_to', 'assigned_users', 'lead_status_comment', 
                                                 'next_follow_up', 'last_follow_up', 'notes'
@@ -3413,9 +3323,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                     const selectedDriverId = parseInt(selectedInput.value);
                                                     const selectedDriver = mergeDrivers.find(d => d.id === selectedDriverId);
                                                     if (selectedDriver) {
-                                                        if (fieldName === 'riding_company_id') {
-                                                            fieldMappings[fieldName] = selectedDriver.riding_company?.id?.toString() || '';
-                                                        } else if (fieldName === 'campaign_id') {
+                                                        if (fieldName === 'campaign_id') {
                                                             fieldMappings[fieldName] = selectedDriver.campaign?.id?.toString() || '';
                                                         } else if (fieldName === 'lead_source_id') {
                                                             fieldMappings[fieldName] = selectedDriver.lead_source?.id?.toString() || '';
@@ -3450,12 +3358,12 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                     },
                                                     onError: (errors) => {
                                                         console.error('Merge error:', errors);
-                                                        alert('Failed to merge drivers. Please try again.');
+                                                        alert('Failed to merge leads. Please try again.');
                                                     },
                                                 });
                                             } catch (error) {
                                                 console.error('Merge error:', error);
-                                                alert('Failed to merge drivers. Please try again.');
+                                                alert('Failed to merge leads. Please try again.');
                                             }
                                         }}
                                     >
@@ -3472,7 +3380,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                     onOpenChange={setImportModalOpen}
                     importStoreUrl="/drivers/drivers/import"
                     availableFields={availableFields}
-                    entityName="Drivers"
+                    entityName="Leads"
                 />
 
                 {/* View Details Dialog */}
@@ -3482,9 +3390,9 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                         overlayClassName="bg-black/40"
                     >
                         <DialogHeader>
-                            <DialogTitle>{viewingDriver?.full_name || 'Driver Details'}</DialogTitle>
+                            <DialogTitle>{viewingDriver?.full_name || 'Lead Details'}</DialogTitle>
                             <DialogDescription>
-                                Driver Details & Onboarding Progress
+                                Lead Details & Onboarding Progress
                             </DialogDescription>
                         </DialogHeader>
                         
@@ -3607,12 +3515,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                             <Card className="p-6">
                                                 <h2 className="mb-4 text-lg font-semibold">CRM Information</h2>
                                                 <div className="space-y-4">
-                                                        <div>
-                                                            <p className="text-sm text-neutral-500">Riding Company</p>
-                                                        <p className="font-medium">
-                                                            {driverDetails.riding_company?.name || <span className="text-neutral-400 italic">Not Set</span>}
-                                                        </p>
-                                                        </div>
                                                     {driverDetails.campaign && (
                                                         <div>
                                                             <p className="text-sm text-neutral-500">Campaign</p>
@@ -3689,112 +3591,9 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                             </div>
                                                         </div>
                                                     )}
-                                                    {driverDetails.current_stage && (
-                                                        <div>
-                                                            <p className="text-sm text-neutral-500">Current Stage</p>
-                                                            <p className="font-medium">{driverDetails.current_stage.name}</p>
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </Card>
                                         </div>
-
-                                        {/* Stages Progress */}
-                                        {driverDetails.stages_progress && (
-                                            <Card className="p-6">
-                                                <div className="mb-4 flex items-center justify-between">
-                                                    <h2 className="text-lg font-semibold">Stages Progress</h2>
-                                                    {driverDetails.has_completed_all_stages && (
-                                                        <Badge variant="default" className="gap-2">
-                                                            <CheckCircle2 className="h-4 w-4" />
-                                                            All Stages Completed
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                                <div className="space-y-4">
-                                                    <div>
-                                                        <div className="mb-2 flex items-center justify-between text-sm">
-                                                            <span>Progress</span>
-                                                            <span className="font-medium">
-                                                                {driverDetails.stages_progress.completed} / {driverDetails.stages_progress.total} (
-                                                                {driverDetails.stages_progress.percentage}%)
-                                                            </span>
-                                                        </div>
-                                                        <Progress value={driverDetails.stages_progress.percentage} />
-                                                    </div>
-                                                    <div className="grid grid-cols-4 gap-4 text-center">
-                                                        <div>
-                                                            <p className="text-2xl font-bold text-green-600">
-                                                                {driverDetails.stages_progress.completed}
-                                                            </p>
-                                                            <p className="text-xs text-neutral-500">Completed</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-2xl font-bold text-yellow-600">
-                                                                {driverDetails.stages_progress.in_progress}
-                                                            </p>
-                                                            <p className="text-xs text-neutral-500">In Progress</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-2xl font-bold text-gray-600">
-                                                                {driverDetails.stages_progress.pending}
-                                                            </p>
-                                                            <p className="text-xs text-neutral-500">Pending</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-2xl font-bold text-red-600">
-                                                                {driverDetails.stages_progress.rejected}
-                                                            </p>
-                                                            <p className="text-xs text-neutral-500">Rejected</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </Card>
-                                        )}
-
-                                        {/* Stages Details */}
-                                        {driverDetails.stages_status && driverDetails.stages_status.length > 0 && (
-                                            <Card className="p-6">
-                                                <div className="mb-4 flex items-center justify-between">
-                                                    <h2 className="text-lg font-semibold">Stages Details</h2>
-                                                    <Link href={`/drivers/driver-stages?driver_id=${driverDetails.id}`}>
-                                                        <Button variant="outline" size="sm">
-                                                            View All Stages
-                                                        </Button>
-                                                    </Link>
-                                                </div>
-                                                <div className="space-y-3">
-                                                    {driverDetails.stages_status.map((stage: any, index: number) => (
-                                                        <div
-                                                            key={stage.stage_template?.id || index}
-                                                            className="flex items-center justify-between rounded-lg border p-4"
-                                                        >
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800">
-                                                                    <span className="text-sm font-medium">
-                                                                        {stage.stage_template?.order || index + 1}
-                                                                    </span>
-                                                                </div>
-                                                                <div>
-                                                                    <p className="font-medium">{stage.stage_template?.name || 'Unknown Stage'}</p>
-                                                                    {stage.completed_at && (
-                                                                        <p className="text-xs text-neutral-500">
-                                                                            Completed: {formatDate(stage.completed_at)}
-                                                                        </p>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                {getStatusBadge(stage.status)}
-                                                                {stage.is_completed && (
-                                                                    <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </Card>
-                                        )}
 
                                         {/* Documents */}
                                         <Card className="p-6">
@@ -4008,7 +3807,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                             <tr>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
-                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Reseller</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Feedback Comment</th>
@@ -4037,9 +3836,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                         {followUp.user_name || 'N/A'}
                                                                     </td>
                                                                     <td className="px-4 py-3 text-sm">
-                                                                        {followUp.riding_company || 'N/A'}
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-sm">
                                                                         {followUp.lead_stage || 'N/A'}
                                                                     </td>
                                                                     <td className="px-4 py-3 text-sm">
@@ -4066,7 +3862,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                 </div>
                                             ) : (
                                                 <div className="py-8 text-center text-neutral-500">
-                                                    No follow-ups found for this driver.
+                                                    No follow-ups found for this lead.
                                                 </div>
                                             )}
                                         </Card>
@@ -4074,9 +3870,9 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
 
                                         {viewDialogTab === 'duplicates' && driverDetails?.duplicate > 0 && (
                                         <Card className="p-6">
-                                            <h2 className="mb-4 text-lg font-semibold">Duplicate Drivers ({driverDetails.duplicate})</h2>
+                                            <h2 className="mb-4 text-lg font-semibold">Duplicate Leads ({driverDetails.duplicate})</h2>
                                             <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
-                                                Drivers with the same phone number or WhatsApp number as this driver.
+                                                Leads with the same phone number or WhatsApp number as this lead.
                                             </p>
                                             {driverDuplicateDrivers.length > 0 ? (
                                                 <div className="overflow-x-auto">
@@ -4087,7 +3883,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">WhatsApp</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Email</th>
-                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Riding Company</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Campaign</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Source</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
@@ -4118,7 +3913,6 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                     <td className="px-4 py-3 text-sm">{dup.phone || '-'}</td>
                                                                     <td className="px-4 py-3 text-sm">{dup.whatsapp_phone || '-'}</td>
                                                                     <td className="px-4 py-3 text-sm">{dup.email || '-'}</td>
-                                                                    <td className="px-4 py-3 text-sm">{dup.riding_company?.name || '-'}</td>
                                                                     <td className="px-4 py-3 text-sm">{dup.campaign?.name || '-'}</td>
                                                                     <td className="px-4 py-3 text-sm">{dup.lead_source?.name || '-'}</td>
                                                                     <td className="px-4 py-3 text-sm">
@@ -4312,7 +4106,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         phone: driver.phone || '',
         whatsapp_phone: driver.whatsapp_phone || '',
         email: driver.email || '',
-        riding_company_id: driver.riding_company?.id ? String(driver.riding_company.id) : '',
         campaign_id: driver.campaign?.id ? String(driver.campaign.id) : '',
         lead_source_id: driver.lead_source?.id ? String(driver.lead_source.id) : '',
         assigned_to: driver.assigned_to?.id ? String(driver.assigned_to.id) : '',
@@ -4324,7 +4117,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         next_follow_up: driver.next_follow_up || '',
         last_follow_up: driver.last_follow_up || '',
         lead_stage_id: driver.lead_stage?.id ? String(driver.lead_stage.id) : '',
-        current_stage_id: '',
         notes: driver.notes || '',
     });
 
@@ -4335,7 +4127,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
             phone: data.phone || '',
             whatsapp_phone: data.whatsapp_phone || null,
             email: data.email || null,
-            riding_company_id: data.riding_company_id ? Number(data.riding_company_id) : null,
             campaign_id: data.campaign_id ? Number(data.campaign_id) : null,
             lead_source_id: data.lead_source_id ? Number(data.lead_source_id) : null,
             assigned_to: data.assigned_to ? Number(data.assigned_to) : null,
@@ -4346,7 +4137,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
             lead_status_comment: data.lead_status_comment || null,
             next_follow_up: data.next_follow_up || null,
             lead_stage_id: data.lead_stage_id ? Number(data.lead_stage_id) : null,
-            current_stage_id: data.current_stage_id || null,
             notes: data.notes || null,
         };
         
@@ -4357,54 +4147,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
         
         return transformed;
     });
-
-    // Load lead stages when riding company changes
-    useEffect(() => {
-        if (data.riding_company_id) {
-            setLoadingLeadStages(true);
-            axios
-                .get(`/api/drivers/riding-companies/${data.riding_company_id}/lead-stages`)
-                .then((response) => {
-                    setLeadStages(response.data || []);
-                    // Reset lead_stage_id if current selection is not in the new list
-                    if (data.lead_stage_id) {
-                        const exists = response.data?.some((stage: FilterOption) => String(stage.id) === data.lead_stage_id);
-                        if (!exists) {
-                            setData('lead_stage_id', '');
-                        }
-                    }
-                })
-                .catch((error) => {
-                    console.error('Error fetching lead stages:', error);
-                    setLeadStages([]);
-                })
-                .finally(() => {
-                    setLoadingLeadStages(false);
-                });
-        } else {
-            setLeadStages([]);
-            setData('lead_stage_id', '');
-        }
-    }, [data.riding_company_id]);
-
-    // Load lead stages when dialog opens
-    useEffect(() => {
-        if (open && driver.riding_company?.id) {
-            setLoadingLeadStages(true);
-            axios
-                .get(`/api/drivers/riding-companies/${driver.riding_company.id}/lead-stages`)
-                .then((response) => {
-                    setLeadStages(response.data || []);
-                })
-                .catch((error) => {
-                    console.error('Error fetching lead stages:', error);
-                    setLeadStages([]);
-                })
-                .finally(() => {
-                    setLoadingLeadStages(false);
-                });
-        }
-    }, [open, driver.riding_company?.id]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -4419,9 +4161,9 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                 // Show error message to user
                 if (errors && typeof errors === 'object') {
                     const errorMessages = Object.values(errors).flat();
-                    alert('Error saving driver: ' + errorMessages.join(', '));
+                    alert('Error saving lead: ' + errorMessages.join(', '));
                 } else {
-                    alert('Error saving driver. Please try again.');
+                    alert('Error saving lead. Please try again.');
                 }
             },
         });
@@ -4433,7 +4175,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                 <DialogHeader>
                     <DialogTitle>Quick Edit Lead</DialogTitle>
                     <DialogDescription>
-                        Edit driver details: {driver.full_name}
+                        Edit lead details: {driver.full_name}
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -4482,24 +4224,6 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                             {errors.email && (
                                 <p className="text-sm text-red-500 mt-1">{errors.email}</p>
                             )}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">ReSeller</label>
-                            <Select
-                                value={data.riding_company_id}
-                                onValueChange={(value) => setData('riding_company_id', value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Riding Company" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {filterOptions.ridingCompanies?.map((company) => (
-                                        <SelectItem key={company.id} value={String(company.id)}>
-                                            {company.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-1">Campaign</label>
@@ -4647,15 +4371,13 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                             <Select
                                 value={data.lead_stage_id}
                                 onValueChange={(value) => setData('lead_stage_id', value)}
-                                disabled={loadingLeadStages || !data.riding_company_id}
+                                disabled={loadingLeadStages}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder={
                                         loadingLeadStages
                                             ? 'Loading...'
-                                            : !data.riding_company_id
-                                              ? 'Select a riding company first'
-                                              : 'Select Lead Stage'
+                                            : 'Select Lead Stage'
                                     } />
                                 </SelectTrigger>
                                 <SelectContent>

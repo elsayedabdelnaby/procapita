@@ -366,7 +366,7 @@ export function WhatsAppLinkDeviceRidingCompanyTab({
                 )}
             </Card>
 
-            {/* Default User for New Drivers */}
+            {/* Default User for New Leads */}
             <div className="border-t border-neutral-400/30 pt-6 mt-6">
                 <div className="space-y-4">
                     <div>

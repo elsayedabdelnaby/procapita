@@ -27,7 +27,7 @@ export default function AuthSplitLayout({
                     <img 
                         src="/logos/procapita_logo.svg" 
                         alt="ProCapita Logo" 
-                        className="mr-2 h-8 w-auto"
+                        className="mr-2 h-[calc(2rem-2mm)] w-auto"
                     />
                     {name}
                 </Link>
@@ -53,7 +53,7 @@ export default function AuthSplitLayout({
                         <img 
                             src="/logos/procapita_logo.svg" 
                             alt="ProCapita Logo" 
-                            className="h-10 w-auto sm:h-12"
+                            className="h-[calc(2.5rem-2mm)] w-auto sm:h-[calc(3rem-2mm)]"
                         />
                     </Link>
                     <div className="flex flex-col items-start gap-2 text-left sm:items-center sm:text-center">

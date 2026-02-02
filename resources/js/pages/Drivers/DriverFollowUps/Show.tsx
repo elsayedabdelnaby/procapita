@@ -65,7 +65,7 @@ export default function DriverFollowUpsShow({ followUp }: DriverFollowUpsShowPro
                         <h2 className="mb-4 text-lg font-semibold">Follow-up Information</h2>
                         <div className="space-y-4">
                             <div>
-                                <p className="text-sm text-neutral-500">Driver</p>
+                                <p className="text-sm text-neutral-500">Lead</p>
                                 <p className="font-medium">
                                     {followUp.driver?.full_name || 'N/A'}
                                     {followUp.driver?.phone && ` (${followUp.driver.phone})`}
@@ -91,11 +91,6 @@ export default function DriverFollowUpsShow({ followUp }: DriverFollowUpsShowPro
                                         ? new Date(followUp.created_time).toLocaleString()
                                         : 'N/A'}
                                 </p>
-                            </div>
-
-                            <div>
-                                <p className="text-sm text-neutral-500">Riding Company</p>
-                                <p className="font-medium">{followUp.riding_company || 'N/A'}</p>
                             </div>
 
                             <div>

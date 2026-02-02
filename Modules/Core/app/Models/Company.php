@@ -210,8 +210,14 @@ class Company extends Model
             return $this->logo;
         }
 
-        // Otherwise, return storage URL
-        return \Illuminate\Support\Facades\Storage::url($this->logo);
+        $path = ltrim($this->logo, '/');
+
+        // Paths under logos/ are served from public/logos/ (avoid double slash and 403)
+        if (str_starts_with($path, 'logos/')) {
+            return '/'.trim($path, '/');
+        }
+
+        return \Illuminate\Support\Facades\Storage::url($path);
     }
 }
 

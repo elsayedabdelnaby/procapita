@@ -30,7 +30,6 @@ export default function DriverFollowUpsCreate({
         assigned_to: '',
         user_name: '',
         created_time: new Date().toISOString().slice(0, 16), // Format: YYYY-MM-DDTHH:mm
-        riding_company: '',
         lead_stage: '',
         notes: '',
     });
@@ -48,7 +47,7 @@ export default function DriverFollowUpsCreate({
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold">Create Follow-up</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Add a new follow-up record for a driver
+                        Add a new follow-up record for a lead
                     </p>
                 </div>
 
@@ -56,7 +55,7 @@ export default function DriverFollowUpsCreate({
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="driver_id">Driver *</Label>
+                                <Label htmlFor="driver_id">Lead *</Label>
                                 <select
                                     id="driver_id"
                                     name="driver_id"
@@ -65,7 +64,7 @@ export default function DriverFollowUpsCreate({
                                     className="w-full rounded-md border px-3 py-2"
                                     required
                                 >
-                                    <option value="">Select a driver</option>
+                                    <option value="">Select a lead</option>
                                     {drivers.map((driver) => (
                                         <option key={driver.id} value={driver.id}>
                                             {driver.full_name} ({driver.phone})
@@ -123,15 +122,6 @@ export default function DriverFollowUpsCreate({
                                     <p className="text-sm text-red-500">{errors.created_time}</p>
                                 )}
                             </div>
-
-                            <FormField
-                                label="Riding Company"
-                                name="riding_company"
-                                value={data.riding_company}
-                                onChange={(e) => setData('riding_company', e.target.value)}
-                                error={errors.riding_company}
-                                placeholder="Enter riding company name"
-                            />
 
                             <FormField
                                 label="Lead Stage"

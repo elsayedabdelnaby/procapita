@@ -90,52 +90,50 @@ interface DriverFollowUpsIndexProps {
 // Define all available columns - Follow-ups columns
 const ALL_FOLLOWUP_COLUMNS = [
     { id: 'actions', label: 'Actions', defaultVisible: true, defaultOrder: 0 },
-    { id: 'driver_num', label: 'Driver Num', defaultVisible: true, defaultOrder: 1 },
-    { id: 'driver', label: 'Driver', defaultVisible: true, defaultOrder: 2 },
+    { id: 'driver_num', label: 'Lead Num', defaultVisible: true, defaultOrder: 1 },
+    { id: 'driver', label: 'Lead', defaultVisible: true, defaultOrder: 2 },
     { id: 'user_name', label: 'User Name', defaultVisible: true, defaultOrder: 3 },
     { id: 'assigned_to', label: 'Assigned To', defaultVisible: true, defaultOrder: 4 },
     { id: 'created_time', label: 'Created Time', defaultVisible: true, defaultOrder: 5 },
-    { id: 'riding_company', label: 'Riding Company', defaultVisible: true, defaultOrder: 6 },
     { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 7 },
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 7.5 },
     { id: 'lead_status_comment', label: 'Feedback Comment', defaultVisible: false, defaultOrder: 7.6 },
     { id: 'cancel_reason', label: 'Cancel Reasons', defaultVisible: false, defaultOrder: 7.65 },
-    { id: 'next_follow_up_drivers', label: 'Next Follow-up (Drivers)', defaultVisible: false, defaultOrder: 7.7 },
-    { id: 'last_follow_up_drivers', label: 'Last Follow-up (Drivers)', defaultVisible: false, defaultOrder: 7.8 },
+    { id: 'next_follow_up_drivers', label: 'Next Follow-up (Leads)', defaultVisible: false, defaultOrder: 7.7 },
+    { id: 'last_follow_up_drivers', label: 'Last Follow-up (Leads)', defaultVisible: false, defaultOrder: 7.8 },
     { id: 'notes', label: 'Notes', defaultVisible: false, defaultOrder: 8 },
     { id: 'created_at', label: 'Created At', defaultVisible: false, defaultOrder: 9 },
 ];
 
 // Define all available columns from Drivers (with special naming)
 const ALL_DRIVER_COLUMNS = [
-    { id: 'driver_driver_num', label: 'Driver Num (Drivers)', defaultVisible: false, defaultOrder: 10 },
-    { id: 'driver_duplicate', label: 'Duplicate (Drivers)', defaultVisible: false, defaultOrder: 10.1 },
-    { id: 'driver_phone', label: 'Phone (Drivers)', defaultVisible: false, defaultOrder: 10.2 },
-    { id: 'driver_whatsapp', label: 'WhatsApp (Drivers)', defaultVisible: false, defaultOrder: 10.3 },
-    { id: 'driver_email', label: 'Email (Drivers)', defaultVisible: false, defaultOrder: 10.4 },
-    { id: 'driver_riding_company', label: 'Riding Company (Drivers)', defaultVisible: false, defaultOrder: 10.5 },
-    { id: 'driver_campaign', label: 'Campaign (Drivers)', defaultVisible: false, defaultOrder: 10.6 },
-    { id: 'driver_lead_source', label: 'Lead Source (Drivers)', defaultVisible: false, defaultOrder: 10.7 },
-    { id: 'driver_lead_status', label: 'Lead Status (Drivers)', defaultVisible: false, defaultOrder: 10.8 },
-    { id: 'driver_lead_status_comment', label: 'Feedback Comment (Drivers)', defaultVisible: false, defaultOrder: 10.9 },
-    { id: 'driver_next_follow_up', label: 'Next Follow-up (Drivers)', defaultVisible: false, defaultOrder: 11 },
-    { id: 'driver_next_time', label: 'Next Time (Drivers)', defaultVisible: false, defaultOrder: 11.1 },
-    { id: 'driver_last_follow_up', label: 'Last Follow-up (Drivers)', defaultVisible: false, defaultOrder: 11.2 },
-    { id: 'driver_assigned_to', label: 'Assigned To (Drivers)', defaultVisible: false, defaultOrder: 11.3 },
-    { id: 'driver_lead_stage', label: 'Lead Stage (Drivers)', defaultVisible: false, defaultOrder: 11.5 },
-    { id: 'driver_current_stage', label: 'Current Stage (Drivers)', defaultVisible: false, defaultOrder: 11.6 },
-    { id: 'driver_last_assigned_time', label: 'Last Assigned Time (Drivers)', defaultVisible: false, defaultOrder: 11.7 },
-    { id: 'driver_last_assigned_date', label: 'Last Assigned Date (Drivers)', defaultVisible: false, defaultOrder: 11.75 },
-    { id: 'driver_last_assigned_by', label: 'Last Assigned By (Drivers)', defaultVisible: false, defaultOrder: 11.8 },
-    { id: 'driver_notes', label: 'Notes (Drivers)', defaultVisible: false, defaultOrder: 11.9 },
-    { id: 'driver_cancel_reason', label: 'Cancel Reasons (Drivers)', defaultVisible: false, defaultOrder: 12 },
-    { id: 'driver_vehicle_type', label: 'Vehicle Type (Drivers)', defaultVisible: false, defaultOrder: 12.1 },
-    { id: 'driver_has_worked_before', label: 'Has the driver worked before? (Drivers)', defaultVisible: false, defaultOrder: 12.2 },
-    { id: 'driver_city', label: 'City (Drivers)', defaultVisible: false, defaultOrder: 12.3 },
-    { id: 'driver_feedback_count', label: 'Feedback Count (Drivers)', defaultVisible: false, defaultOrder: 12.5 },
-    { id: 'driver_uuid', label: 'UUID (Drivers)', defaultVisible: false, defaultOrder: 13 },
-    { id: 'driver_created_at', label: 'Created At (Drivers)', defaultVisible: false, defaultOrder: 14 },
-    { id: 'driver_updated_at', label: 'Updated At (Drivers)', defaultVisible: false, defaultOrder: 15 },
+    { id: 'driver_driver_num', label: 'Lead Num (Leads)', defaultVisible: false, defaultOrder: 10 },
+    { id: 'driver_duplicate', label: 'Duplicate (Leads)', defaultVisible: false, defaultOrder: 10.1 },
+    { id: 'driver_phone', label: 'Phone (Leads)', defaultVisible: false, defaultOrder: 10.2 },
+    { id: 'driver_whatsapp', label: 'WhatsApp (Leads)', defaultVisible: false, defaultOrder: 10.3 },
+    { id: 'driver_email', label: 'Email (Leads)', defaultVisible: false, defaultOrder: 10.4 },
+    { id: 'driver_campaign', label: 'Campaign (Leads)', defaultVisible: false, defaultOrder: 10.6 },
+    { id: 'driver_lead_source', label: 'Lead Source (Leads)', defaultVisible: false, defaultOrder: 10.7 },
+    { id: 'driver_lead_status', label: 'Lead Status (Leads)', defaultVisible: false, defaultOrder: 10.8 },
+    { id: 'driver_lead_status_comment', label: 'Feedback Comment (Leads)', defaultVisible: false, defaultOrder: 10.9 },
+    { id: 'driver_next_follow_up', label: 'Next Follow-up (Leads)', defaultVisible: false, defaultOrder: 11 },
+    { id: 'driver_next_time', label: 'Next Time (Leads)', defaultVisible: false, defaultOrder: 11.1 },
+    { id: 'driver_last_follow_up', label: 'Last Follow-up (Leads)', defaultVisible: false, defaultOrder: 11.2 },
+    { id: 'driver_assigned_to', label: 'Assigned To (Leads)', defaultVisible: false, defaultOrder: 11.3 },
+    { id: 'driver_lead_stage', label: 'Lead Stage (Leads)', defaultVisible: false, defaultOrder: 11.5 },
+    { id: 'driver_current_stage', label: 'Current Stage (Leads)', defaultVisible: false, defaultOrder: 11.6 },
+    { id: 'driver_last_assigned_time', label: 'Last Assigned Time (Leads)', defaultVisible: false, defaultOrder: 11.7 },
+    { id: 'driver_last_assigned_date', label: 'Last Assigned Date (Leads)', defaultVisible: false, defaultOrder: 11.75 },
+    { id: 'driver_last_assigned_by', label: 'Last Assigned By (Leads)', defaultVisible: false, defaultOrder: 11.8 },
+    { id: 'driver_notes', label: 'Notes (Leads)', defaultVisible: false, defaultOrder: 11.9 },
+    { id: 'driver_cancel_reason', label: 'Cancel Reasons (Leads)', defaultVisible: false, defaultOrder: 12 },
+    { id: 'driver_vehicle_type', label: 'Vehicle Type (Leads)', defaultVisible: false, defaultOrder: 12.1 },
+    { id: 'driver_has_worked_before', label: 'Has the lead worked before? (Leads)', defaultVisible: false, defaultOrder: 12.2 },
+    { id: 'driver_city', label: 'City (Leads)', defaultVisible: false, defaultOrder: 12.3 },
+    { id: 'driver_feedback_count', label: 'Feedback Count (Leads)', defaultVisible: false, defaultOrder: 12.5 },
+    { id: 'driver_uuid', label: 'UUID (Leads)', defaultVisible: false, defaultOrder: 13 },
+    { id: 'driver_created_at', label: 'Created At (Leads)', defaultVisible: false, defaultOrder: 14 },
+    { id: 'driver_updated_at', label: 'Updated At (Leads)', defaultVisible: false, defaultOrder: 15 },
 ];
 
 // Combine all columns
@@ -251,7 +249,6 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
         driver: '',
         user_name: '',
         assigned_to: null,
-        riding_company: '',
         lead_stage: '',
         lead_status: '',
         lead_status_comment: '',
@@ -260,7 +257,6 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
         driver_phone: '',
         driver_whatsapp: '',
         driver_email: '',
-        driver_riding_company: '',
         driver_campaign: null,
         driver_lead_source: null,
             driver_lead_status: null,
@@ -412,16 +408,6 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                 }
             }
 
-            if (filters.riding_company && filters.riding_company !== 'is_empty') {
-                if (!followUp.riding_company?.toLowerCase().includes(String(filters.riding_company).toLowerCase())) {
-                    return false;
-                }
-            } else if (filters.riding_company === 'is_empty') {
-                if (followUp.riding_company && followUp.riding_company.trim() !== '') {
-                    return false;
-                }
-            }
-
             if (filters.lead_stage && filters.lead_stage !== 'is_empty') {
                 if (!followUp.lead_stage?.toLowerCase().includes(String(filters.lead_stage).toLowerCase())) {
                     return false;
@@ -493,16 +479,6 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                 }
             }
 
-            if (filters.driver_riding_company && filters.driver_riding_company !== 'is_empty') {
-                if (!followUp.driver?.riding_company?.name?.toLowerCase().includes(String(filters.driver_riding_company).toLowerCase())) {
-                    return false;
-                }
-            } else if (filters.driver_riding_company === 'is_empty') {
-                if (followUp.driver?.riding_company?.name && followUp.driver.riding_company.name.trim() !== '') {
-                    return false;
-                }
-            }
-
             if (filters.driver_campaign) {
                 if (filters.driver_campaign === 'is_empty') {
                     if (followUp.driver?.campaign) {
@@ -553,7 +529,7 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                 }
             }
 
-            // Next Follow-up (Drivers) filter
+            // Next Follow-up (Leads) filter
             if (filters.driver_next_follow_up && filters.driver_next_follow_up !== 'is_empty') {
                 if (!followUp.driver?.next_follow_up || !followUp.driver.next_follow_up.includes(String(filters.driver_next_follow_up))) {
                     return false;
@@ -564,7 +540,7 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                 }
             }
 
-            // Last Follow-up (Drivers) filter
+            // Last Follow-up (Leads) filter
             if (filters.driver_last_follow_up && filters.driver_last_follow_up !== 'is_empty') {
                 if (!followUp.driver?.last_follow_up || !followUp.driver.last_follow_up.includes(String(filters.driver_last_follow_up))) {
                     return false;
@@ -607,10 +583,6 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                     case 'assigned_to':
                         aValue = a.assigned_to_user?.name || '';
                         bValue = b.assigned_to_user?.name || '';
-                        break;
-                    case 'riding_company':
-                        aValue = a.riding_company || '';
-                        bValue = b.riding_company || '';
                         break;
                     case 'lead_stage':
                         aValue = a.lead_stage || '';
@@ -770,7 +742,6 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
             driver: '',
             user_name: '',
             assigned_to: null,
-            riding_company: '',
             lead_stage: '',
             lead_status: '',
             lead_status_comment: '',
@@ -779,7 +750,6 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
             driver_phone: '',
             driver_whatsapp: '',
             driver_email: '',
-            driver_riding_company: '',
             driver_campaign: null,
             driver_lead_source: null,
             driver_lead_status: null,
@@ -899,13 +869,13 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
 
     return (
         <AppLayout>
-            <Head title="Driver Follow-ups" />
+            <Head title="Lead Follow-ups" />
             <div className="p-6">
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold">Driver Follow-ups</h1>
+                        <h1 className="text-2xl font-bold">Lead Follow-ups</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Track all changes made to drivers
+                            Track all changes made to leads
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1109,7 +1079,6 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                                                col.id === 'driver_num' ? 'driver_num' :
                                                                col.id === 'user_name' ? 'user_name' :
                                                                col.id === 'assigned_to' ? 'assigned_to' :
-                                                               col.id === 'riding_company' ? 'riding_company' :
                                                                col.id === 'lead_stage' ? 'lead_stage' :
                                                                col.id === 'lead_status' ? 'lead_status' :
                                                                col.id === 'lead_status_comment' ? 'lead_status_comment' :
@@ -1185,7 +1154,6 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                                                   col.id === 'driver_num' ? 'driver_num' :
                                                                   col.id === 'user_name' ? 'user_name' :
                                                                   col.id === 'assigned_to' ? 'assigned_to' :
-                                                                  col.id === 'riding_company' ? 'riding_company' :
                                                                   col.id === 'lead_stage' ? 'lead_stage' :
                                                                   col.id === 'lead_status' ? 'lead_status' :
                                                                   col.id === 'lead_status_comment' ? 'lead_status_comment' :
@@ -1422,9 +1390,6 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                                                     ? formatDate(followUp.created_time)
                                                                     : 'N/A';
                                                                 break;
-                                                            case 'riding_company':
-                                                                cellContent = followUp.riding_company || 'N/A';
-                                                                break;
                                                             case 'lead_stage':
                                                                 cellContent = followUp.lead_stage || 'N/A';
                                                                 break;
@@ -1460,9 +1425,6 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                                                 break;
                                                             case 'driver_email':
                                                                 cellContent = followUp.driver?.email || '-';
-                                                                break;
-                                                            case 'driver_riding_company':
-                                                                cellContent = followUp.driver?.riding_company?.name || '-';
                                                                 break;
                                                             case 'driver_campaign':
                                                                 cellContent = followUp.driver?.campaign?.name || '-';

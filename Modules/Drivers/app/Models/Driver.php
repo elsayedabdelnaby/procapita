@@ -11,11 +11,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Modules\Core\app\Models\Company;
 use Modules\Marketing\app\Models\Campaign;
 use Modules\RidingCarCompanies\app\Models\RidingCompany;
-use Modules\RidingCarCompanies\app\Models\RidingCompanyStageTemplate;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -26,11 +26,11 @@ class Driver extends Model
     protected $fillable = [
         'uuid',
         'company_id',
+        'riding_company_id',
         'full_name',
         'phone',
         'whatsapp_phone',
         'email',
-        'riding_company_id',
         'campaign_id',
         'lead_source_id',
         'assigned_to',
@@ -45,8 +45,6 @@ class Driver extends Model
         'next_follow_up',
         'last_follow_up',
         'lead_stage_id',
-        'driver_stage_id',
-        'current_stage_id',
         'notes',
         'cancel_reason',
         'driver_num',
@@ -67,6 +65,21 @@ class Driver extends Model
             'last_assigned_time' => 'datetime',
             'confirm_duplicate' => 'boolean',
         ];
+    }
+
+    /**
+     * Get the fillable attributes. Exclude riding_company_id when column was removed by migration.
+     *
+     * @return array<int, string>
+     */
+    public function getFillable(): array
+    {
+        $fillable = $this->fillable;
+        if (! Schema::hasColumn($this->getTable(), 'riding_company_id')) {
+            $fillable = array_values(array_diff($fillable, ['riding_company_id']));
+        }
+
+        return $fillable;
     }
 
     protected static function boot(): void
@@ -162,7 +175,7 @@ class Driver extends Model
             }
         });
 
-        // Track changes to lead_status_id, riding_company_id, lead_stage_id, lead_status_comment, next_follow_up and create follow-up
+        // Track changes to lead_status_id, lead_stage_id, lead_status_comment, next_follow_up and create follow-up
         static::updated(function ($driver) {
             // Check if lead_status_id changed BEFORE any saveQuietly calls
             $leadStatusChanged = $driver->wasChanged('lead_status_id') && $driver->lead_status_id;
@@ -174,7 +187,7 @@ class Driver extends Model
             }
 
             // Check for changes BEFORE any modifications
-            $changedFields = ['lead_status_id', 'riding_company_id', 'lead_stage_id', 'lead_status_comment', 'next_follow_up'];
+            $changedFields = ['lead_status_id', 'lead_stage_id', 'lead_status_comment', 'next_follow_up'];
             $hasRelevantChange = false;
             $shouldUpdateLastFollowUp = false;
 
@@ -207,31 +220,10 @@ class Driver extends Model
                 $assignedToUserId = $driver->assigned_to;
 
                 // Get current values from Driver
-                $ridingCompanyName = $driver->ridingCompany ? $driver->ridingCompany->name : null;
                 $leadStageName = $driver->leadStage ? $driver->leadStage->name : null;
                 $leadStatusName = $driver->leadStatus ? $driver->leadStatus->name : null;
                 $leadStatusComment = $driver->lead_status_comment;
                 $driverNum = $driver->driver_num ?? (string) $driver->id;
-
-                // Get Driver Stage name (current stage)
-                $driverStageName = null;
-                if ($driver->current_stage_id) {
-                    $currentStage = $driver->currentStage;
-                    if ($currentStage) {
-                        // Get the actual driver stage record
-                        $currentStageOrder = $currentStage->order ?? null;
-                        if ($currentStageOrder) {
-                            $driverStage = $driver->stages()->where('stage_order', $currentStageOrder)->first();
-                            if ($driverStage) {
-                                // Use the stage template name
-                                $driverStageName = $currentStage->name;
-                            }
-                        } else {
-                            // Fallback to stage template name
-                            $driverStageName = $currentStage->name;
-                        }
-                    }
-                }
 
                 // Get Team Leader name
                 $teamLeaderName = null;
@@ -261,11 +253,10 @@ class Driver extends Model
                         'team_leader' => $teamLeaderName, // اسم Team Leader وقت الإنشاء
                         'account_manager' => $accountManagerName, // اسم Account Manager وقت الإنشاء
                         'created_time' => now(),
-                        'riding_company' => $ridingCompanyName,
                         'lead_stage' => $leadStageName,
                         'lead_status' => $leadStatusName,
-                        'lead_status_comment' => $leadStatusComment, // Feedback Comment
-                        'driver_stage' => $driverStageName, // Driver Stage
+                        'lead_status_comment' => $leadStatusComment,
+                        'driver_stage' => null,
                         'notes' => $driver->notes,
                         'driver_num' => $driverNum,
                     ]);
@@ -281,21 +272,12 @@ class Driver extends Model
             Log::info('Driver deleting event triggered', ['driver_id' => $driver->id]);
 
             // Use direct query to get all related data (bypassing soft delete scope if needed)
-            // This ensures we get all records even if driver is soft deleted
-            $stages = \Modules\Drivers\app\Models\DriverStage::where('driver_id', $driver->id)->get();
             $documents = \Modules\Drivers\app\Models\DriverDocument::where('driver_id', $driver->id)->get();
 
             Log::info('Found related data to delete', [
                 'driver_id' => $driver->id,
-                'stages_count' => $stages->count(),
                 'documents_count' => $documents->count(),
             ]);
-
-            // Delete all driver stages using DB delete for immediate deletion
-            if ($stages->isNotEmpty()) {
-                DB::table('driver_stages')->where('driver_id', $driver->id)->delete();
-                Log::info('Deleted all driver stages from database', ['driver_id' => $driver->id, 'count' => $stages->count()]);
-            }
 
             // Delete all driver documents and their files
             foreach ($documents as $document) {
@@ -322,7 +304,6 @@ class Driver extends Model
         });
 
         // When a driver is force deleted (hard delete), ensure all related data is also deleted
-        // Note: DriverStage and DriverDocument don't use SoftDeletes, so regular delete is sufficient
         static::forceDeleting(function ($driver) {
             Log::info('Driver force deleting event triggered', ['driver_id' => $driver->id]);
 
@@ -338,8 +319,6 @@ class Driver extends Model
                 }
             }
 
-            // Delete all driver stages and documents from database using DB delete for immediate deletion
-            DB::table('driver_stages')->where('driver_id', $driver->id)->delete();
             DB::table('driver_documents')->where('driver_id', $driver->id)->delete();
 
             Log::info('Driver force deletion completed', ['driver_id' => $driver->id]);
@@ -416,21 +395,6 @@ class Driver extends Model
         return $this->belongsTo(LeadStage::class);
     }
 
-    public function driverStage(): BelongsTo
-    {
-        return $this->belongsTo(DriverStage::class, 'driver_stage_id');
-    }
-
-    public function currentStage(): BelongsTo
-    {
-        return $this->belongsTo(RidingCompanyStageTemplate::class, 'current_stage_id');
-    }
-
-    public function stages(): HasMany
-    {
-        return $this->hasMany(DriverStage::class)->orderBy('stage_order');
-    }
-
     public function documents(): HasMany
     {
         return $this->hasMany(DriverDocument::class);
@@ -445,11 +409,6 @@ class Driver extends Model
     public function scopeForCompany($query, int $companyId)
     {
         return $query->where('company_id', $companyId);
-    }
-
-    public function scopeForRidingCompany($query, int $ridingCompanyId)
-    {
-        return $query->where('riding_company_id', $ridingCompanyId);
     }
 
     public function scopeForCampaign($query, int $campaignId)
@@ -467,209 +426,4 @@ class Driver extends Model
         return $query->where('lead_status_id', $leadStatusId);
     }
 
-    // Stage Progress Methods
-
-    /**
-     * Get all required stages from the riding company
-     */
-    public function getRequiredStages()
-    {
-        if (! $this->riding_company_id) {
-            return collect([]);
-        }
-
-        return $this->ridingCompany
-            ->activeStageTemplates()
-            ->ordered()
-            ->get();
-    }
-
-    /**
-     * Get completed stages for this driver
-     */
-    public function getCompletedStages()
-    {
-        return $this->stages()
-            ->where('status', 'completed')
-            ->with('ridingCompany')
-            ->get();
-    }
-
-    /**
-     * Get pending stages for this driver
-     */
-    public function getPendingStages()
-    {
-        return $this->stages()
-            ->where('status', 'pending')
-            ->with('ridingCompany')
-            ->get();
-    }
-
-    /**
-     * Get in-progress stages for this driver
-     */
-    public function getInProgressStages()
-    {
-        return $this->stages()
-            ->where('status', 'in_progress')
-            ->with('ridingCompany')
-            ->get();
-    }
-
-    /**
-     * Get rejected stages for this driver
-     */
-    public function getRejectedStages()
-    {
-        return $this->stages()
-            ->where('status', 'rejected')
-            ->with('ridingCompany')
-            ->get();
-    }
-
-    /**
-     * Check if driver has completed all required stages
-     */
-    public function hasCompletedAllStages(): bool
-    {
-        $requiredStages = $this->getRequiredStages();
-
-        if ($requiredStages->isEmpty()) {
-            return false; // No stages required
-        }
-
-        $completedStageOrders = $this->stages()
-            ->where('status', 'completed')
-            ->pluck('stage_order')
-            ->toArray();
-
-        $requiredStageOrders = $requiredStages->pluck('order')->toArray();
-
-        // Check if all required stages are completed
-        return count(array_intersect($completedStageOrders, $requiredStageOrders)) === count($requiredStageOrders);
-    }
-
-    /**
-     * Get stages progress percentage
-     */
-    public function getStagesProgress(): array
-    {
-        $requiredStages = $this->getRequiredStages();
-
-        if ($requiredStages->isEmpty()) {
-            return [
-                'total' => 0,
-                'completed' => 0,
-                'pending' => 0,
-                'in_progress' => 0,
-                'rejected' => 0,
-                'percentage' => 0,
-            ];
-        }
-
-        $total = $requiredStages->count();
-        $completed = $this->stages()->where('status', 'completed')->count();
-        $pending = $this->stages()->where('status', 'pending')->count();
-        $inProgress = $this->stages()->where('status', 'in_progress')->count();
-        $rejected = $this->stages()->where('status', 'rejected')->count();
-
-        $percentage = $total > 0 ? round(($completed / $total) * 100, 2) : 0;
-
-        return [
-            'total' => $total,
-            'completed' => $completed,
-            'pending' => $pending,
-            'in_progress' => $inProgress,
-            'rejected' => $rejected,
-            'percentage' => $percentage,
-        ];
-    }
-
-    /**
-     * Get the next stage that should be completed
-     */
-    public function getNextStage(): ?RidingCompanyStageTemplate
-    {
-        $requiredStages = $this->getRequiredStages();
-
-        if ($requiredStages->isEmpty()) {
-            return null;
-        }
-
-        $completedStageOrders = $this->stages()
-            ->where('status', 'completed')
-            ->pluck('stage_order')
-            ->toArray();
-
-        // Find first stage that is not completed
-        foreach ($requiredStages as $stage) {
-            if (! in_array($stage->order, $completedStageOrders)) {
-                return $stage;
-            }
-        }
-
-        return null; // All stages completed
-    }
-
-    /**
-     * Get detailed status of all stages with their progress
-     */
-    public function getStagesStatus(): array
-    {
-        $requiredStages = $this->getRequiredStages();
-        $driverStages = $this->stages()
-            ->with('ridingCompany')
-            ->get()
-            ->keyBy('stage_order');
-
-        $stagesStatus = [];
-
-        foreach ($requiredStages as $requiredStage) {
-            $driverStage = $driverStages->get($requiredStage->order);
-
-            $stagesStatus[] = [
-                'stage_template' => $requiredStage,
-                'driver_stage' => $driverStage,
-                'status' => $driverStage ? $driverStage->status : 'not_started',
-                'is_completed' => $driverStage && $driverStage->status === 'completed',
-                'is_pending' => $driverStage && $driverStage->status === 'pending',
-                'is_in_progress' => $driverStage && $driverStage->status === 'in_progress',
-                'is_rejected' => $driverStage && $driverStage->status === 'rejected',
-                'completed_at' => $driverStage?->completed_at,
-                'notes' => $driverStage?->notes,
-            ];
-        }
-
-        return $stagesStatus;
-    }
-
-    /**
-     * Get current stage information
-     */
-    public function getCurrentStageInfo(): ?array
-    {
-        if (! $this->current_stage_id) {
-            return null;
-        }
-
-        $currentStage = $this->currentStage;
-        if (! $currentStage) {
-            return null;
-        }
-
-        // Find driver stage by matching current_stage_id with stage template order
-        $currentStageOrder = $currentStage->order ?? null;
-        $driverStage = $currentStageOrder
-            ? $this->stages()->where('stage_order', $currentStageOrder)->first()
-            : null;
-
-        return [
-            'stage_template' => $currentStage,
-            'driver_stage' => $driverStage,
-            'status' => $driverStage ? $driverStage->status : 'not_started',
-            'is_completed' => $driverStage && $driverStage->status === 'completed',
-            'completed_at' => $driverStage?->completed_at,
-        ];
-    }
 }

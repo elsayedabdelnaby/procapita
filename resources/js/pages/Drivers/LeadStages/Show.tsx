@@ -4,16 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
-import { Activity, Building2, Edit, Trash2, ArrowLeft } from 'lucide-react';
+import { Activity, Edit, Trash2, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { DeleteDialog } from '@/components/core/delete-dialog';
 import { usePermissions } from '@/hooks/use-permissions';
 import { formatDate } from '@/utils/date-format';
-
-interface RidingCompany {
-    id: number;
-    name: string;
-}
 
 interface LeadStage {
     id: number;
@@ -24,7 +19,6 @@ interface LeadStage {
     order: number;
     active: boolean;
     requires_all_documents_approved: boolean;
-    riding_company?: RidingCompany;
     created_at: string;
     updated_at: string;
 }
@@ -153,15 +147,6 @@ export default function LeadStagesShow({ leadStage, activities = [] }: LeadStage
                                     <p className="text-sm text-neutral-500">Slug</p>
                                     <p className="font-mono text-xs">{leadStage.slug}</p>
                                 </div>
-                                {leadStage.riding_company && (
-                                    <div>
-                                        <p className="text-sm text-neutral-500">Riding Company</p>
-                                        <div className="flex items-center gap-2">
-                                            <Building2 className="h-4 w-4 text-neutral-500" />
-                                            <p className="font-medium">{leadStage.riding_company.name}</p>
-                                        </div>
-                                    </div>
-                                )}
                                 <div>
                                     <p className="text-sm text-neutral-500">Trip</p>
                                     <p className="font-medium">{leadStage.order}</p>

@@ -2,19 +2,11 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
 
-interface RidingCompany {
-    id: number;
-    name: string;
-}
-
 interface LeadStage {
     id: number;
-    riding_company_id?: number;
-    riding_company_ids?: number[];
     name: string;
     slug: string;
     description?: string;
@@ -26,17 +18,10 @@ interface LeadStage {
 
 interface LeadStagesEditProps {
     leadStage: LeadStage;
-    ridingCompanies?: RidingCompany[];
 }
 
-export default function LeadStagesEdit({ leadStage, ridingCompanies = [] }: LeadStagesEditProps) {
-    // Prepare riding_company_ids from leadStage
-    const initialRidingCompanyIds = leadStage.riding_company_ids && leadStage.riding_company_ids.length > 0
-        ? leadStage.riding_company_ids.map(id => id.toString())
-        : (leadStage.riding_company_id ? [leadStage.riding_company_id.toString()] : []);
-
+export default function LeadStagesEdit({ leadStage }: LeadStagesEditProps) {
     const { data, setData, put, processing, errors } = useForm({
-        riding_company_ids: initialRidingCompanyIds,
         name: leadStage.name || '',
         slug: leadStage.slug || '',
         description: leadStage.description || '',
@@ -112,39 +97,6 @@ export default function LeadStagesEdit({ leadStage, ridingCompanies = [] }: Lead
                                 />
                             </div>
 
-                            <div className="md:col-span-2">
-                                <Label htmlFor="riding_company_ids">
-                                    Riding Companies <span className="text-red-500">*</span>
-                                </Label>
-                                <MultiSelect
-                                    options={ridingCompanies.map((company) => ({
-                                        value: company.id.toString(),
-                                        label: company.name,
-                                    }))}
-                                    value={data.riding_company_ids}
-                                    onChange={(value) => setData('riding_company_ids', value)}
-                                    placeholder="Select riding companies..."
-                                    className="w-full"
-                                    searchable={true}
-                                />
-                                {errors.riding_company_ids && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.riding_company_ids}</p>
-                                )}
-                                <p className="mt-1 text-xs text-neutral-500">
-                                    Select one or more riding companies. This stage will be available for all drivers in the selected companies.
-                                </p>
-                            </div>
-
-                            <div className="md:col-span-2">
-                                <FormField
-                                    label="Name"
-                                    name="name"
-                                    value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    error={errors.name}
-                                    required
-                                />
-                            </div>
 
                             <div className="md:col-span-2">
                                 <FormField

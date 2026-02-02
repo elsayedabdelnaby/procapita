@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             \Modules\RidingCarCompanies\database\seeders\RidingCarCompaniesDatabaseSeeder::class,
             \Modules\Drivers\database\seeders\DriversDatabaseSeeder::class,
             \Modules\RecycleBin\database\seeders\RecycleBinDatabaseSeeder::class,
+            ResellerUsersAndLeadsSeeder::class,
         ]);
     }
 }

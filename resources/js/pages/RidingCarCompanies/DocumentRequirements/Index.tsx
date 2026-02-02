@@ -102,7 +102,7 @@ export default function DocumentRequirementsIndex({
                                             </Link>
                                             {row.driver_count !== undefined && row.driver_count > 0 && (
                                                 <p className="text-xs text-neutral-500 mt-1">
-                                                    Used by {row.driver_count} driver(s)
+                                                    Used by {row.driver_count} lead(s)
                                                 </p>
                                             )}
                                         </div>

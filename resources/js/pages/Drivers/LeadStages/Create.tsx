@@ -2,38 +2,11 @@ import { FormField } from '@/components/core/form-field';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { type SharedData } from '@/types';
-import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
 
-interface RidingCompany {
-    id: number;
-    name: string;
-}
-
-interface LeadStagesCreateProps {
-    ridingCompanies?: RidingCompany[];
-}
-
-export default function LeadStagesCreate({ ridingCompanies: initialRidingCompanies = [] }: LeadStagesCreateProps) {
-    const page = usePage<SharedData>();
-    const { selectedCompany } = page.props;
-    
-    const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies);
-    const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
-
-    // Initialize riding companies from props on mount
-    useEffect(() => {
-        if (initialRidingCompanies && initialRidingCompanies.length > 0) {
-            setRidingCompanies(initialRidingCompanies);
-        }
-    }, []);
-
+export default function LeadStagesCreate() {
     const { data, setData, post, processing, errors } = useForm({
-        riding_company_ids: [] as string[],
         name: '',
         slug: '',
         description: '',
@@ -42,46 +15,6 @@ export default function LeadStagesCreate({ ridingCompanies: initialRidingCompani
         active: true,
         requires_all_documents_approved: false,
     });
-
-    // Load riding companies when selectedCompany changes
-    useEffect(() => {
-        setLoadingRidingCompanies(true);
-        
-        // If "All Companies" is selected (selectedCompany is null) and user is super admin, load all riding companies
-        if (!selectedCompany && page.props.auth?.user?.is_super_admin) {
-            axios
-                .get('/api/drivers/riding-companies/all')
-                .then((response) => {
-                    setRidingCompanies(response.data);
-                    setData('riding_company_id', '');
-                })
-                .catch((error) => {
-                    console.error('Error fetching all riding companies:', error);
-                    setRidingCompanies([]);
-                })
-                .finally(() => {
-                    setLoadingRidingCompanies(false);
-                });
-        } else if (selectedCompany?.id) {
-            axios
-                .get(`/api/drivers/companies/${selectedCompany.id}/riding-companies`)
-                .then((response) => {
-                    setRidingCompanies(response.data);
-                    setData('riding_company_id', '');
-                })
-                .catch((error) => {
-                    console.error('Error fetching riding companies:', error);
-                    setRidingCompanies([]);
-                })
-                .finally(() => {
-                    setLoadingRidingCompanies(false);
-                });
-        } else {
-            // If no selectedCompany or user is not super admin, use initial riding companies from controller
-            setRidingCompanies(initialRidingCompanies);
-            setLoadingRidingCompanies(false);
-        }
-    }, [selectedCompany?.id, initialRidingCompanies]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -96,7 +29,7 @@ export default function LeadStagesCreate({ ridingCompanies: initialRidingCompani
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold">Create Lead Stage</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Add a new lead stage for tracking driver progress by riding company
+                        Add a new lead stage for tracking lead progress
                     </p>
                 </div>
 
@@ -147,29 +80,6 @@ export default function LeadStagesCreate({ ridingCompanies: initialRidingCompani
                                     required
                                     placeholder="Enter lead stage name"
                                 />
-                            </div>
-
-                            <div className="md:col-span-2">
-                                <Label htmlFor="riding_company_ids">
-                                    Riding Companies <span className="text-red-500">*</span>
-                                </Label>
-                                <MultiSelect
-                                    options={ridingCompanies.map((company) => ({
-                                        value: company.id.toString(),
-                                        label: company.name,
-                                    }))}
-                                    value={data.riding_company_ids}
-                                    onChange={(value) => setData('riding_company_ids', value)}
-                                    placeholder="Select riding companies..."
-                                    className="w-full"
-                                    searchable={true}
-                                />
-                                {errors.riding_company_ids && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.riding_company_ids}</p>
-                                )}
-                                <p className="mt-1 text-xs text-neutral-500">
-                                    Select one or more riding companies. This stage will be available for all drivers in the selected companies.
-                                </p>
                             </div>
 
                             <div className="md:col-span-2">

@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
-use Modules\RidingCarCompanies\app\Models\RidingCompany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -21,7 +20,6 @@ class DriverDocument extends Model
         'name',
         'document_name_id',
         'driver_id',
-        'riding_company_id',
         'uploaded_path',
         'original_filename',
         'status',
@@ -51,11 +49,6 @@ class DriverDocument extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(Driver::class);
-    }
-
-    public function ridingCompany(): BelongsTo
-    {
-        return $this->belongsTo(RidingCompany::class);
     }
 
     public function reviewer(): BelongsTo

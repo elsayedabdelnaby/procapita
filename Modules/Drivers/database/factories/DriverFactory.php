@@ -10,7 +10,6 @@ use Modules\Drivers\app\Models\LeadSource;
 use Modules\Drivers\app\Models\LeadStatus;
 use Modules\Marketing\app\Models\Campaign;
 use Modules\RidingCarCompanies\app\Models\RidingCompany;
-use Modules\RidingCarCompanies\app\Models\RidingCompanyStageTemplate;
 
 class DriverFactory extends Factory
 {
@@ -30,7 +29,6 @@ class DriverFactory extends Factory
             'lead_source_id' => $this->faker->optional(0.6)->randomElement([LeadSource::factory(), null]),
             'assigned_to' => $this->faker->optional(0.5)->randomElement([User::factory(), null]),
             'lead_status_id' => $this->faker->optional(0.7)->randomElement([LeadStatus::factory(), null]),
-            'current_stage_id' => $this->faker->optional(0.4)->randomElement([RidingCompanyStageTemplate::factory(), null]),
             'notes' => $this->faker->optional(0.3)->paragraph(),
         ];
     }

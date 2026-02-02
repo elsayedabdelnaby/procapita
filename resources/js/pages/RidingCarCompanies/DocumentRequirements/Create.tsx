@@ -124,7 +124,7 @@ export default function DocumentRequirementsCreate({ ridingCompany, ridingCompan
                                     onChange={(e) => setData('name', e.target.value)}
                                     error={errors.name}
                                     required
-                                    placeholder="e.g., Driver License, Vehicle Registration, Insurance"
+                                    placeholder="e.g., Lead License, Vehicle Registration, Insurance"
                                 />
                             </div>
 
@@ -214,7 +214,7 @@ export default function DocumentRequirementsCreate({ ridingCompany, ridingCompan
                                     <p className="text-sm text-red-500">{errors.instructions}</p>
                                 )}
                                 <p className="mt-1 text-xs text-neutral-500">
-                                    Additional notes or instructions that will be copied to driver documents.
+                                    Additional notes or instructions that will be copied to lead documents.
                                 </p>
                             </div>
 
@@ -274,7 +274,7 @@ export default function DocumentRequirementsCreate({ ridingCompany, ridingCompan
                 <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
                     <DialogContent>
                         <DialogHeader>
-                            <DialogTitle>Add to Existing Drivers?</DialogTitle>
+                            <DialogTitle>Add to Existing Leads?</DialogTitle>
                             <DialogDescription>
                                 {ridingCompany 
                                     ? `Do you want to add this document requirement to all existing drivers for ${ridingCompany.name}?`

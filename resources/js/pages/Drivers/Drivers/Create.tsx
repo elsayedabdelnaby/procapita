@@ -52,16 +52,6 @@ interface User {
     name: string;
 }
 
-interface DriverStage {
-    id: number;
-    name?: string;
-    stage_order: number;
-    status: string;
-    notes?: string;
-    riding_company_id?: number;
-    riding_company_ids?: number[];
-}
-
 interface LeadStage {
     id: number;
     name: string;
@@ -78,7 +68,6 @@ interface DriversCreateProps {
     leadSources: LeadSource[];
     leadStatuses: LeadStatus[];
     users: User[];
-    driverStages?: DriverStage[];
     leadStages?: LeadStage[];
     defaultRidingCompanyId?: number;
 }
@@ -90,7 +79,6 @@ export default function DriversCreate({
     leadSources: initialLeadSources = [],
     leadStatuses: initialLeadStatuses = [],
     users: initialUsers = [],
-    driverStages: initialDriverStages = [],
     leadStages: initialLeadStages = [],
     defaultRidingCompanyId,
 }: DriversCreateProps) {
@@ -108,8 +96,6 @@ export default function DriversCreate({
     const [leadSources, setLeadSources] = useState<LeadSource[]>(initialLeadSources || []);
     const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>(initialLeadStatuses || []);
     const [leadStages, setLeadStages] = useState<LeadStage[]>(initialLeadStages || []);
-    const [driverStages, setDriverStages] = useState<DriverStage[]>(initialDriverStages || []);
-    const [filteredDriverStages, setFilteredDriverStages] = useState<DriverStage[]>([]);
     const [filteredLeadStages, setFilteredLeadStages] = useState<LeadStage[]>([]);
     const [users, setUsers] = useState<User[]>(initialUsers || []);
 
@@ -126,16 +112,14 @@ export default function DriversCreate({
         phone: '',
         whatsapp_phone: '',
         email: '',
-        riding_company_id: defaultRidingCompanyId ? String(defaultRidingCompanyId) : '',
         campaign_id: '',
+        riding_company_id: '',
         lead_source_id: '',
         lead_status_id: '',
         lead_status_comment: '',
         next_follow_up: '',
         last_follow_up: '',
         lead_stage_id: '',
-        driver_stage_id: '',
-        current_stage_id: '',
         notes: '',
         cancel_reason: '',
         feedback_count: 0,
@@ -214,15 +198,13 @@ export default function DriversCreate({
         
         if (companyId) {
             // Reset dependent fields when company changes (but keep default riding company)
-            if (!defaultRidingCompanyId) {
-            setData('riding_company_id', '');
-            }
             setData('campaign_id', '');
+            setData('riding_company_id', '');
             setData('lead_source_id', '');
             setData('lead_status_id', '');
             setData('lead_stage_id', '');
         }
-    }, [selectedCompany?.id, data.company_id, setData, defaultRidingCompanyId]);
+    }, [selectedCompany?.id, data.company_id, setData]);
 
     // Fetch data when company/selectedCompany changes (for super admin)
     useEffect(() => {
@@ -238,7 +220,6 @@ export default function DriversCreate({
                     .get('/api/drivers/riding-companies/all')
                     .then((response) => {
                         setRidingCompanies(response.data);
-                        setData('riding_company_id', '');
                     })
                     .catch((error) => {
                         console.error('Error fetching all riding companies:', error);
@@ -252,7 +233,6 @@ export default function DriversCreate({
                     .get(`/api/drivers/companies/${companyId}/riding-companies`)
                     .then((response) => {
                         setRidingCompanies(response.data);
-                        setData('riding_company_id', '');
                     })
                     .catch((error) => {
                         console.error('Error fetching riding companies:', error);
@@ -263,7 +243,6 @@ export default function DriversCreate({
                     });
             } else {
                 setRidingCompanies([]);
-                setData('riding_company_id', '');
                 setLoadingRidingCompanies(false);
             }
             
@@ -341,43 +320,10 @@ export default function DriversCreate({
         }
     }, [selectedCompany?.id, data.company_id, companies, setData, initialRidingCompanies, initialCampaigns, initialLeadSources, initialLeadStatuses, initialUsers]);
 
-    // Filter driver stages and lead stages when riding company changes
+    // Use all lead stages (no riding company filter)
     useEffect(() => {
-        const ridingCompanyId = data.riding_company_id ? Number(data.riding_company_id) : null;
-
-        if (ridingCompanyId) {
-            // Filter driver stages by riding_company_id
-            const filteredDriver = initialDriverStages.filter((stage) => {
-                if (stage.riding_company_id === ridingCompanyId) {
-                    return true;
-                }
-                if (stage.riding_company_ids && Array.isArray(stage.riding_company_ids)) {
-                    return stage.riding_company_ids.includes(ridingCompanyId);
-                }
-                return false;
-            });
-            setFilteredDriverStages(filteredDriver);
-            setData('driver_stage_id', ''); // Reset driver_stage_id when riding company changes
-
-            // Filter lead stages by riding_company_id
-            const filteredLead = initialLeadStages.filter((stage) => {
-                if (stage.riding_company_id === ridingCompanyId) {
-                    return true;
-                }
-                if (stage.riding_company_ids && Array.isArray(stage.riding_company_ids)) {
-                    return stage.riding_company_ids.includes(ridingCompanyId);
-                }
-                return false;
-            });
-            setFilteredLeadStages(filteredLead);
-            setData('lead_stage_id', ''); // Reset lead_stage_id when riding company changes
-        } else {
-            setFilteredDriverStages([]);
-            setFilteredLeadStages([]);
-            setData('driver_stage_id', '');
-            setData('lead_stage_id', '');
-        }
-    }, [data.riding_company_id, setData, initialDriverStages, initialLeadStages]);
+        setFilteredLeadStages(initialLeadStages || []);
+    }, [initialLeadStages]);
 
     const [showValidation, setShowValidation] = useState(false);
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
@@ -494,12 +440,12 @@ export default function DriversCreate({
         setConfirmDuplicate(false);
         // Fetch full details of duplicate drivers for merge
         if (!duplicateDrivers || duplicateDrivers.length === 0) {
-            alert('No duplicate drivers to merge.');
+            alert('No duplicate leads to merge.');
             return;
         }
         const duplicateIds = duplicateDrivers.map(d => d.id).filter(id => id);
         if (duplicateIds.length === 0) {
-            alert('No valid duplicate driver IDs found.');
+            alert('No valid duplicate lead IDs found.');
             return;
         }
         try {
@@ -517,7 +463,6 @@ export default function DriversCreate({
                 phone: data.phone,
                 whatsapp_phone: data.whatsapp_phone,
                 email: data.email,
-                riding_company_id: data.riding_company_id,
                 campaign_id: data.campaign_id,
                 lead_source_id: data.lead_source_id,
                 lead_status_id: data.lead_status_id,
@@ -533,8 +478,8 @@ export default function DriversCreate({
             setMergeDrivers([newDriverData, ...fullDuplicateDrivers]);
             setMergeDialogOpen(true);
         } catch (error) {
-            console.error('Error fetching duplicate driver details:', error);
-            alert('Failed to load duplicate driver details. Please try again.');
+            console.error('Error fetching duplicate lead details:', error);
+            alert('Failed to load duplicate lead details. Please try again.');
         }
     };
 
@@ -724,37 +669,6 @@ export default function DriversCreate({
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Additional Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <Label htmlFor="riding_company_id">
-                                    Riding Company <span className="text-red-500">*</span>
-                                </Label>
-                                <select
-                                    id="riding_company_id"
-                                    name="riding_company_id"
-                                    value={data.riding_company_id}
-                                    onChange={(e) => setData('riding_company_id', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                    disabled={loadingRidingCompanies || (companies && !data.company_id)}
-                                    required
-                                >
-                                    <option value="">
-                                        {loadingRidingCompanies
-                                            ? 'Loading...'
-                                            : companies && !data.company_id
-                                              ? 'Select a company first'
-                                              : 'Select a riding company'}
-                                    </option>
-                                    {ridingCompanies.map((company) => (
-                                        <option key={company.id} value={company.id}>
-                                            {company.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.riding_company_id && (
-                                    <p className="text-sm text-red-500">{errors.riding_company_id}</p>
-                                )}
-                            </div>
-
                             {canViewDriverField('campaign') && (
                                 <div>
                                     <Label htmlFor="campaign_id">Campaign</Label>
@@ -781,6 +695,36 @@ export default function DriversCreate({
                                     </select>
                                     {errors.campaign_id && (
                                         <p className="text-sm text-red-500">{errors.campaign_id}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {(canViewDriverField('riding_company') || canViewDriverField('riding_company_id')) && (
+                                <div>
+                                    <Label htmlFor="riding_company_id">Reseller</Label>
+                                    <select
+                                        id="riding_company_id"
+                                        name="riding_company_id"
+                                        value={data.riding_company_id}
+                                        onChange={(e) => setData('riding_company_id', e.target.value)}
+                                        className="w-full rounded-md border px-3 py-2"
+                                        disabled={loadingRidingCompanies || (companies && !data.company_id) || (!canEditDriverField('riding_company') && !canEditDriverField('riding_company_id'))}
+                                    >
+                                        <option value="">
+                                            {loadingRidingCompanies
+                                                ? 'Loading...'
+                                                : companies && !data.company_id
+                                                  ? 'Select a company first'
+                                                  : 'Select a reseller'}
+                                        </option>
+                                        {ridingCompanies.map((rc) => (
+                                            <option key={rc.id} value={String(rc.id)}>
+                                                {rc.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.riding_company_id && (
+                                        <p className="text-sm text-red-500">{errors.riding_company_id}</p>
                                     )}
                                 </div>
                             )}
@@ -1192,11 +1136,11 @@ export default function DriversCreate({
                                     value={data.lead_stage_id}
                                     onChange={(e) => setData('lead_stage_id', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
-                                    disabled={!data.riding_company_id}
+                                    disabled={loadingLeadStages}
                                 >
                                     <option value="">
-                                        {!data.riding_company_id
-                                            ? 'Select a riding company first'
+                                        {loadingLeadStages
+                                            ? 'Loading...'
                                             : filteredLeadStages.length === 0
                                               ? 'No lead stages available'
                                               : 'Select a lead stage'}
@@ -1209,27 +1153,6 @@ export default function DriversCreate({
                                 </select>
                                 {errors.lead_stage_id && (
                                     <p className="text-sm text-red-500">{errors.lead_stage_id}</p>
-                                )}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="driver_stage_id">Driver Stage</Label>
-                                <select
-                                    id="driver_stage_id"
-                                    name="driver_stage_id"
-                                    value={data.driver_stage_id}
-                                    onChange={(e) => setData('driver_stage_id', e.target.value)}
-                                    className="w-full rounded-md border px-3 py-2"
-                                >
-                                    <option value="">Select a driver stage</option>
-                                    {filteredDriverStages.map((stage) => (
-                                        <option key={stage.id} value={stage.id}>
-                                            {stage.name || `Stage ${stage.stage_order}`} {stage.status ? `(${stage.status})` : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.driver_stage_id && (
-                                    <p className="text-sm text-red-500">{errors.driver_stage_id}</p>
                                 )}
                             </div>
 
@@ -1296,7 +1219,7 @@ export default function DriversCreate({
                                         onChange={(e) => setData('notes', e.target.value)}
                                         className="w-full rounded-md border px-3 py-2"
                                         rows={3}
-                                        placeholder="Additional notes about the driver..."
+                                        placeholder="Additional notes about the lead..."
                                         disabled={!canEditDriverField('notes')}
                                     />
                                     {errors.notes && (
@@ -1328,7 +1251,7 @@ export default function DriversCreate({
                                             <SelectItem value="Wrong Documents">Wrong Documents</SelectItem>
                                             <SelectItem value="Car Not Accepted">Car Not Accepted</SelectItem>
                                             <SelectItem value="Other">Other</SelectItem>
-                                            <SelectItem value="Already driver">Already driver</SelectItem>
+                                            <SelectItem value="Already lead">Already lead</SelectItem>
                                             <SelectItem value="Expired">Expired</SelectItem>
                                             <SelectItem value="Cities">Cities</SelectItem>
                                             <SelectItem value="Dont have driving license">Dont have driving license</SelectItem>
@@ -1413,20 +1336,20 @@ export default function DriversCreate({
                                 </Button>
                             </Link>
                             <Button type="submit" disabled={processing}>
-                                {processing ? 'Creating...' : 'Create Driver'}
+                                {processing ? 'Creating...' : 'Create Lead'}
                             </Button>
                         </div>
                     </div>
                 </form>
             </div>
 
-            {/* Duplicate Drivers Dialog */}
+            {/* Duplicate Leads Dialog */}
             <Dialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Duplicate Phone/WhatsApp Number Found</DialogTitle>
                         <DialogDescription>
-                            The phone number or WhatsApp number you entered already exists with {duplicateDrivers?.length || 0} driver{(duplicateDrivers?.length || 0) > 1 ? 's' : ''} in the system.
+                            The phone number or WhatsApp number you entered already exists with {duplicateDrivers?.length || 0} lead{(duplicateDrivers?.length || 0) > 1 ? 's' : ''} in the system.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
@@ -1488,13 +1411,13 @@ export default function DriversCreate({
                 <Dialog open={viewDriverDialogOpen} onOpenChange={setViewDriverDialogOpen}>
                     <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
-                            <DialogTitle>Driver Details</DialogTitle>
+                            <DialogTitle>Lead Details</DialogTitle>
                         </DialogHeader>
                         <div className="mt-4">
                             <iframe
                                 src={`/drivers/drivers/${viewingDriverId}`}
                                 className="w-full h-[600px] border rounded"
-                                title="Driver Details"
+                                title="Lead Details"
                             />
                         </div>
                     </DialogContent>
@@ -1506,7 +1429,7 @@ export default function DriversCreate({
                 <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
                     <DialogContent className="!max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
                         <DialogHeader>
-                            <DialogTitle>Merge Records In &gt; Drivers</DialogTitle>
+                            <DialogTitle>Merge Records In &gt; Leads</DialogTitle>
                             <DialogDescription>
                                 The primary record will be retained after the merge. You can select the column to retain the values. The other record(s) will be deleted but the related information will be merged.
                             </DialogDescription>
@@ -1532,7 +1455,7 @@ export default function DriversCreate({
                                                                 Record #{driver.id}
                                                             </Link>
                                                         ) : (
-                                                            <span className="text-blue-600">New Driver</span>
+                                                            <span className="text-blue-600">New Lead</span>
                                                         )}
                                                     </div>
                                                 </th>
@@ -1611,29 +1534,6 @@ export default function DriversCreate({
                                                             className="w-4 h-4"
                                                         />
                                                         <span>{driver.email || '-'}</span>
-                                                    </div>
-                                                </td>
-                                            ))}
-                                        </tr>
-                                        
-                                        {/* Riding Company */}
-                                        <tr className="border-b hover:bg-muted/50">
-                                            <td className="px-4 py-3 text-sm font-medium">Riding Company</td>
-                                            {mergeDrivers.map((driver, idx) => (
-                                                <td key={driver.id || `new-${idx}`} className="px-4 py-3 text-sm">
-                                                    <div className="flex items-center gap-2">
-                                                        <input
-                                                            type="radio"
-                                                            name="riding_company_id"
-                                                            value={driver.id || 0}
-                                                            defaultChecked={idx === 0}
-                                                            className="w-4 h-4"
-                                                        />
-                                                        <span>
-                                                            {driver.riding_company_id 
-                                                                ? (ridingCompanies.find(c => String(c.id) === String(driver.riding_company_id))?.name || '-')
-                                                                : '-'}
-                                                        </span>
                                                     </div>
                                                 </td>
                                             ))}
@@ -1885,7 +1785,7 @@ export default function DriversCreate({
                                         
                                         const fieldMappings: { [key: string]: string } = {};
                                         const fieldNames = [
-                                            'full_name', 'phone', 'whatsapp_phone', 'email', 'riding_company_id', 
+                                            'full_name', 'phone', 'whatsapp_phone', 'email', 
                                             'campaign_id', 'lead_source_id', 'lead_status_id', 'lead_stage_id',
                                             'assigned_to', 'assigned_users', 'lead_status_comment', 
                                             'next_follow_up', 'last_follow_up', 'notes', 'created_at'
@@ -1897,9 +1797,7 @@ export default function DriversCreate({
                                                 const selectedDriverId = parseInt(selectedInput.value);
                                                 const selectedDriver = mergeDrivers.find(d => (d.id || 0) === selectedDriverId || (!d.id && selectedDriverId === 0));
                                                 if (selectedDriver) {
-                                                    if (fieldName === 'riding_company_id') {
-                                                        fieldMappings[fieldName] = selectedDriver.riding_company_id?.toString() || '';
-                                                    } else if (fieldName === 'campaign_id') {
+                                                    if (fieldName === 'campaign_id') {
                                                         fieldMappings[fieldName] = selectedDriver.campaign_id?.toString() || '';
                                                     } else if (fieldName === 'lead_source_id') {
                                                         fieldMappings[fieldName] = selectedDriver.lead_source_id?.toString() || '';
@@ -1956,7 +1854,7 @@ export default function DriversCreate({
                                                             },
                                                             onError: (errors) => {
                                                                 console.error('Merge error:', errors);
-                                                                alert('Failed to merge drivers. Please try again.');
+                                                                alert('Failed to merge leads. Please try again.');
                                                             },
                                                         });
                                                     } else {
@@ -1966,7 +1864,7 @@ export default function DriversCreate({
                                                 },
                                                 onError: (errors) => {
                                                     console.error('Create error:', errors);
-                                                    alert('Failed to create driver. Please try again.');
+                                                    alert('Failed to create lead. Please try again.');
                                                 },
                                             });
                                         } else {
@@ -1986,7 +1884,7 @@ export default function DriversCreate({
                                                     },
                                                     onError: (errors) => {
                                                         console.error('Merge error:', errors);
-                                                        alert('Failed to merge drivers. Please try again.');
+                                                        alert('Failed to merge leads. Please try again.');
                                                     },
                                                 });
                                             } else {

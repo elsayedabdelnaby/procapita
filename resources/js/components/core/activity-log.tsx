@@ -54,7 +54,7 @@ export function ActivityLog({ activities }: ActivityLogProps) {
             'phone': 'Phone',
             'whatsapp_phone': 'WhatsApp Phone',
             'email': 'Email',
-            'riding_company_id': 'Riding Company',
+            'riding_company_id': 'Reseller',
             'campaign_id': 'Campaign',
             'lead_source_id': 'Lead Source',
             'assigned_to': 'Assigned To',
@@ -64,7 +64,6 @@ export function ActivityLog({ activities }: ActivityLogProps) {
             'next_follow_up': 'Next Follow-up',
             'last_follow_up': 'Last Follow-up',
             'lead_stage_id': 'Lead Stage',
-            'current_stage_id': 'Current Stage',
             'notes': 'Notes',
         };
         return fieldLabels[field] || field

@@ -133,8 +133,6 @@ class HandleInertiaRequests extends Middleware
         // Get selected company for super admin
         $selectedCompany = null;
         $companies = collect([]);
-        $ridingCompanies = collect([]);
-        $selectedRidingCompany = null;
 
         if ($user && $user->isSuperAdmin()) {
             $companies = \Modules\Core\app\Models\Company::active()->orderBy('name')->get(['id', 'name', 'logo']);
@@ -157,45 +155,6 @@ class HandleInertiaRequests extends Middleware
                     $request->session()->put('selected_company_id', $selectedCompany->id);
                 }
             }
-
-            // Load riding companies for the selected company
-            if ($selectedCompany) {
-                $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $selectedCompany->id)
-                    ->active()
-                    ->orderBy('name')
-                    ->get();
-
-                // Get selected riding company from session
-                $selectedRidingCompanyId = $request->session()->get('selected_riding_company_id');
-                if ($selectedRidingCompanyId) {
-                    // Reload from database to ensure we have the latest data including logo_url
-                    $selectedRidingCompany = \Modules\RidingCarCompanies\app\Models\RidingCompany::find($selectedRidingCompanyId);
-                    // If not found in database, fallback to collection
-                    if (! $selectedRidingCompany) {
-                        $selectedRidingCompany = $ridingCompanies->firstWhere('id', $selectedRidingCompanyId);
-                    }
-                }
-            }
-        } elseif ($user && $user->is_company_admin && ! $user->riding_company_id) {
-            // Company admin without specific riding company - can see all riding companies in their company
-            $companyId = $user->company_id;
-            if ($companyId) {
-                $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $companyId)
-                    ->active()
-                    ->orderBy('name')
-                    ->get();
-
-                // Get selected riding company from session
-                $selectedRidingCompanyId = $request->session()->get('selected_riding_company_id');
-                if ($selectedRidingCompanyId) {
-                    // Reload from database to ensure we have the latest data including logo_url
-                    $selectedRidingCompany = \Modules\RidingCarCompanies\app\Models\RidingCompany::find($selectedRidingCompanyId);
-                    // If not found in database, fallback to collection
-                    if (! $selectedRidingCompany) {
-                        $selectedRidingCompany = $ridingCompanies->firstWhere('id', $selectedRidingCompanyId);
-                    }
-                }
-            }
         }
 
         // Load user permissions if user exists (both direct and through roles)
@@ -207,7 +166,7 @@ class HandleInertiaRequests extends Middleware
             }
 
             // Load permissions through roles and direct permissions
-            $user->load(['roles.permissions', 'permissions', 'company', 'ridingCompany']);
+            $user->load(['roles.permissions', 'permissions', 'company']);
 
             // Get all permissions (from roles + direct)
             $allPermissions = $user->getAllPermissions();
@@ -226,17 +185,11 @@ class HandleInertiaRequests extends Middleware
                     'is_super_admin' => $user->is_super_admin ?? false,
                     'is_company_admin' => $user->is_company_admin ?? false,
                     'company_id' => $user->company_id,
-                    'riding_company_id' => $user->riding_company_id,
                     'company' => $user->company ? [
                         'id' => $user->company->id,
                         'name' => $user->company->name,
                         'logo' => $user->company->logo,
                         'logo_url' => $user->company->logo_url,
-                    ] : null,
-                    'riding_company' => $user->ridingCompany ? [
-                        'id' => $user->ridingCompany->id,
-                        'name' => $user->ridingCompany->name,
-                        'logo_url' => $user->ridingCompany->logo_url,
                     ] : null,
                     'permissions' => $allPermissions->map(fn ($p) => [
                         'id' => $p->id,
@@ -258,7 +211,7 @@ class HandleInertiaRequests extends Middleware
                     ])->toArray() : [],
                 ] : null,
             ],
-            'navigation' => $user ? $this->getNavigationItems($user, $ridingCompanies) : [],
+            'navigation' => $user ? $this->getNavigationItems($user) : [],
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
@@ -279,20 +232,10 @@ class HandleInertiaRequests extends Middleware
                 'logo' => $c->logo,
                 'logo_url' => $c->logo_url,
             ])->toArray(),
-            'ridingCompanies' => $ridingCompanies->map(fn ($rc) => [
-                'id' => $rc->id,
-                'name' => $rc->name,
-                'logo_url' => $rc->logo_url,
-            ])->toArray(),
-            'selectedRidingCompany' => $selectedRidingCompany ? [
-                'id' => $selectedRidingCompany->id,
-                'name' => $selectedRidingCompany->name,
-                'logo_url' => $selectedRidingCompany->logo_url,
-            ] : null,
         ];
     }
 
-    protected function getNavigationItems($user, $ridingCompanies = null): array
+    protected function getNavigationItems($user): array
     {
         $navigation = [];
 
@@ -305,13 +248,13 @@ class HandleInertiaRequests extends Middleware
             'permission_entity' => null,
         ];
 
-        // Core Module - Companies group for Super Admin
+        // Core Module - Resellers (Companies) group for Super Admin
         // Roles, Users, and Hierarchy are now accessed from the Company view
         if ($user->isSuperAdmin()) {
             $coreItems = [];
 
             $coreItems[] = [
-                'title' => 'Companies',
+                'title' => 'Resellers',
                 'href' => '/core/companies',
                 'icon' => 'Building2',
                 'permission_module' => 'core',
@@ -334,15 +277,6 @@ class HandleInertiaRequests extends Middleware
                 'icon' => 'Flag',
                 'permission_module' => 'drivers',
                 'permission_entity' => 'leadstatuses',
-            ];
-
-            // ReSellers - accessible to super admin
-            $coreItems[] = [
-                'title' => 'ReSellers',
-                'href' => '/ridingcarcompanies/riding-companies',
-                'icon' => 'Car',
-                'permission_module' => 'ridingcarcompanies',
-                'permission_entity' => 'ridingcompanies',
             ];
 
             // Only add Core group if there are items
@@ -421,57 +355,6 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
-        // ReSellers Module - For Company Admin and users with access
-        // Super admin sees ReSellers under Core group
-        if (! $user->isSuperAdmin() && ($user->canAccessModule('ridingcarcompanies') || $user->isCompanyAdmin())) {
-            $ridingCarItems = [];
-
-            // Use provided riding companies or fetch them
-            $userRidingCompanies = $ridingCompanies;
-            if (! $userRidingCompanies || $userRidingCompanies->isEmpty()) {
-                $companyId = $user->company_id;
-                if ($companyId) {
-                    $userRidingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $companyId)
-                        ->active()
-                        ->orderBy('name')
-                        ->get();
-                } else {
-                    $userRidingCompanies = collect([]);
-                }
-            }
-
-            // If user has access to multiple riding companies, show each as a separate link
-            if ($userRidingCompanies && $userRidingCompanies->count() > 1) {
-                foreach ($userRidingCompanies as $ridingCompany) {
-                    $ridingCarItems[] = [
-                        'title' => $ridingCompany->name,
-                        'href' => '/ridingcarcompanies/riding-companies?riding_company_id='.$ridingCompany->id,
-                        'icon' => 'Car',
-                        'permission_module' => 'ridingcarcompanies',
-                        'permission_entity' => 'ridingcompanies',
-                    ];
-                }
-            } else {
-                // If only one or no riding companies, show the general link
-                $ridingCarItems[] = [
-                    'title' => 'ReSellers',
-                    'href' => '/ridingcarcompanies/riding-companies',
-                    'icon' => 'Car',
-                    'permission_module' => 'ridingcarcompanies',
-                    'permission_entity' => 'ridingcompanies',
-                ];
-            }
-
-            // Only add ReSellers group if there are items
-            if (! empty($ridingCarItems)) {
-                $navigation[] = [
-                    'title' => 'ReSellers',
-                    'icon' => 'Car',
-                    'items' => $ridingCarItems,
-                ];
-            }
-        }
-
         // Leads Module
         if ($user->canAccessModule('drivers') || $user->isSuperAdmin()) {
             $driversItems = [];
@@ -516,27 +399,18 @@ class HandleInertiaRequests extends Middleware
                 'permission_entity' => 'leadstages',
             ];
 
-            // Driver Stages
+            // Lead Documents
             $driversItems[] = [
-                'title' => 'Driver Stages',
-                'href' => '/drivers/driver-stages',
-                'icon' => 'ListChecks',
-                'permission_module' => 'drivers',
-                'permission_entity' => 'driverstages',
-            ];
-
-            // Driver Documents
-            $driversItems[] = [
-                'title' => 'Driver Documents',
+                'title' => 'Lead Documents',
                 'href' => '/drivers/driver-documents',
                 'icon' => 'FileText',
                 'permission_module' => 'drivers',
                 'permission_entity' => 'driverdocuments',
             ];
 
-            // Driver Follow-ups
+            // Lead Follow-ups
             $driversItems[] = [
-                'title' => 'Follow-ups',
+                'title' => 'Lead Follow-ups',
                 'href' => '/drivers/driver-follow-ups',
                 'icon' => 'History',
                 'permission_module' => 'drivers',
@@ -552,6 +426,15 @@ class HandleInertiaRequests extends Middleware
                 ];
             }
         }
+
+        // Reports Module - accessible to all authenticated users
+        $navigation[] = [
+            'title' => 'Reports',
+            'href' => '/reports',
+            'icon' => 'BarChart3',
+            'permission_module' => null,
+            'permission_entity' => null,
+        ];
 
         // Recycle Bin Module - accessible to all authenticated users with permission
         if ($user && ($user->canAccessModule('recyclebin') || $user->isSuperAdmin() || $user->isCompanyAdmin())) {

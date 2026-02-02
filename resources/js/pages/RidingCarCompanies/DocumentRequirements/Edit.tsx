@@ -276,12 +276,12 @@ export default function DocumentRequirementsEdit({
                 {/* Drivers Table with Document Requirements */}
                 {drivers.length > 0 && allDocumentRequirements.length > 0 && (
                     <Card className="p-6 mt-6">
-                        <h2 className="mb-4 text-lg font-semibold">Drivers & Document Status</h2>
+                        <h2 className="mb-4 text-lg font-semibold">Leads & Document Status</h2>
                         <DataTable
                             data={drivers}
                             columns={[
                                 {
-                                    header: 'Driver Name',
+                                    header: 'Lead Name',
                                     accessor: (row) => row.full_name,
                                 },
                                 {

@@ -4,7 +4,6 @@ namespace Modules\Drivers\database\factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Modules\Drivers\app\Models\LeadStage;
-use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
 class LeadStageFactory extends Factory
 {
@@ -25,7 +24,6 @@ class LeadStageFactory extends Factory
         $name = $this->faker->unique()->randomElement($stages);
 
         return [
-            'riding_company_id' => RidingCompany::factory(),
             'name' => $name,
             'slug' => \Illuminate\Support\Str::slug($name),
             'description' => $this->faker->optional(0.5)->sentence(),
@@ -41,13 +39,6 @@ class LeadStageFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'active' => false,
-        ]);
-    }
-
-    public function forRidingCompany(int $ridingCompanyId): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'riding_company_id' => $ridingCompanyId,
         ]);
     }
 

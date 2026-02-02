@@ -79,7 +79,7 @@ export default function LeadStatusesIndex({
                     <div>
                         <h1 className="text-2xl font-bold">Lead Statuses</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Manage lead statuses for tracking driver progress
+                            Manage lead statuses for tracking lead progress
                         </p>
                     </div>
                     <div className="flex gap-2">

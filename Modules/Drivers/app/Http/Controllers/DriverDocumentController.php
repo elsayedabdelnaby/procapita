@@ -35,9 +35,10 @@ class DriverDocumentController extends Controller
 
         // Get all document names (unique)
         $documentNames = DocumentName::orderBy('name')->get();
+        $hasRidingCompanyIdsColumn = \Illuminate\Support\Facades\Schema::hasColumn('document_names', 'riding_company_ids');
 
-        // Filter by company if not super admin
-        if ($companyId) {
+        // Filter by company if not super admin (only when riding_company_ids column exists)
+        if ($companyId && $hasRidingCompanyIdsColumn) {
             // Get riding company IDs for this company
             $ridingCompanyIds = RidingCompany::where('company_id', $companyId)->pluck('id')->toArray();
 
@@ -57,9 +58,9 @@ class DriverDocumentController extends Controller
         }
 
         // Map document names with their riding companies
-        $allDocuments = $documentNames->map(function ($documentName) {
-            // Convert riding_company_ids to integers if they are strings
-            $ridingCompanyIds = $documentName->riding_company_ids ?? [];
+        $allDocuments = $documentNames->map(function ($documentName) use ($hasRidingCompanyIdsColumn) {
+            // Convert riding_company_ids to integers if they are strings (only when column exists)
+            $ridingCompanyIds = ($hasRidingCompanyIdsColumn ? ($documentName->riding_company_ids ?? []) : []);
             if (! empty($ridingCompanyIds)) {
                 $ridingCompanyIds = array_map('intval', $ridingCompanyIds);
             }
@@ -232,16 +233,19 @@ class DriverDocumentController extends Controller
                     ->with('error', 'Please run migrations first: php artisan migrate');
             }
 
-            // Create document name record (unique)
-            $documentNameRecord = DocumentName::create([
+            // Create document name record (unique) - only set riding_company_ids when column exists
+            $createPayload = [
                 'name' => $documentName,
-                'riding_company_ids' => $ridingCompanyIds,
                 'type' => $data['type'],
                 'required' => $data['required'],
                 'notes' => $data['notes'] ?? null,
                 'status' => $data['status'],
                 'active' => $data['active'],
-            ]);
+            ];
+            if (\Illuminate\Support\Facades\Schema::hasColumn('document_names', 'riding_company_ids')) {
+                $createPayload['riding_company_ids'] = $ridingCompanyIds;
+            }
+            $documentNameRecord = DocumentName::create($createPayload);
 
             $totalDocumentsCreated = 0;
 
@@ -342,11 +346,13 @@ class DriverDocumentController extends Controller
 
         $ridingCompanies = RidingCompany::orderBy('name')->get();
 
+        $hasRidingCompanyIdsColumn = Schema::hasColumn('document_names', 'riding_company_ids');
+
         return Inertia::render('Drivers/DriverDocuments/Edit', [
             'documentName' => [
                 'id' => $documentNameRecord->id,
                 'name' => $documentNameRecord->name,
-                'riding_company_ids' => $documentNameRecord->riding_company_ids ?? [],
+                'riding_company_ids' => $hasRidingCompanyIdsColumn ? ($documentNameRecord->riding_company_ids ?? []) : [],
                 'type' => $documentNameRecord->type,
                 'required' => $documentNameRecord->required,
                 'notes' => $documentNameRecord->notes,
@@ -370,23 +376,27 @@ class DriverDocumentController extends Controller
 
             $data = $request->validated();
             $ridingCompanyIds = $data['riding_company_ids'] ?? [];
+            $hasRidingCompanyIdsColumn = Schema::hasColumn('document_names', 'riding_company_ids');
 
             // Get the document name record
             $documentNameRecord = DocumentName::findOrFail($documentName);
 
-            // Get old riding company IDs
-            $oldRidingCompanyIds = $documentNameRecord->riding_company_ids ?? [];
+            // Get old riding company IDs (only when column exists)
+            $oldRidingCompanyIds = $hasRidingCompanyIdsColumn ? ($documentNameRecord->riding_company_ids ?? []) : [];
 
-            // Update document name
-            $documentNameRecord->update([
+            // Update document name (only set riding_company_ids when column exists)
+            $updatePayload = [
                 'name' => $data['name'],
-                'riding_company_ids' => $ridingCompanyIds,
                 'type' => $data['type'] ?? $documentNameRecord->type,
                 'required' => $data['required'] ?? $documentNameRecord->required,
                 'notes' => $data['notes'] ?? $documentNameRecord->notes,
                 'status' => $data['status'] ?? $documentNameRecord->status,
                 'active' => $data['active'] ?? $documentNameRecord->active,
-            ]);
+            ];
+            if ($hasRidingCompanyIdsColumn) {
+                $updatePayload['riding_company_ids'] = $ridingCompanyIds;
+            }
+            $documentNameRecord->update($updatePayload);
 
             // Update all related driver documents with new name
             $documentNameRecord->driverDocuments()->update([
@@ -494,8 +504,9 @@ class DriverDocumentController extends Controller
 
             // Get all document names (filtered by company if needed)
             $query = DocumentName::query();
+            $hasRidingCompanyIdsColumn = Schema::hasColumn('document_names', 'riding_company_ids');
 
-            if ($companyId) {
+            if ($companyId && $hasRidingCompanyIdsColumn) {
                 // Get riding company IDs for this company
                 $ridingCompanyIds = RidingCompany::where('company_id', $companyId)->pluck('id')->toArray();
 
@@ -893,7 +904,7 @@ class DriverDocumentController extends Controller
         // Open output stream
         $output = fopen('php://temp', 'r+');
 
-        fputcsv($output, ['ID', 'Driver', 'Riding Company', 'Status', 'Reviewer', 'Created At']);
+        fputcsv($output, ['ID', 'Driver', 'Reseller', 'Status', 'Reviewer', 'Created At']);
 
         foreach ($driverDocuments as $doc) {
             fputcsv($output, [

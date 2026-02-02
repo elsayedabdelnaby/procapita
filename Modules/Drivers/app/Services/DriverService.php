@@ -6,32 +6,20 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Schema;
 use Modules\Drivers\app\Models\Driver;
 use Modules\Drivers\app\Models\DriverDocument;
-use Modules\Drivers\app\Models\DriverStage;
 use Modules\Drivers\app\Models\LeadStage;
-use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
 class DriverService
 {
-    public function getAllDrivers(?int $companyId = null, ?\App\Models\User $user = null, ?int $selectedRidingCompanyId = null): Collection
+    public function getAllDrivers(?int $companyId = null, ?\App\Models\User $user = null): Collection
     {
-        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'teamLeader', 'accountManager', 'assignedUsers', 'leadStatus', 'leadStage', 'driverStage', 'currentStage', 'lastAssignedByUser']);
+        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'teamLeader', 'accountManager', 'assignedUsers', 'leadStatus', 'leadStage', 'lastAssignedByUser']);
 
         if ($companyId) {
             $query->where('company_id', $companyId);
         }
 
-        // Filter by selected riding company (for admins using the selector)
-        if ($selectedRidingCompanyId) {
-            $query->where('riding_company_id', $selectedRidingCompanyId);
-        }
-
         // Filter by assigned_to or assigned_users if user is not super admin
         if ($user && ! $user->isSuperAdmin()) {
-            // Filter by riding company first (if user is not company admin and has a specific riding company)
-            if (! $user->is_company_admin && $user->riding_company_id) {
-                $query->where('riding_company_id', $user->riding_company_id);
-            }
-
             $subordinateUserIds = $user->getSubordinateUserIds();
 
             // Always include current user ID to ensure they see their own data
@@ -64,11 +52,8 @@ class DriverService
             'assignedUsers',
             'leadStatus',
             'leadStage',
-            'driverStage',
-            'currentStage',
             'lastAssignedByUser',
-            'stages.ridingCompany',
-            'documents.ridingCompany',
+            'documents',
         ])->find($id);
     }
 
@@ -145,7 +130,6 @@ class DriverService
 
         return Driver::with([
             'company',
-            'ridingCompany',
             'campaign',
             'leadSource',
             'assignedTo',
@@ -187,90 +171,7 @@ class DriverService
             $driver->assignedUsers()->sync($assignedUsers);
         }
 
-        // If riding company is selected, create stages and documents automatically
-        if ($driver->riding_company_id) {
-            $this->createDriverStagesFromRidingCompany($driver);
-            $this->createDriverDocumentsFromRidingCompany($driver);
-        }
-
-        return $driver->fresh(['stages.ridingCompany', 'documents.ridingCompany', 'assignedUsers']);
-    }
-
-    /**
-     * Create driver stages from riding company stage templates
-     */
-    protected function createDriverStagesFromRidingCompany(Driver $driver): void
-    {
-        $ridingCompany = RidingCompany::find($driver->riding_company_id);
-
-        if (! $ridingCompany) {
-            return;
-        }
-
-        // Get active stage templates ordered by order
-        $stageTemplates = $ridingCompany->activeStageTemplates()->get();
-
-        if ($stageTemplates->isEmpty()) {
-            return;
-        }
-
-        $stages = [];
-        foreach ($stageTemplates as $template) {
-            $stages[] = [
-                'driver_id' => $driver->id,
-                'riding_company_id' => $driver->riding_company_id,
-                'stage_order' => $template->order,
-                'status' => 'pending',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-        }
-
-        if (! empty($stages)) {
-            DriverStage::insert($stages);
-
-            // Set the first stage as current stage
-            $firstStage = $stageTemplates->first();
-            if ($firstStage) {
-                $driver->update(['current_stage_id' => $firstStage->id]);
-            }
-        }
-    }
-
-    /**
-     * Create driver documents from riding company document requirements
-     */
-    protected function createDriverDocumentsFromRidingCompany(Driver $driver): void
-    {
-        $ridingCompany = RidingCompany::find($driver->riding_company_id);
-
-        if (! $ridingCompany) {
-            return;
-        }
-
-        // Get active document requirements
-        $documentRequirements = $ridingCompany->activeDocumentRequirements()->get();
-
-        if ($documentRequirements->isEmpty()) {
-            return;
-        }
-
-        $documents = [];
-        foreach ($documentRequirements as $requirement) {
-            $documents[] = [
-                'name' => $requirement->name,
-                'driver_id' => $driver->id,
-                'riding_company_id' => $driver->riding_company_id,
-                'status' => $requirement->default_status ?? 'pending',
-                'notes' => $requirement->instructions,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-        }
-
-        if (! empty($documents)) {
-            DriverDocument::insert($documents);
-        }
+        return $driver->fresh(['documents', 'assignedUsers']);
     }
 
     public function updateDriver(int $id, array $data): Driver
@@ -359,10 +260,8 @@ class DriverService
         $updateData = ['assigned_to' => $userId];
 
         if ($user) {
-            // Update team_leader_id, account_manager_id, and riding_company_id from assigned user
             $updateData['team_leader_id'] = $user->team_leader_id;
             $updateData['account_manager_id'] = $user->account_manager_id;
-            $updateData['riding_company_id'] = $user->riding_company_id;
         }
 
         $driver->update($updateData);
