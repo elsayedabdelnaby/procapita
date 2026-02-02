@@ -1081,7 +1081,9 @@ class DriverController extends Controller
         $companyId = $this->getCompanyId();
 
         $companies = $user->isSuperAdmin() ? Company::active()->orderBy('name')->get() : null;
-        $ridingCompanies = RidingCompany::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get();
+        $ridingCompanies = Schema::hasTable('riding_companies')
+            ? RidingCompany::when($companyId, fn ($q) => $q->where('company_id', $companyId))->active()->orderBy('name')->get()
+            : collect();
         $campaigns = Campaign::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
         $leadSources = LeadSource::active()->orderBy('name')->get();
         $leadStatuses = LeadStatus::active()->ordered()->get();
@@ -2825,6 +2827,11 @@ class DriverController extends Controller
      */
     protected function getRidingCompaniesForUser($user, $companyId = null)
     {
+        // Check if the riding_companies table exists before querying
+        if (!\Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
+            return collect();
+        }
+
         if ($user->isSuperAdmin()) {
             return RidingCompany::active()->orderBy('name')->get(['id', 'name', 'company_id']);
         }
