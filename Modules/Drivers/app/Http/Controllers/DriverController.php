@@ -212,18 +212,21 @@ class DriverController extends Controller
             // Get ALL document requirements (even if no driver documents exist yet)
             // Note: We only use these for display purposes, not for creating columns
             // Columns are created only from document_names table
-            $documentRequirementsQuery = \Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement::with(['ridingCompany']);
+            $allDocumentRequirements = collect();
+            if (Schema::hasTable('riding_company_document_requirements')) {
+                $documentRequirementsQuery = \Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement::with(['ridingCompany']);
 
-            if ($companyId) {
-                $documentRequirementsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
-                    $q->where('company_id', $companyId);
-                });
+                if ($companyId) {
+                    $documentRequirementsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
+                        $q->where('company_id', $companyId);
+                    });
+                }
+
+                $allDocumentRequirements = $documentRequirementsQuery
+                    ->orderBy('riding_company_id')
+                    ->orderBy('name')
+                    ->get();
             }
-
-            $allDocumentRequirements = $documentRequirementsQuery
-                ->orderBy('riding_company_id')
-                ->orderBy('name')
-                ->get();
 
             // Use ONLY document names from document_names table for columns
             // Do NOT merge with requirements - columns should only show actual Driver Documents
@@ -1422,28 +1425,34 @@ class DriverController extends Controller
             $allDocumentNames = $documentNames->pluck('name')->unique()->sort()->values()->toArray();
             
             // Also get requirements for checking if document is required for specific riding company
-            $documentRequirementsQuery = \Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement::with(['ridingCompany']);
-            if ($companyId) {
-                $documentRequirementsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
-                    $q->where('company_id', $companyId);
-                });
+            $allDocumentRequirements = collect();
+            if (Schema::hasTable('riding_company_document_requirements')) {
+                $documentRequirementsQuery = \Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement::with(['ridingCompany']);
+                if ($companyId) {
+                    $documentRequirementsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
+                        $q->where('company_id', $companyId);
+                    });
+                }
+                $allDocumentRequirements = $documentRequirementsQuery
+                    ->where('active', true)
+                    ->orderBy('name')
+                    ->get();
             }
-            $allDocumentRequirements = $documentRequirementsQuery
-                ->where('active', true)
-                ->orderBy('name')
-                ->get();
         } else {
             // Fallback to old method if document_names table doesn't exist
-            $documentRequirementsQuery = \Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement::with(['ridingCompany']);
-            if ($companyId) {
-                $documentRequirementsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
-                    $q->where('company_id', $companyId);
-                });
+            $allDocumentRequirements = collect();
+            if (Schema::hasTable('riding_company_document_requirements')) {
+                $documentRequirementsQuery = \Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement::with(['ridingCompany']);
+                if ($companyId) {
+                    $documentRequirementsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
+                        $q->where('company_id', $companyId);
+                    });
+                }
+                $allDocumentRequirements = $documentRequirementsQuery
+                    ->where('active', true)
+                    ->orderBy('name')
+                    ->get();
             }
-            $allDocumentRequirements = $documentRequirementsQuery
-                ->where('active', true)
-                ->orderBy('name')
-                ->get();
 
             // Get unique document names (from both documents and requirements)
             $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
