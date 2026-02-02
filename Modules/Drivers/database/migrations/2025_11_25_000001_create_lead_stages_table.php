@@ -14,7 +14,10 @@ return new class extends Migration
 
         Schema::create('lead_stages', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('riding_company_id')->constrained('riding_companies')->cascadeOnDelete();
+            
+            // Create column first, then add foreign key if table exists
+            $table->unsignedBigInteger('riding_company_id');
+            
             $table->string('name');
             $table->string('slug');
             $table->text('description')->nullable();
@@ -31,6 +34,16 @@ return new class extends Migration
             $table->index('requires_all_documents_approved');
             $table->unique(['riding_company_id', 'slug']);
         });
+
+        // Add foreign key constraint only if the referenced table exists
+        if (Schema::hasTable('riding_companies')) {
+            Schema::table('lead_stages', function (Blueprint $table) {
+                $table->foreign('riding_company_id')
+                    ->references('id')
+                    ->on('riding_companies')
+                    ->onDelete('cascade');
+            });
+        }
     }
 
     public function down(): void
