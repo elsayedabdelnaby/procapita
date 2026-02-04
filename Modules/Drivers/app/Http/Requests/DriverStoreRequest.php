@@ -135,7 +135,17 @@ class DriverStoreRequest extends FormRequest
                 },
                 'nullable',
                 'string',
-                'in:Not interested,Wrong Number,Under Age,Duplicated,Wrong Documents,Car Not Accepted,Other,Already driver,Expired,Cities,Dont have driving license',
+                function ($attribute, $value, $fail) {
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+                    $allowed = config('app.demo_reseller', false)
+                        ? ['Not interested', 'Wrong Number', 'Under Age', 'Duplicated', 'Wrong Documents', 'Other', 'Expired', 'Cities', 'Already lead']
+                        : ['Not interested', 'Wrong Number', 'Under Age', 'Duplicated', 'Wrong Documents', 'Car Not Accepted', 'Other', 'Already driver', 'Expired', 'Cities', 'Dont have driving license'];
+                    if (! in_array($value, $allowed, true)) {
+                        $fail('The selected cancel reason is invalid.');
+                    }
+                },
             ],
         ];
 

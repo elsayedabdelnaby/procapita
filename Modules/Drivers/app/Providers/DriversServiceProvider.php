@@ -43,7 +43,9 @@ class DriversServiceProvider extends ServiceProvider
      */
     protected function registerCommands(): void
     {
-        // $this->commands([]);
+        $this->commands([
+            \Modules\Drivers\app\Console\Commands\ApplyLeadStatusDuration::class,
+        ]);
     }
 
     /**

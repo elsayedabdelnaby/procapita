@@ -68,7 +68,13 @@ class LeadStatusController extends Controller
 
     public function create(): Response
     {
-        return Inertia::render('Drivers/LeadStatuses/Create');
+        $availableLeadStatuses = $this->leadStatusService->getAllLeadStatuses()
+            ->map(fn ($ls) => ['id' => $ls->id, 'name' => $ls->name])
+            ->toArray();
+
+        return Inertia::render('Drivers/LeadStatuses/Create', [
+            'availableLeadStatuses' => $availableLeadStatuses,
+        ]);
     }
 
     public function store(LeadStatusStoreRequest $request): RedirectResponse
@@ -145,8 +151,15 @@ class LeadStatusController extends Controller
             abort(404, 'Lead status not found.');
         }
 
+        $availableLeadStatuses = $this->leadStatusService->getAllLeadStatuses()
+            ->filter(fn ($ls) => $ls->id !== $leadStatusModel->id)
+            ->values()
+            ->map(fn ($ls) => ['id' => $ls->id, 'name' => $ls->name])
+            ->toArray();
+
         return Inertia::render('Drivers/LeadStatuses/Edit', [
             'leadStatus' => $leadStatusModel,
+            'availableLeadStatuses' => $availableLeadStatuses,
         ]);
     }
 

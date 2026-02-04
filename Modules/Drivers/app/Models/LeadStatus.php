@@ -4,6 +4,7 @@ namespace Modules\Drivers\app\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
@@ -21,6 +22,9 @@ class LeadStatus extends Model
         'color',
         'order',
         'active',
+        'duration_value',
+        'duration_unit',
+        'change_to_lead_status_id',
     ];
 
     protected function casts(): array
@@ -28,6 +32,7 @@ class LeadStatus extends Model
         return [
             'order' => 'integer',
             'active' => 'boolean',
+            'duration_value' => 'integer',
         ];
     }
 
@@ -102,6 +107,11 @@ class LeadStatus extends Model
     public function drivers(): HasMany
     {
         return $this->hasMany(Driver::class);
+    }
+
+    public function changeToLeadStatus(): BelongsTo
+    {
+        return $this->belongsTo(LeadStatus::class, 'change_to_lead_status_id');
     }
 
     public function scopeActive($query)

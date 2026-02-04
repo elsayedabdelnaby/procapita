@@ -262,13 +262,20 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
         Route::get('driver-follow-ups', [DriverFollowUpController::class, 'index'])->name('driverfollowups.index');
         Route::get('driver-follow-ups/recycle-bin', [DriverFollowUpController::class, 'recycleBin'])->name('driverfollowups.recycle-bin');
         Route::get('driver-follow-ups/export', [DriverFollowUpController::class, 'export'])->name('driverfollowups.export');
-        Route::get('driver-follow-ups/{driverFollowUp}', [DriverFollowUpController::class, 'show'])->name('driverfollowups.show');
     });
 
-    // Mass edit route - must be before driver-follow-ups/{driverFollowUp} route to avoid route matching conflicts
+    // Static paths must be registered before {driverFollowUp} so "mass-edit" is not matched as an id
     Route::middleware(['permission:drivers.driverfollowups.mass-edit'])->group(function () {
         Route::get('driver-follow-ups/mass-edit', [DriverFollowUpController::class, 'massEdit'])->name('driverfollowups.mass-edit');
         Route::post('driver-follow-ups/mass-update', [DriverFollowUpController::class, 'massUpdate'])->name('driverfollowups.mass-update');
+    });
+
+    Route::middleware(['permission:drivers.driverfollowups.mass-delete'])->group(function () {
+        Route::post('driver-follow-ups/mass-delete', [DriverFollowUpController::class, 'massDelete'])->name('driverfollowups.mass-delete');
+    });
+
+    Route::middleware(['permission:drivers.driverfollowups.read'])->group(function () {
+        Route::get('driver-follow-ups/{driverFollowUp}', [DriverFollowUpController::class, 'show'])->name('driverfollowups.show');
     });
 
     Route::middleware(['permission:drivers.driverfollowups.update'])->group(function () {
@@ -278,9 +285,5 @@ Route::middleware(['auth', 'verified'])->prefix('drivers')->name('drivers.')->gr
 
     Route::middleware(['permission:drivers.driverfollowups.delete'])->group(function () {
         Route::delete('driver-follow-ups/{driverFollowUp}', [DriverFollowUpController::class, 'destroy'])->name('driverfollowups.destroy');
-    });
-
-    Route::middleware(['permission:drivers.driverfollowups.mass-delete'])->group(function () {
-        Route::post('driver-follow-ups/mass-delete', [DriverFollowUpController::class, 'massDelete'])->name('driverfollowups.mass-delete');
     });
 });

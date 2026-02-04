@@ -61,6 +61,11 @@ interface LeadStage {
     riding_company_ids?: number[];
 }
 
+const DEFAULT_CANCEL_REASON_OPTIONS = [
+    'Not interested', 'Wrong Number', 'Under Age', 'Duplicated', 'Wrong Documents',
+    'Car Not Accepted', 'Other', 'Already driver', 'Expired', 'Cities', 'Dont have driving license',
+];
+
 interface DriversCreateProps {
     companies?: Company[];
     ridingCompanies: RidingCompany[];
@@ -70,6 +75,7 @@ interface DriversCreateProps {
     users: User[];
     leadStages?: LeadStage[];
     defaultRidingCompanyId?: number;
+    cancelReasonOptions?: Array<{ value: string; label: string }>;
 }
 
 export default function DriversCreate({
@@ -81,6 +87,7 @@ export default function DriversCreate({
     users: initialUsers = [],
     leadStages: initialLeadStages = [],
     defaultRidingCompanyId,
+    cancelReasonOptions: cancelReasonOptionsProp = [],
 }: DriversCreateProps) {
     const page = usePage<SharedData>();
     const selectedCompany = (page.props as any)?.selectedCompany || null;
@@ -1244,17 +1251,9 @@ export default function DriversCreate({
                                             <SelectValue placeholder="Select cancel reason..." />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="Not interested">Not interested</SelectItem>
-                                            <SelectItem value="Wrong Number">Wrong Number</SelectItem>
-                                            <SelectItem value="Under Age">Under Age</SelectItem>
-                                            <SelectItem value="Duplicated">Duplicated</SelectItem>
-                                            <SelectItem value="Wrong Documents">Wrong Documents</SelectItem>
-                                            <SelectItem value="Car Not Accepted">Car Not Accepted</SelectItem>
-                                            <SelectItem value="Other">Other</SelectItem>
-                                            <SelectItem value="Already lead">Already lead</SelectItem>
-                                            <SelectItem value="Expired">Expired</SelectItem>
-                                            <SelectItem value="Cities">Cities</SelectItem>
-                                            <SelectItem value="Dont have driving license">Dont have driving license</SelectItem>
+                                            {(cancelReasonOptionsProp?.length ? cancelReasonOptionsProp : DEFAULT_CANCEL_REASON_OPTIONS.map((v) => ({ value: v, label: v }))).map((opt) => (
+                                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                     {errors.cancel_reason && (

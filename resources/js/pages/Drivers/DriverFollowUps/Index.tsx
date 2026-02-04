@@ -83,8 +83,11 @@ interface DriverFollowUp {
     updated_at: string;
 }
 
+const DEMO_RESELLER_HIDDEN_FOLLOWUP_COLUMNS = ['driver_campaign', 'driver_vehicle_type'];
+
 interface DriverFollowUpsIndexProps {
     followUps: DriverFollowUp[];
+    demo_reseller?: boolean;
 }
 
 // Define all available columns - Follow-ups columns
@@ -136,12 +139,18 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'driver_updated_at', label: 'Updated At (Leads)', defaultVisible: false, defaultOrder: 15 },
 ];
 
-// Combine all columns
-const ALL_COLUMNS = [...ALL_FOLLOWUP_COLUMNS, ...ALL_DRIVER_COLUMNS];
+// Combine all columns (filter riding/campaign/vehicle when demo_reseller)
+const getBaseColumns = (demoReseller: boolean) => {
+    const driverCols = demoReseller
+        ? ALL_DRIVER_COLUMNS.filter((c) => !DEMO_RESELLER_HIDDEN_FOLLOWUP_COLUMNS.includes(c.id))
+        : ALL_DRIVER_COLUMNS;
+    return [...ALL_FOLLOWUP_COLUMNS, ...driverCols];
+};
 
-export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUpsIndexProps) {
+export default function DriverFollowUpsIndex({ followUps = [], demo_reseller = false }: DriverFollowUpsIndexProps) {
     const page = usePage<SharedData>();
-    
+    const baseColumns = useMemo(() => getBaseColumns(demo_reseller), [demo_reseller]);
+
     const safeFollowUps = Array.isArray(followUps) ? followUps : [];
     const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; followUp: DriverFollowUp | null }>({
         open: false,
@@ -192,7 +201,7 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
     // Merge saved columns with new columns to ensure all columns are present
     const mergeColumns = (saved: any[] | null) => {
         if (!saved || !Array.isArray(saved)) {
-            return ALL_COLUMNS.map(col => ({
+            return baseColumns.map(col => ({
                 id: col.id,
                 visible: col.defaultVisible,
                 order: col.defaultOrder,
@@ -203,7 +212,7 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
         const savedMap = new Map(saved.map(col => [col.id, col]));
         
         // Merge: use saved settings if exists, otherwise use defaults
-        return ALL_COLUMNS.map(col => {
+        return baseColumns.map(col => {
             const savedCol = savedMap.get(col.id);
             if (savedCol) {
                 return {
@@ -324,7 +333,7 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
     const sortedColumns = useMemo(() => {
         try {
             if (!columns || !Array.isArray(columns) || columns.length === 0) {
-                return ALL_COLUMNS.map(col => ({
+                return baseColumns.map(col => ({
                     id: col.id,
                     visible: col.defaultVisible,
                     order: col.defaultOrder,
@@ -333,18 +342,18 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
             return [...columns].sort((a, b) => (a.order || 0) - (b.order || 0));
         } catch (e) {
             console.error('Error in sortedColumns:', e);
-            return ALL_COLUMNS.map(col => ({
+            return baseColumns.map(col => ({
                 id: col.id,
                 visible: col.defaultVisible,
                 order: col.defaultOrder,
             }));
         }
-    }, [columns]);
+    }, [columns, baseColumns]);
 
     const visibleColumns = useMemo(() => {
         try {
             if (!sortedColumns || !Array.isArray(sortedColumns) || sortedColumns.length === 0) {
-                return ALL_COLUMNS.filter(col => col.defaultVisible).map(col => ({
+                return baseColumns.filter(col => col.defaultVisible).map(col => ({
                     id: col.id,
                     visible: col.defaultVisible,
                     order: col.defaultOrder,
@@ -353,13 +362,13 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
             return sortedColumns.filter(col => col.visible);
         } catch (e) {
             console.error('Error in visibleColumns:', e);
-            return ALL_COLUMNS.filter(col => col.defaultVisible).map(col => ({
+            return baseColumns.filter(col => col.defaultVisible).map(col => ({
                 id: col.id,
                 visible: col.defaultVisible,
                 order: col.defaultOrder,
             }));
         }
-    }, [sortedColumns]);
+    }, [sortedColumns, baseColumns]);
 
     // Filter follow-ups
     const filteredFollowUps = useMemo(() => {
@@ -935,8 +944,9 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                 </div>
                             )}
 
-                            {/* Table Controls Bar */}
-                            <div className="mb-4 flex items-center justify-between gap-4">
+                            {/* Table Controls Bar - sticky at top when scrolling */}
+                            <div className="bg-neutral-100 dark:bg-neutral-800 backdrop-blur-sm sticky top-0 z-30 shadow-sm -mx-6 px-6 py-4 mb-4 rounded-none">
+                                <div className="flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-2">
                                     {isAllSelected && sortedAndFilteredFollowUps && sortedAndFilteredFollowUps.length > 0 && (
                                         <button
@@ -999,7 +1009,7 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                             <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                                             <DropdownMenuSeparator />
                                             {(sortedColumns || []).map((col) => {
-                                                const columnDef = ALL_COLUMNS.find(c => c.id === col.id);
+                                                const columnDef = baseColumns.find(c => c.id === col.id);
                                                 return (
                                                     <DropdownMenuCheckboxItem
                                                         key={col.id}
@@ -1012,6 +1022,7 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                             })}
                                         </DropdownMenuContent>
                                     </DropdownMenu>
+                                </div>
                                 </div>
                             </div>
 
@@ -1074,7 +1085,7 @@ export default function DriverFollowUpsIndex({ followUps = [] }: DriverFollowUps
                                                         </th>
                                                     );
                                                 }
-                                                const columnDef = ALL_COLUMNS.find(c => c.id === col.id);
+                                                const columnDef = baseColumns.find(c => c.id === col.id);
                                                 const sortKey = col.id === 'driver' ? 'driver' : 
                                                                col.id === 'driver_num' ? 'driver_num' :
                                                                col.id === 'user_name' ? 'user_name' :

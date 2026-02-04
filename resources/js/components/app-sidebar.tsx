@@ -58,6 +58,12 @@ export function AppSidebar() {
         } : null);
 
     const handleCompanySelect = (companyId: string) => {
+            // If already on a Reseller Company page, navigate to the new company so the whole page updates
+            const onCompanyPage = typeof window !== 'undefined' && /^\/core\/companies\/\d+$/.test(window.location.pathname);
+            if (onCompanyPage) {
+                router.visit(`/core/companies/${companyId}`);
+                return;
+            }
             router.post('/core/companies/select', {
                 company_id: parseInt(companyId),
             }, {

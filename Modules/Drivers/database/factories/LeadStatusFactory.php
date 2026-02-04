@@ -3,7 +3,6 @@
 namespace Modules\Drivers\database\factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Modules\Core\app\Models\Company;
 use Modules\Drivers\app\Models\LeadStatus;
 
 class LeadStatusFactory extends Factory
@@ -25,7 +24,6 @@ class LeadStatusFactory extends Factory
         $name = $this->faker->unique()->randomElement($statuses);
 
         return [
-            'company_id' => Company::factory(),
             'name' => $name,
             'slug' => \Illuminate\Support\Str::slug($name),
             'description' => $this->faker->optional(0.5)->sentence(),
@@ -39,13 +37,6 @@ class LeadStatusFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'active' => false,
-        ]);
-    }
-
-    public function forCompany(int $companyId): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'company_id' => $companyId,
         ]);
     }
 }

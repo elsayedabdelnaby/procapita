@@ -12,6 +12,9 @@ use Modules\Core\app\Http\Requests\CompanyUpdateRequest;
 use Modules\Core\app\Models\Company;
 use Modules\Core\app\Models\Role;
 use Modules\Core\app\Services\CompanyService;
+use Modules\Drivers\app\Models\LeadSource;
+use Modules\Marketing\app\Models\Campaign;
+use Modules\RidingCarCompanies\app\Models\RidingCompanyIntegrationSetting;
 
 class CompanyController extends Controller
 {
@@ -120,6 +123,17 @@ class CompanyController extends Controller
 
         if (! $company) {
             abort(404, 'Company not found.');
+        }
+
+        // Company admin can only view their own company; super admin can view any
+        $user = \Illuminate\Support\Facades\Auth::user();
+        if ($user && ! $user->isSuperAdmin() && (int) $user->company_id !== (int) $id) {
+            abort(403, 'You can only view your own company.');
+        }
+
+        // Keep sidebar company selector in sync when super admin views a company
+        if ($user && $user->isSuperAdmin()) {
+            session(['selected_company_id' => $id]);
         }
 
         $statistics = $this->companyService->getCompanyStatistics($id);
@@ -237,6 +251,134 @@ class CompanyController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        // For Integration/WhatsApp/Distribution/Rotation: use first riding company of this reseller (company from URL; sidebar switch changes company so whole page updates)
+        $selectedRidingCompanyId = request()->integer('selected_riding_company_id', 0);
+        $ridingCompaniesCollection = collect($ridingCompanies);
+        if (! $selectedRidingCompanyId && $ridingCompaniesCollection->isNotEmpty()) {
+            $selectedRidingCompanyId = $ridingCompaniesCollection->first()['id'];
+        }
+        $selectedRidingCompanyData = null;
+        if ($selectedRidingCompanyId && class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+            $ridingCompany = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $id)
+                ->where('id', $selectedRidingCompanyId)
+                ->with('defaultDriverUser')
+                ->first();
+            if ($ridingCompany) {
+                // Facebook integration (same shape as FacebookIntegrationController@show)
+                $integration = RidingCompanyIntegrationSetting::firstOrNew(
+                    [
+                        'riding_company_id' => $ridingCompany->id,
+                        'type' => 'facebook',
+                    ]
+                );
+                if (! isset($integration->config) || $integration->config === null) {
+                    $integration->setAttribute('config', []);
+                }
+                if (! $integration->exists) {
+                    $integration->active = false;
+                }
+                if (! isset($integration->attributes['config']) || ! array_key_exists('config', $integration->attributes)) {
+                    $integration->setAttribute('config', $integration->config ?? []);
+                }
+                $integration->save();
+
+                $forms = $integration->facebook_forms ?? [];
+                if (empty($forms) && $integration->facebook_form_id) {
+                    $config = $integration->config ?? [];
+                    $forms = [
+                        [
+                            'form_id' => $integration->facebook_form_id,
+                            'campaign_id' => $config['facebook_campaign_id'] ?? null,
+                            'field_mapping' => $integration->facebook_field_mapping ?? [],
+                            'name' => null,
+                            'status' => null,
+                        ],
+                    ];
+                }
+
+                $integrationPayload = [
+                    'id' => $integration->id,
+                    'type' => $integration->type,
+                    'active' => $integration->active,
+                    'facebook_user_id' => $integration->facebook_user_id,
+                    'facebook_user_name' => $integration->facebook_user_name,
+                    'facebook_page_id' => $integration->facebook_page_id,
+                    'facebook_form_id' => $integration->facebook_form_id,
+                    'facebook_field_mapping' => $integration->facebook_field_mapping ?? [],
+                    'facebook_forms' => $forms,
+                    'has_access_token' => ! empty($integration->facebook_access_token),
+                ];
+
+                // Distribution: extract user IDs from distribution_users
+                $distributionUsers = $ridingCompany->distribution_users ?? [];
+                $distributionUserIds = $this->extractUserIdsFromDistributionUsers(is_array($distributionUsers) ? $distributionUsers : []);
+
+                $distributionScenarios = $ridingCompany->distribution_scenarios;
+                if ($distributionScenarios !== null && ! is_array($distributionScenarios)) {
+                    $distributionScenarios = json_decode($distributionScenarios, true) ?? [];
+                }
+                $distributionScenarios = $distributionScenarios ?? [];
+
+                // Lead sources, campaigns, roles, available users for Distribution tab
+                $leadSources = LeadSource::active()
+                    ->orderBy('name')
+                    ->get(['id', 'name'])
+                    ->map(fn ($source) => ['id' => $source->id, 'name' => $source->name])
+                    ->toArray();
+
+                $campaigns = $ridingCompany->company_id
+                    ? Campaign::where('company_id', $ridingCompany->company_id)
+                        ->orderBy('name')
+                        ->get(['id', 'name'])
+                        ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])
+                        ->toArray()
+                    : [];
+
+                $rolesForDistribution = $ridingCompany->company_id
+                    ? Role::where('team_id', $ridingCompany->company_id)
+                        ->orderBy('name')
+                        ->get(['id', 'name'])
+                        ->map(fn ($r) => ['id' => $r->id, 'name' => $r->name])
+                        ->toArray()
+                    : [];
+
+                $availableUsersForRc = \App\Models\User::query()
+                    ->where('company_id', $ridingCompany->company_id)
+                    ->where('is_active', true);
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'riding_company_id')) {
+                    $availableUsersForRc->where(function ($q) use ($ridingCompany) {
+                        $q->whereNull('riding_company_id')
+                            ->orWhere('riding_company_id', $ridingCompany->id);
+                    });
+                }
+                $availableUsersForRc = $availableUsersForRc->orderBy('name')
+                    ->get(['id', 'name', 'email'])
+                    ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'email' => $u->email])
+                    ->toArray();
+
+                $selectedRidingCompanyData = [
+                    'id' => $ridingCompany->id,
+                    'name' => $ridingCompany->name,
+                    'default_driver_user_id' => $ridingCompany->default_driver_user_id,
+                    'default_driver_user' => $ridingCompany->defaultDriverUser ? [
+                        'id' => $ridingCompany->defaultDriverUser->id,
+                        'name' => $ridingCompany->defaultDriverUser->name,
+                        'email' => $ridingCompany->defaultDriverUser->email,
+                    ] : null,
+                    'integration' => $integrationPayload,
+                    'distribution_type' => $ridingCompany->distribution_type,
+                    'max_drivers_per_day' => $ridingCompany->max_drivers_per_day ?? 50,
+                    'distribution_users' => $distributionUserIds,
+                    'distribution_scenarios' => $distributionScenarios,
+                    'last_distribution_date' => $ridingCompany->last_distribution_date,
+                    'leadSources' => $leadSources,
+                    'campaigns' => $campaigns,
+                    'roles' => $rolesForDistribution,
+                    'availableUsers' => $availableUsersForRc,
+                ];
+            }
+        }
+
         return Inertia::render('Core/Companies/Show', [
             'company' => $company->load('users', 'roles'),
             'statistics' => $statistics,
@@ -248,6 +390,8 @@ class CompanyController extends Controller
             'ridingCompanies' => $ridingCompanies,
             'availableCompanies' => $availableCompanies,
             'documentRequirements' => $documentRequirements,
+            'selected_riding_company_id' => $selectedRidingCompanyId ?: null,
+            'selectedRidingCompanyData' => $selectedRidingCompanyData,
         ]);
     }
 
@@ -388,6 +532,21 @@ class CompanyController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Company filter cleared. Showing all companies.');
+    }
+
+    /**
+     * Extract user IDs from distribution_users array (handles array of IDs or array of objects with user_id).
+     */
+    private function extractUserIdsFromDistributionUsers(array $distributionUsers): array
+    {
+        if (empty($distributionUsers)) {
+            return [];
+        }
+        if (is_array($distributionUsers[0]) && isset($distributionUsers[0]['user_id'])) {
+            return array_column($distributionUsers, 'user_id');
+        }
+
+        return $distributionUsers;
     }
 
     /**

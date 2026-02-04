@@ -189,11 +189,19 @@ class DriverListService
     }
 
     /**
-     * Get available fields for columns
+     * Fields to hide in demo_reseller mode (riding/campaign/vehicle related).
+     */
+    protected static function demoResellerHiddenConditionFields(): array
+    {
+        return ['riding_company_id', 'campaign_id', 'vehicle_type', 'car_or_scooter', 'vehicle_type_and_year'];
+    }
+
+    /**
+     * Get available fields for columns (excludes riding/campaign/vehicle when demo_reseller).
      */
     public function getAvailableFields(): array
     {
-        return [
+        $fields = [
             ['value' => 'id', 'label' => 'ID', 'type' => 'number'],
             ['value' => 'driver_num', 'label' => 'Driver Number', 'type' => 'text'],
             ['value' => 'duplicate', 'label' => 'Duplicate Count', 'type' => 'number'],
@@ -213,6 +221,7 @@ class DriverListService
             ['value' => 'assigned_time', 'label' => 'Assigned Time', 'type' => 'datetime'],
             ['value' => 'team_leader_id', 'label' => 'Team Leader', 'type' => 'picklist'],
             ['value' => 'account_manager_id', 'label' => 'Account Manager', 'type' => 'picklist'],
+            ['value' => 'reseller', 'label' => 'Reseller', 'type' => 'text'],
             ['value' => 'resigned_leads', 'label' => 'Resigned Leads', 'type' => 'text'],
             ['value' => 'last_assigned_time', 'label' => 'Last Assigned Time', 'type' => 'datetime'],
             ['value' => 'last_assigned_date', 'label' => 'Last Assigned Date', 'type' => 'date'],
@@ -236,6 +245,13 @@ class DriverListService
             ['value' => 'allow_duplicate', 'label' => 'Allow Duplicate', 'type' => 'checkbox'],
             ['value' => 'confirm_duplicate', 'label' => 'Confirm Duplicate', 'type' => 'checkbox'],
         ];
+
+        if (config('app.demo_reseller', false)) {
+            $hidden = self::demoResellerHiddenConditionFields();
+            $fields = array_values(array_filter($fields, fn ($f) => ! in_array($f['value'], $hidden, true)));
+        }
+
+        return $fields;
     }
 
     /**

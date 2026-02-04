@@ -24,12 +24,14 @@ interface RoleCreateProps {
     company: Company;
     availableRoles: Role[];
     permissions?: Record<string, Record<string, Permission[]>>;
+    demo_reseller?: boolean;
 }
 
 export default function RoleCreate({
     company,
     availableRoles,
     permissions = {},
+    demo_reseller = false,
 }: RoleCreateProps) {
     const page = usePage<SharedData>();
     const { selectedCompany } = page.props;
@@ -137,7 +139,7 @@ export default function RoleCreate({
         // Special handling for driverfields: use default "read" permission for all fields
         if (moduleName === 'drivers' && entityName === 'driverfields') {
             const currentPermissions = data.permissions || [];
-            const fields = Object.keys(driverFieldMapping);
+            const fields = visibleDriverFieldKeys;
             const newPermissions = [...currentPermissions];
 
             if (checked) {
@@ -197,6 +199,8 @@ export default function RoleCreate({
     };
 
     // Field mapping for Drivers fields
+    const demoResellerHiddenDriverFields = ['campaign', 'riding_company', 'vehicle_type', 'car_or_scooter', 'vehicle_type_and_year'];
+
     const driverFieldMapping: Record<string, string> = {
         'assigned_to': 'Assigned To',
         'campaign': 'Campaign',
@@ -218,6 +222,11 @@ export default function RoleCreate({
         'whatsapp_phone': 'WhatsApp',
         'worked_with_us_before': 'Worked With Us Before',
     };
+    const visibleDriverFieldKeys = useMemo(() => {
+        const keys = Object.keys(driverFieldMapping);
+        if (!demo_reseller) return keys;
+        return keys.filter((k) => !demoResellerHiddenDriverFields.includes(k));
+    }, [demo_reseller]);
 
     // Group driverfields permissions by field name
     const driverFieldsPermissions = useMemo(() => {
@@ -520,7 +529,8 @@ export default function RoleCreate({
                                 </div>
 
                                 <div className="max-h-[600px] space-y-2 overflow-y-auto rounded-md border p-4">
-                                    {Object.entries(permissions).map(([moduleName, entities]) => {
+                                    {Object.entries(permissions)
+                                        .map(([moduleName, entities]) => {
                                         // For drivers module, exclude driverfields from module-level selection
                                         const modulePermissions = Object.entries(entities)
                                             .filter(([entityName]) => {
@@ -578,7 +588,7 @@ export default function RoleCreate({
                                                             toggleModule(moduleName);
                                                         }}
                                                     >
-                                                        {(moduleName === 'drivers' ? 'Leads' : moduleName.charAt(0).toUpperCase() + moduleName.slice(1))} Module
+                                                        {(moduleName === 'drivers' ? 'Leads' : demo_reseller && moduleName === 'ridingcarcompanies' ? 'Reseller Companies' : moduleName.charAt(0).toUpperCase() + moduleName.slice(1))} Module
                                                     </Label>
                                                     <span className="text-xs text-neutral-500">
                                                         ({modulePermissions.length} permissions)
@@ -597,7 +607,7 @@ export default function RoleCreate({
                                                                 // For driverfields, check if at least one permission per field is selected
                                                                 let allEntitySelected: boolean;
                                                                 if (moduleName === 'drivers' && entityName === 'driverfields') {
-                                                                    const fields = Object.keys(driverFieldMapping);
+                                                                    const fields = visibleDriverFieldKeys;
                                                                     allEntitySelected = fields.length > 0 && fields.every((fieldName) => {
                                                                         const state = getFieldPermissionState(fieldName);
                                                                         return state !== null; // At least one permission (invisible, read, or write) is selected
@@ -673,7 +683,7 @@ export default function RoleCreate({
                                                                                     );
                                                                                 }}
                                                                             >
-                                                                                {moduleName === 'drivers' && entityName === 'drivers' ? 'Leads' : (moduleName === 'drivers' && entityName === 'driverfields' ? 'Lead Fields' : entityName)}
+                                                                                {moduleName === 'drivers' && entityName === 'drivers' ? 'Leads' : (moduleName === 'drivers' && entityName === 'driverfields' ? 'Lead Fields' : (moduleName === 'drivers' && entityName === 'driverdocuments' ? 'Lead Documents' : (moduleName === 'drivers' && entityName === 'driverfollowups' ? 'Lead Follow Ups' : (moduleName === 'drivers' && entityName === 'driverstages' ? 'Lead Stages' : (entityName || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())))))}
                                                                             </Label>
                                                                             <span className="text-xs text-neutral-500">
                                                                                 ({entityPermissionIds.length}{' '}
@@ -692,7 +702,7 @@ export default function RoleCreate({
                                                                                             </p>
                                                                                         </div>
                                                                                         <div className="space-y-4">
-                                                                                            {Object.keys(driverFieldMapping).map((fieldName) => {
+                                                                                            {visibleDriverFieldKeys.map((fieldName) => {
                                                                                                 const fieldLabel = driverFieldMapping[fieldName];
                                                                                                 const currentState = getFieldPermissionState(fieldName);
                                                                                                 const fieldPerms = driverFieldsPermissions[fieldName];

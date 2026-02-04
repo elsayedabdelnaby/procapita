@@ -81,6 +81,7 @@ interface Driver {
     lead_status?: LeadStatus;
     lead_status_comment?: string;
     cancel_reason?: string;
+    reseller?: string | null;
     next_follow_up?: string;
     last_follow_up?: string;
     lead_stage?: LeadStage;
@@ -120,9 +121,13 @@ interface DriverList {
     }>;
 }
 
+const DEMO_RESELLER_HIDDEN_COLUMNS = ['campaign', 'riding_company'];
+
 interface DriversIndexProps {
     drivers: Driver[];
     lists?: DriverList[];
+    demo_reseller?: boolean;
+    cancelReasonOptions?: Array<{ value: string; label: string }>;
     importAvailableFields?: Array<{ 
         value: string; 
         label: string; 
@@ -288,10 +293,17 @@ function FilterDropdown({
     );
 }
 
-export default function DriversIndex({ drivers = [], lists = [], importAvailableFields, filterOptions = {}, allDocumentNames = [], documentsByRidingCompany = {}, allDocumentRequirements = [] }: DriversIndexProps) {
+export default function DriversIndex({ drivers = [], lists = [], importAvailableFields, filterOptions = {}, allDocumentNames = [], documentsByRidingCompany = {}, allDocumentRequirements = [], demo_reseller = false, cancelReasonOptions: cancelReasonOptionsProp = [] }: DriversIndexProps) {
     // Field permissions hook
     const { canViewDriverField } = useFieldPermissions();
     const page = usePage<SharedData>();
+    const baseColumns = useMemo(() => {
+        if (!demo_reseller) return ALL_DRIVER_COLUMNS;
+        const filtered = ALL_DRIVER_COLUMNS.filter((col) => !DEMO_RESELLER_HIDDEN_COLUMNS.includes(col.id));
+        // Add reseller column (company name from assigned user) for demo
+        filtered.push({ id: 'reseller', label: 'Reseller', defaultVisible: true, defaultOrder: 5.5 });
+        return filtered.sort((a, b) => (a.defaultOrder ?? 0) - (b.defaultOrder ?? 0));
+    }, [demo_reseller]);
     
     // Removed debug logs to prevent console spam
     
@@ -476,10 +488,10 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
         }));
     }, [documentColumnsToShow]);
     
-    // Merge static and dynamic columns
+    // Merge static and dynamic columns (use baseColumns so demo_reseller hides campaign/riding_company)
     const allColumnsWithDocuments = useMemo(() => {
-        return [...ALL_DRIVER_COLUMNS, ...dynamicDocumentColumns];
-    }, [dynamicDocumentColumns]);
+        return [...baseColumns, ...dynamicDocumentColumns];
+    }, [baseColumns, dynamicDocumentColumns]);
     
     // Get available riding companies for WhatsApp selector (for admins)
     const availableRidingCompanies = useMemo(() => {
@@ -510,13 +522,11 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
     }, [availableRidingCompanies, sidebarSelectedRidingCompanyId]);
     
     // Determine which riding company ID to use for WhatsApp
-    // If user has a specific riding company, use that
-    // Otherwise, use sidebar selection
-    const whatsAppRidingCompanyId = userRidingCompanyId || sidebarSelectedRidingCompanyId;
+    // If user has a specific riding company, use that; else sidebar selection; else in demo_reseller mode use local selector (first available)
+    const whatsAppRidingCompanyId = userRidingCompanyId || sidebarSelectedRidingCompanyId || (demo_reseller && availableRidingCompanies.length > 0 ? selectedWhatsAppRidingCompanyId : null);
     
-    // Hide WhatsApp button when "All ReSellers" is selected (no specific reseller)
-    // Show only when user has a specific riding company OR admin selected a specific riding company from sidebar
-    const showWhatsAppButton = !!userRidingCompanyId || !!sidebarSelectedRidingCompanyId;
+    // Show WhatsApp when: user has riding company, or sidebar has selection, or (demo_reseller and at least one reseller company)
+    const showWhatsAppButton = !!userRidingCompanyId || !!sidebarSelectedRidingCompanyId || (!!demo_reseller && availableRidingCompanies.length > 0);
     
     // Removed debug log
     
@@ -2295,6 +2305,10 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                         aValue = a.riding_company?.name || '';
                         bValue = b.riding_company?.name || '';
                         break;
+                    case 'reseller':
+                        aValue = (a as any).reseller || a.riding_company?.name || '';
+                        bValue = (b as any).reseller || b.riding_company?.name || '';
+                        break;
                     case 'lead_source':
                         aValue = a.lead_source?.name || '';
                         bValue = b.lead_source?.name || '';
@@ -3133,8 +3147,8 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                 <Card className="flex-1 flex flex-col min-h-0 py-2 gap-2">
                     {safeDrivers.length > 0 ? (
                         <>
-                            {/* Notification Buttons */}
-                            <div className="px-6 py-2 mb-2 flex items-center gap-3 flex-wrap flex-shrink-0">
+                            {/* Notification Buttons - sticky at top when scrolling */}
+                            <div className="bg-neutral-100 dark:bg-neutral-800 backdrop-blur-sm sticky top-0 z-30 shadow-sm px-6 py-2 mb-2 flex items-center gap-3 flex-wrap flex-shrink-0">
                                 <button
                                     onClick={() => {
                                         setActiveTab('all');
@@ -4046,19 +4060,13 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                     );
                                                 }
                                                 if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to', 'team_leader', 'account_manager', 'city', 'cancel_reason', 'last_assigned_by'].includes(col.id)) {
-                                                    const cancelReasonOptions = [
-                                                        'Not interested',
-                                                        'Wrong Number',
-                                                        'Under Age',
-                                                        'Duplicated',
-                                                        'Wrong Documents',
-                                                        'Car Not Accepted',
-                                                        'Other',
-                                                        'Already lead',
-                                                        'Expired',
-                                                        'Cities',
-                                                        'Dont have driving license'
-                                                    ];
+                                                    const cancelReasonOptions = cancelReasonOptionsProp?.length
+                                                        ? cancelReasonOptionsProp.map((o) => ({ id: o.value, name: o.label }))
+                                                        : [
+                                                            'Not interested', 'Wrong Number', 'Under Age', 'Duplicated',
+                                                            'Wrong Documents', 'Car Not Accepted', 'Other', 'Already lead',
+                                                            'Expired', 'Cities', 'Dont have driving license'
+                                                          ].map((val) => ({ id: val, name: val }));
                                                     
                                                     const options = col.id === 'campaign' ? (filterOptions?.campaigns || []) :
                                                                   col.id === 'lead_source' ? (filterOptions?.leadSources || []) :
@@ -4492,6 +4500,9 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                 break;
                                                             case 'riding_company':
                                                                 cellContent = driver.riding_company?.name || '-';
+                                                                break;
+                                                            case 'reseller':
+                                                                cellContent = (driver as any).reseller || driver.riding_company?.name || '-';
                                                                 break;
                                                             case 'lead_source':
                                                                 cellContent = driver.lead_source?.name || '-';

@@ -181,6 +181,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
     // Get selected riding company from sidebar (for admins)
     const sidebarSelectedRidingCompany = (page.props as any).selectedRidingCompany;
     const sidebarSelectedRidingCompanyId = sidebarSelectedRidingCompany?.id || null;
+    const demoReseller = (page.props as { demo_reseller?: boolean }).demo_reseller ?? false;
     
     // Get available riding companies for WhatsApp selector (for admins)
     const availableRidingCompanies = useMemo(() => {
@@ -211,13 +212,11 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
     }, [availableRidingCompanies, sidebarSelectedRidingCompanyId]);
     
     // Determine which riding company ID to use for WhatsApp
-    // If user has a specific riding company, use that
-    // Otherwise, use sidebar selection
-    const whatsAppRidingCompanyId = userRidingCompanyId || sidebarSelectedRidingCompanyId;
+    // If user has a specific riding company, use that; else sidebar selection; else in demo_reseller mode use local selector
+    const whatsAppRidingCompanyId = userRidingCompanyId || sidebarSelectedRidingCompanyId || (demoReseller && availableRidingCompanies.length > 0 ? selectedWhatsAppRidingCompanyId : null);
     
-    // Hide WhatsApp button when "All Riding Companies" is selected (no specific riding company)
-    // Show only when user has a specific riding company OR admin selected a specific riding company from sidebar
-    const showWhatsAppButton = !!userRidingCompanyId || !!sidebarSelectedRidingCompanyId;
+    // Show WhatsApp when: user has riding company, or sidebar has selection, or (demo_reseller and at least one reseller company)
+    const showWhatsAppButton = !!userRidingCompanyId || !!sidebarSelectedRidingCompanyId || (!!demoReseller && availableRidingCompanies.length > 0);
     
     // Debug: Log to help troubleshoot
     if (!companyId) {

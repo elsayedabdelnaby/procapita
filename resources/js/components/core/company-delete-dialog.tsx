@@ -24,6 +24,7 @@ interface CompanyDeleteDialogProps {
     company: Company | null;
     availableCompanies: Company[];
     ridingCompaniesCount?: number;
+    demoReseller?: boolean;
 }
 
 export function CompanyDeleteDialog({
@@ -32,7 +33,9 @@ export function CompanyDeleteDialog({
     company,
     availableCompanies,
     ridingCompaniesCount = 0,
+    demoReseller = false,
 }: CompanyDeleteDialogProps) {
+    const ridingLabel = demoReseller ? 'Reseller Companies' : 'Riding Companies';
     const [transferCompanyId, setTransferCompanyId] = useState<string>('');
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -92,8 +95,7 @@ export function CompanyDeleteDialog({
                         {hasRidingCompanies ? (
                             <>
                                 Are you sure you want to delete "{company?.name}"? This company has{' '}
-                                <strong>{ridingCompaniesCount}</strong> Riding{' '}
-                                {ridingCompaniesCount === 1 ? 'Company' : 'Companies'}. Please select a
+                                <strong>{ridingCompaniesCount}</strong> {ridingLabel}. Please select a
                                 company to transfer them to.
                             </>
                         ) : (
@@ -109,7 +111,7 @@ export function CompanyDeleteDialog({
                 {hasRidingCompanies && (
                     <div className="space-y-2 py-4">
                         <Label htmlFor="transfer-company">
-                            Transfer Riding Companies to:{' '}
+                            Transfer {ridingLabel} to:{' '}
                             <span className="text-red-600 dark:text-red-400">*</span>
                         </Label>
                         <Select
@@ -131,7 +133,7 @@ export function CompanyDeleteDialog({
                             </SelectContent>
                         </Select>
                         <p className="text-xs text-neutral-600 dark:text-neutral-400">
-                            All Riding Companies, users, and leads will be transferred to the selected
+                            All {ridingLabel}, users, and leads will be transferred to the selected
                             company.
                         </p>
                     </div>

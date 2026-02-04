@@ -308,6 +308,7 @@ class DriverController extends Controller
                         ] : null,
                         'notes' => $driver->notes,
                         'cancel_reason' => $driver->cancel_reason,
+                        'reseller' => $driver->reseller ?? null,
                         'worked_with_us_before' => $driver->worked_with_us_before,
                         'vehicle_type' => $driver->vehicle_type,
                         'car_or_scooter' => $driver->car_or_scooter,
@@ -332,6 +333,8 @@ class DriverController extends Controller
                     'leadStatuses' => $leadStatuses->map(fn ($ls) => ['id' => $ls->id, 'name' => $ls->name])->toArray(),
                     'users' => $users->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->toArray(),
                 ],
+                'demo_reseller' => config('app.demo_reseller', false),
+                'cancelReasonOptions' => $this->getCustomDropdownOptions('cancel_reason', $companyId),
                 'lists' => $this->driverListService->getAccessibleLists($user, $companyId),
                 'allDocumentNames' => $allUniqueDocumentNames,
                 'documentsByRidingCompany' => $documentsByRidingCompany,
@@ -478,6 +481,7 @@ class DriverController extends Controller
                 'resigned_leads' => $driver->resigned_leads,
                 'notes' => $driver->notes,
                 'cancel_reason' => $driver->cancel_reason,
+                'reseller' => $driver->reseller ?? null,
                 'created_at' => $driver->created_at,
                 'updated_at' => $driver->updated_at,
                 'deleted_at' => $driver->deleted_at?->format('Y-m-d H:i:s'),
@@ -542,6 +546,8 @@ class DriverController extends Controller
             'leadStatuses' => $leadStatuses,
             'users' => $users,
             'leadStages' => $leadStages,
+            'demo_reseller' => config('app.demo_reseller', false),
+            'cancelReasonOptions' => $this->getCustomDropdownOptions('cancel_reason', $companyId),
         ]);
     }
 
@@ -607,7 +613,7 @@ class DriverController extends Controller
                 $data['last_follow_up'] = now();
             }
 
-            // Auto-fill team_leader_id, account_manager_id, and riding_company_id from assigned user
+            // Auto-fill team_leader_id, account_manager_id, riding_company_id, and reseller from assigned user
             if (isset($data['assigned_to']) && $data['assigned_to']) {
                 $assignedUser = User::find($data['assigned_to']);
                 if ($assignedUser) {
@@ -619,6 +625,10 @@ class DriverController extends Controller
                     if (! isset($data['riding_company_id']) || ! $data['riding_company_id']) {
                         $data['riding_company_id'] = $assignedUser->riding_company_id;
                     }
+                    // Set reseller to assigned user's company name (for reseller demo)
+                    if ($assignedUser->company_id && $assignedUser->company) {
+                        $data['reseller'] = $assignedUser->company->name;
+                    }
                 }
             }
 
@@ -626,7 +636,7 @@ class DriverController extends Controller
 
             return redirect()
                 ->route('drivers.drivers.index')
-                ->with('success', 'Driver created successfully.');
+                ->with('success', config('app.demo_reseller', false) ? 'Lead created successfully.' : 'Driver created successfully.');
         } catch (\Exception $e) {
             if ($request->wantsJson() || $request->expectsJson()) {
                 return response()->json([
@@ -694,6 +704,9 @@ class DriverController extends Controller
             if (! $driverModel) {
                 abort(404, 'Driver not found.');
             }
+
+            // When user belongs to a reseller company, set lead's company to that user's company
+            $this->syncDriverCompanyToCurrentUser($driverModel);
 
             // Get next and previous driver IDs
             $companyId = $this->getCompanyId();
@@ -804,6 +817,7 @@ class DriverController extends Controller
                     ] : null,
                     'notes' => $driverModel->notes,
                     'cancel_reason' => $driverModel->cancel_reason,
+                    'reseller' => $driverModel->reseller ?? null,
                     'worked_with_us_before' => $driverModel->worked_with_us_before,
                     'vehicle_type_and_year' => $driverModel->vehicle_type_and_year,
                     'city' => $driverModel->city,
@@ -987,6 +1001,7 @@ class DriverController extends Controller
                 ] : null,
                 'notes' => $driverModel->notes,
                 'cancel_reason' => $driverModel->cancel_reason,
+                'reseller' => $driverModel->reseller ?? null,
                 'worked_with_us_before' => $driverModel->worked_with_us_before,
                 'vehicle_type_and_year' => $driverModel->vehicle_type_and_year,
                 'city' => $driverModel->city,
@@ -1077,6 +1092,9 @@ class DriverController extends Controller
             abort(404, 'Driver not found.');
         }
 
+        // When user belongs to a reseller company, set lead's company to that user's company
+        $this->syncDriverCompanyToCurrentUser($driverModel);
+
         $user = Auth::user();
         $companyId = $this->getCompanyId();
 
@@ -1135,6 +1153,7 @@ class DriverController extends Controller
                 'lead_stage_id' => $driverModel->lead_stage_id,
                 'notes' => $driverModel->notes,
                 'cancel_reason' => $driverModel->cancel_reason,
+                'reseller' => $driverModel->reseller ?? null,
                 'next_time' => $driverModel->next_time,
                 'resigned_leads' => $driverModel->resigned_leads,
                 'confirm_duplicate' => $driverModel->confirm_duplicate ?? false,
@@ -1146,6 +1165,8 @@ class DriverController extends Controller
             'leadStatuses' => $leadStatuses,
             'users' => $users,
             'leadStages' => $leadStages,
+            'demo_reseller' => config('app.demo_reseller', false),
+            'cancelReasonOptions' => $this->getCustomDropdownOptions('cancel_reason', $companyId),
         ]);
     }
 
@@ -1275,6 +1296,10 @@ class DriverController extends Controller
                         $data['account_manager_id'] = $newAssignedUser->account_manager_id;
                         // Update riding_company_id from new assigned user's riding_company_id
                         $data['riding_company_id'] = $newAssignedUser->riding_company_id;
+                        // Set reseller to assigned user's company name (for reseller demo)
+                        if ($newAssignedUser->company_id && $newAssignedUser->company) {
+                            $data['reseller'] = $newAssignedUser->company->name;
+                        }
 
                         // Handle Follow-ups reassignment
                         if ($oldAssignedUser) {
@@ -1314,6 +1339,7 @@ class DriverController extends Controller
                     // If assigned_to is null, set these fields to null as well
                     $data['team_leader_id'] = null;
                     $data['account_manager_id'] = null;
+                    $data['reseller'] = null;
                     // Note: riding_company_id might be kept if it was set manually, so we don't clear it here
                 }
             }
@@ -1338,7 +1364,7 @@ class DriverController extends Controller
 
             return redirect()
                 ->back()
-                ->with('success', 'Driver updated successfully.');
+                ->with('success', config('app.demo_reseller', false) ? 'Lead updated successfully.' : 'Driver updated successfully.');
         } catch (\Exception $e) {
             return redirect()
                 ->back()
@@ -1353,7 +1379,7 @@ class DriverController extends Controller
 
             return redirect()
                 ->route('drivers.drivers.index')
-                ->with('success', 'Driver deleted successfully.');
+                ->with('success', config('app.demo_reseller', false) ? 'Lead deleted successfully.' : 'Driver deleted successfully.');
         } catch (\Exception $e) {
             return redirect()
                 ->back()
@@ -1372,7 +1398,7 @@ class DriverController extends Controller
 
             return redirect()
                 ->back()
-                ->with('success', 'Driver assigned successfully.');
+                ->with('success', config('app.demo_reseller', false) ? 'Lead assigned successfully.' : 'Driver assigned successfully.');
         } catch (\Exception $e) {
             return redirect()
                 ->back()
@@ -1586,7 +1612,7 @@ class DriverController extends Controller
                 $driver->phone,
                 $driver->whatsapp_phone ?? '',
                 $driver->email ?? '',
-                $driver->ridingCompany?->name ?? '',
+                $driver->reseller ?? $driver->ridingCompany?->name ?? '',
                 $driver->campaign?->name ?? '',
                 $driver->next_time ?? '',
                 $driver->assignedTo?->name ?? '', // Fixed: Use name, not date
@@ -2127,12 +2153,18 @@ class DriverController extends Controller
                 'New Cairo', '6th of October',
             ];
         } elseif ($field === 'cancel_reason') {
-            // Static cancel reason options
+            // Static cancel reason options (exclude riding-related for demo_reseller)
             $staticOptions = [
                 'Not interested', 'Wrong Number', 'Under Age', 'Duplicated',
-                'Wrong Documents', 'Car Not Accepted', 'Other', 'Already driver',
-                'Expired', 'Cities', 'Dont have driving license',
+                'Wrong Documents', 'Other', 'Expired', 'Cities',
             ];
+            if (! config('app.demo_reseller', false)) {
+                $staticOptions = array_merge($staticOptions, [
+                    'Car Not Accepted', 'Already driver', 'Dont have driving license',
+                ]);
+            } else {
+                $staticOptions[] = 'Already lead';
+            }
         }
 
         // Get custom values from database
@@ -2810,7 +2842,7 @@ class DriverController extends Controller
 
             return redirect()
                 ->route('drivers.drivers.index')
-                ->with('success', 'Drivers merged successfully.');
+                ->with('success', config('app.demo_reseller', false) ? 'Leads merged successfully.' : 'Drivers merged successfully.');
         } catch (\Exception $e) {
             \DB::rollBack();
 
@@ -2845,6 +2877,35 @@ class DriverController extends Controller
         }
 
         return collect();
+    }
+
+    /**
+     * When the current user belongs to a reseller company (riding_company_id), set the lead's
+     * company_id, riding_company_id and reseller to that user's company so the lead shows under that reseller.
+     */
+    protected function syncDriverCompanyToCurrentUser(Driver $driver): void
+    {
+        $user = Auth::user();
+        if (! $user || ! $user->riding_company_id || ! $user->company_id) {
+            return;
+        }
+
+        $updates = [];
+        if ($driver->company_id != $user->company_id) {
+            $updates['company_id'] = $user->company_id;
+        }
+        if (Schema::hasColumn($driver->getTable(), 'riding_company_id') && $driver->riding_company_id != $user->riding_company_id) {
+            $updates['riding_company_id'] = $user->riding_company_id;
+        }
+        $resellerName = $user->company ? $user->company->name : null;
+        if ($resellerName !== null && $driver->reseller !== $resellerName) {
+            $updates['reseller'] = $resellerName;
+        }
+
+        if (! empty($updates)) {
+            $driver->update($updates);
+            $driver->refresh();
+        }
     }
 
     /**

@@ -129,11 +129,28 @@ interface RidingCompanyShowProps {
 export default function RidingCompaniesShow({ ridingCompany, users = [], availableUsers = [], leadSources = [], campaigns = [], roles = [], availableRidingCompanies = [], usersCount = 0 }: RidingCompanyShowProps) {
     const page = usePage();
     const { can } = usePermissions();
-    // Preserve active tab in localStorage
+    // Preserve active tab: allow ?tab= from URL on first load, then localStorage
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'rotation' | 'integrations'>(() => {
-        const savedTab = localStorage.getItem('ridingCompanyActiveTab');
-        return (savedTab as any) || 'overview';
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const tabParam = params.get('tab');
+            if (tabParam && ['overview', 'users', 'rotation', 'integrations'].includes(tabParam)) {
+                return tabParam as 'overview' | 'users' | 'rotation' | 'integrations';
+            }
+            const savedTab = localStorage.getItem('ridingCompanyActiveTab');
+            return (savedTab as any) || 'overview';
+        }
+        return 'overview';
     });
+    
+    // Sync tab from URL on mount (e.g. deep link from Reseller Management)
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get('tab');
+        if (tabParam && ['overview', 'users', 'rotation', 'integrations'].includes(tabParam)) {
+            setActiveTab(tabParam as 'overview' | 'users' | 'rotation' | 'integrations');
+        }
+    }, []);
     
     // Save tab to localStorage when it changes
     useEffect(() => {

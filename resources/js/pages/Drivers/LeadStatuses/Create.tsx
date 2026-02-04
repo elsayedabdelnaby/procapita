@@ -3,39 +3,35 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { type SharedData } from '@/types';
-import { useEffect } from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
 
-interface Company {
+interface LeadStatusOption {
     id: number;
     name: string;
 }
 
 interface LeadStatusesCreateProps {
-    companies?: Company[];
+    availableLeadStatuses?: LeadStatusOption[];
 }
 
-export default function LeadStatusesCreate({ companies }: LeadStatusesCreateProps) {
-    const page = usePage<SharedData>();
-    const { selectedCompany } = page.props;
-    
+const DURATION_UNITS = [
+    { value: 'minutes', label: 'Minutes' },
+    { value: 'hours', label: 'Hours' },
+    { value: 'days', label: 'Days' },
+];
+
+export default function LeadStatusesCreate({ availableLeadStatuses = [] }: LeadStatusesCreateProps) {
     const { data, setData, post, processing, errors } = useForm({
-        company_id: selectedCompany ? String(selectedCompany.id) : '',
         name: '',
         slug: '',
         description: '',
         color: '#3b82f6',
         order: 0,
         active: true,
+        duration_value: '',
+        duration_unit: '',
+        change_to_lead_status_id: '',
     });
-
-    // Set selected company on mount if available
-    useEffect(() => {
-        if (selectedCompany && !data.company_id) {
-            setData('company_id', String(selectedCompany.id));
-        }
-    }, [selectedCompany]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -90,35 +86,6 @@ export default function LeadStatusesCreate({ companies }: LeadStatusesCreateProp
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {companies && companies.length > 0 && !selectedCompany && (
-                                <div className="md:col-span-2">
-                                    <Label htmlFor="company_id">
-                                        Company <span className="text-red-500">*</span>
-                                    </Label>
-                                    <select
-                                        id="company_id"
-                                        name="company_id"
-                                        value={data.company_id}
-                                        onChange={(e) => setData('company_id', e.target.value)}
-                                        className="w-full rounded-md border px-3 py-2"
-                                        required
-                                    >
-                                        <option value="">Select a company</option>
-                                        {companies.map((company) => (
-                                            <option key={company.id} value={company.id}>
-                                                {company.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {errors.company_id && (
-                                        <p className="text-sm text-red-500">{errors.company_id}</p>
-                                    )}
-                                </div>
-                            )}
-                            {selectedCompany && (
-                                <input type="hidden" name="company_id" value={selectedCompany.id} />
-                            )}
-
                             <div className="md:col-span-2">
                                 <FormField
                                     label="Name"
@@ -190,6 +157,67 @@ export default function LeadStatusesCreate({ companies }: LeadStatusesCreateProp
                                 </Label>
                                 {errors.active && (
                                     <p className="text-sm text-red-500">{errors.active}</p>
+                                )}
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card className="p-6">
+                        <h2 className="mb-4 text-lg font-semibold">Lead Status Duration</h2>
+                        <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+                            After this duration from when the lead entered this status, automatically change to the selected status.
+                        </p>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <Label htmlFor="duration_value">Duration (number)</Label>
+                                <input
+                                    id="duration_value"
+                                    name="duration_value"
+                                    type="number"
+                                    min={0}
+                                    value={data.duration_value}
+                                    onChange={(e) => setData('duration_value', e.target.value ? parseInt(e.target.value, 10) : '')}
+                                    className="w-full rounded-md border px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
+                                    placeholder="e.g. 3"
+                                />
+                                {errors.duration_value && (
+                                    <p className="text-sm text-red-500">{errors.duration_value}</p>
+                                )}
+                            </div>
+                            <div>
+                                <Label htmlFor="duration_unit">Unit</Label>
+                                <select
+                                    id="duration_unit"
+                                    name="duration_unit"
+                                    value={data.duration_unit}
+                                    onChange={(e) => setData('duration_unit', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
+                                >
+                                    <option value="">—</option>
+                                    {DURATION_UNITS.map((u) => (
+                                        <option key={u.value} value={u.value}>{u.label}</option>
+                                    ))}
+                                </select>
+                                {errors.duration_unit && (
+                                    <p className="text-sm text-red-500">{errors.duration_unit}</p>
+                                )}
+                            </div>
+                            <div className="md:col-span-2">
+                                <Label htmlFor="change_to_lead_status_id">Change Lead Status After Duration</Label>
+                                <select
+                                    id="change_to_lead_status_id"
+                                    name="change_to_lead_status_id"
+                                    value={data.change_to_lead_status_id}
+                                    onChange={(e) => setData('change_to_lead_status_id', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
+                                >
+                                    <option value="">— Do not change —</option>
+                                    {availableLeadStatuses.map((ls) => (
+                                        <option key={ls.id} value={ls.id}>{ls.name}</option>
+                                    ))}
+                                </select>
+                                {errors.change_to_lead_status_id && (
+                                    <p className="text-sm text-red-500">{errors.change_to_lead_status_id}</p>
                                 )}
                             </div>
                         </div>

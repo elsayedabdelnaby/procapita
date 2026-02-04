@@ -2,7 +2,9 @@ import { ActivityLog } from '@/components/core/activity-log';
 import { DataTable } from '@/components/core/data-table';
 import { DeleteDialog } from '@/components/core/delete-dialog';
 import { CompanyDeleteDialog } from '@/components/core/company-delete-dialog';
+import { DistributionSettingsTab } from '@/components/core/DistributionSettingsTab';
 import { RoleTree } from '@/components/core/role-tree';
+import { FacebookIntegrationContent } from '@/components/facebook/FacebookIntegrationContent';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -12,9 +14,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Company, CoreUser, Role } from '@/types/core';
-import { Head, Link, router } from '@inertiajs/react';
-import { Activity, Building2, ChevronLeft, ChevronRight, Mail, MapPin, Network, Phone, ShieldCheck, Users as UsersIcon, X, RotateCcw, Trash2 } from 'lucide-react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Activity, Building2, ChevronLeft, ChevronRight, Mail, MapPin, MessageCircle, Network, Phone, Plug, RefreshCw, ShieldCheck, Users as UsersIcon, X, RotateCcw, Trash2, GitBranch } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { WhatsAppLinkDeviceRidingCompanyTab } from '@/components/whatsapp/whatsapp-link-device-riding-company-tab';
 
 interface RidingCompany {
     id: number;
@@ -66,11 +69,42 @@ interface CompanyShowProps {
         } | null;
         created_at: string;
     }>;
+    selected_riding_company_id?: number | null;
+    selectedRidingCompanyData?: {
+        id: number;
+        name: string;
+        default_driver_user_id?: number | null;
+        default_driver_user?: { id: number; name: string; email: string } | null;
+        integration?: {
+            id: number;
+            type: string;
+            active: boolean;
+            facebook_user_id: string | null;
+            facebook_page_id: string | null;
+            facebook_form_id: string | null;
+            facebook_field_mapping: Record<string, string> | null;
+            facebook_forms?: Array<{ form_id: string; campaign_id: string | null; field_mapping: Record<string, string>; name: string | null; status: string | null }>;
+            has_access_token: boolean;
+            facebook_user_name?: string | null;
+        };
+        distribution_type?: string | null;
+        max_drivers_per_day?: number;
+        distribution_users?: number[];
+        distribution_scenarios?: unknown[];
+        last_distribution_date?: string | null;
+        leadSources?: Array<{ id: number; name: string }>;
+        campaigns?: Array<{ id: number; name: string }>;
+        roles?: Array<{ id: number; name: string }>;
+        availableUsers?: Array<{ id: number; name: string; email?: string }>;
+    } | null;
 }
 
-export default function CompanyShow({ company, statistics, users, deletedUsers = [], roles, roleHierarchy, ridingCompanies = [], availableCompanies = [], documentRequirements = [], activities = [] }: CompanyShowProps) {
+export default function CompanyShow({ company, statistics, users, deletedUsers = [], roles, roleHierarchy, ridingCompanies = [], availableCompanies = [], documentRequirements = [], activities = [], selected_riding_company_id, selectedRidingCompanyData = null }: CompanyShowProps) {
+    const demoReseller = (usePage().props as { demo_reseller?: boolean }).demo_reseller ?? false;
+    const ridingCompaniesLabel = demoReseller ? 'Reseller Companies' : 'Riding Companies';
+    const ridingCompanyLabel = demoReseller ? 'Reseller Company' : 'Riding Company';
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'roles' | 'hierarchy' | 'updates'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'roles' | 'hierarchy' | 'updates' | 'integration' | 'whatsapp' | 'distribution' | 'rotation'>('overview');
     const [deleteUserDialog, setDeleteUserDialog] = useState<{ open: boolean; user: CoreUser | null }>({
         open: false,
         user: null,
@@ -89,7 +123,8 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
     });
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(100);
-
+    // Company is from URL (sidebar switch navigates to /core/companies/{id}); first riding company data comes from backend
+    const availableUsersForRidingCompany = useMemo(() => (users || []).map((u) => ({ id: u.id, name: u.name, email: u.email || '' })), [users]);
 
     const handleToggleStatus = () => {
         const action = company.is_active ? 'deactivate' : 'activate';
@@ -234,11 +269,11 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                 </div>
 
                 {/* Tabs */}
-                <div className="mb-6 border-b">
-                    <nav className="flex gap-6">
+                <div className="mb-6 border-b overflow-x-auto">
+                    <nav className="flex gap-6 flex-nowrap min-w-0">
                         <button
                             onClick={() => setActiveTab('overview')}
-                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                            className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
                                 activeTab === 'overview'
                                     ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
                                     : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
@@ -251,7 +286,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                         </button>
                         <button
                             onClick={() => setActiveTab('users')}
-                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                            className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
                                 activeTab === 'users'
                                     ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
                                     : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
@@ -264,7 +299,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                         </button>
                         <button
                             onClick={() => setActiveTab('roles')}
-                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                            className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
                                 activeTab === 'roles'
                                     ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
                                     : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
@@ -277,7 +312,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                         </button>
                         <button
                             onClick={() => setActiveTab('hierarchy')}
-                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                            className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
                                 activeTab === 'hierarchy'
                                     ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
                                     : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
@@ -289,8 +324,60 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                             </div>
                         </button>
                         <button
+                            onClick={() => setActiveTab('integration')}
+                            className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                activeTab === 'integration'
+                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <Plug className="h-4 w-4" />
+                                Integration
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('whatsapp')}
+                            className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                activeTab === 'whatsapp'
+                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <MessageCircle className="h-4 w-4" />
+                                WhatsApp
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('distribution')}
+                            className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                activeTab === 'distribution'
+                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <GitBranch className="h-4 w-4" />
+                                Distribution
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('rotation')}
+                            className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                                activeTab === 'rotation'
+                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <RefreshCw className="h-4 w-4" />
+                                Rotation
+                            </div>
+                        </button>
+                        <button
                             onClick={() => setActiveTab('updates')}
-                            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                            className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
                                 activeTab === 'updates'
                                     ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
                                     : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
@@ -310,6 +397,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                     company={company}
                     availableCompanies={availableCompanies}
                     ridingCompaniesCount={ridingCompanies.length}
+                    demoReseller={demoReseller}
                 />
 
                 {/* Tab Content */}
@@ -433,6 +521,41 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                     </div>
                                 </div>
                             </div>
+                        </Card>
+
+                        {/* Reseller Companies (Riding Companies) */}
+                        <Card className="p-6">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-lg font-semibold">{ridingCompaniesLabel}</h2>
+                                <Link href="/ridingcarcompanies/riding-companies/create">
+                                    <Button size="sm">
+                                        {ridingCompanies.length === 0 ? `Create first ${ridingCompanyLabel}` : `Add ${ridingCompanyLabel}`}
+                                    </Button>
+                                </Link>
+                            </div>
+                            {ridingCompanies && ridingCompanies.length > 0 ? (
+                                <div className="space-y-2">
+                                    {ridingCompanies.map((rc) => (
+                                        <div
+                                            key={rc.id}
+                                            className="flex items-center justify-between rounded-md border p-3 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+                                        >
+                                            <span className="font-medium">{rc.name}</span>
+                                            <Link href={`/ridingcarcompanies/riding-companies/${rc.id}`}>
+                                                <Button variant="outline" size="sm">Open</Button>
+                                            </Link>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="py-6 text-center text-neutral-500">
+                                    <p className="mb-2">No {ridingCompaniesLabel.toLowerCase()} yet.</p>
+                                    <p className="mb-4 text-sm">Create one to use Integration, WhatsApp, Distribution and Rotation for this company.</p>
+                                    <Link href="/ridingcarcompanies/riding-companies/create">
+                                        <Button size="sm">Create first {ridingCompanyLabel}</Button>
+                                    </Link>
+                                </div>
+                            )}
                         </Card>
 
                         {/* Document Requirements */}
@@ -647,10 +770,10 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                                     onValueChange={(value) => handleUserFilterChange('ridingCompany', value || '')}
                                                 >
                                                     <SelectTrigger className="w-full text-xs h-8">
-                                                        <SelectValue placeholder="All Riding Companies" />
+                                                        <SelectValue placeholder={`All ${ridingCompaniesLabel}`} />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="__all__">All Riding Companies</SelectItem>
+                                                        <SelectItem value="__all__">All {ridingCompaniesLabel}</SelectItem>
                                                         {ridingCompanies && ridingCompanies.length > 0 ? (
                                                             ridingCompanies.map((rc) => (
                                                                 <SelectItem key={rc.id} value={rc.id.toString()}>
@@ -1062,6 +1185,154 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Activity Log</h2>
                         <ActivityLog activities={activities} />
+                    </Card>
+                )}
+
+                {activeTab === 'integration' && (
+                    <Card className="p-6">
+                        {selectedRidingCompanyData?.integration ? (
+                            <FacebookIntegrationContent
+                                ridingCompany={{ id: selectedRidingCompanyData.id, name: selectedRidingCompanyData.name }}
+                                integration={selectedRidingCompanyData.integration}
+                                partialReloadKey="selectedRidingCompanyData"
+                            />
+                        ) : ridingCompanies && ridingCompanies.length > 0 ? (
+                            <div className="space-y-3">
+                                {ridingCompanies.map((rc) => (
+                                    <div key={rc.id} className="flex flex-wrap items-center gap-2 rounded-lg border p-4 dark:border-neutral-700">
+                                        <span className="font-medium mr-2">{rc.name}</span>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Link href={`/ridingcarcompanies/riding-companies/${rc.id}/integrations`}><Button variant="outline" size="sm">Integrations</Button></Link>
+                                            <Link href={`/ridingcarcompanies/riding-companies/${rc.id}/integration-settings`}><Button variant="outline" size="sm">Settings</Button></Link>
+                                            <Link href={`/ridingcarcompanies/riding-companies/${rc.id}/facebook`}><Button variant="outline" size="sm">Facebook</Button></Link>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="py-6 text-center text-neutral-500">
+                                <p className="mb-4">No {ridingCompaniesLabel.toLowerCase()} yet.</p>
+                                <Link href="/ridingcarcompanies/riding-companies/create">
+                                    <Button size="sm">Create first {ridingCompanyLabel}</Button>
+                                </Link>
+                            </div>
+                        )}
+                    </Card>
+                )}
+
+                {activeTab === 'whatsapp' && (
+                    <Card className="p-6">
+                        <h2 className="mb-2 text-lg font-semibold">WhatsApp &amp; Settings</h2>
+                        <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+                            Settings for this reseller’s company.
+                        </p>
+                        {selectedRidingCompanyData ? (
+                            <div className="space-y-4">
+                                <WhatsAppLinkDeviceRidingCompanyTab
+                                    ridingCompanyId={selectedRidingCompanyData.id}
+                                    defaultDriverUserId={selectedRidingCompanyData.default_driver_user_id ?? undefined}
+                                    defaultDriverUser={selectedRidingCompanyData.default_driver_user ?? undefined}
+                                    availableUsers={availableUsersForRidingCompany}
+                                    onUserChange={(userId) => {
+                                        router.put(`/ridingcarcompanies/riding-companies/${selectedRidingCompanyData!.id}`, {
+                                            default_driver_user_id: userId ?? null,
+                                        }, { preserveScroll: true });
+                                    }}
+                                />
+                                <div className="border-t pt-4">
+                                    <Link href={`/ridingcarcompanies/riding-companies/${selectedRidingCompanyData.id}`}>
+                                        <Button variant="outline" size="sm">Open full company settings</Button>
+                                    </Link>
+                                </div>
+                            </div>
+                        ) : ridingCompanies && ridingCompanies.length > 0 ? (
+                            <div className="space-y-3">
+                                {ridingCompanies.map((rc) => (
+                                    <div key={rc.id} className="flex items-center justify-between rounded-lg border p-4 dark:border-neutral-700">
+                                        <span className="font-medium">{rc.name}</span>
+                                        <Link href={`/ridingcarcompanies/riding-companies/${rc.id}`}><Button variant="outline" size="sm">WhatsApp &amp; Settings</Button></Link>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="py-6 text-center text-neutral-500">
+                                <p className="mb-4">No {ridingCompaniesLabel.toLowerCase()} yet.</p>
+                                <Link href="/ridingcarcompanies/riding-companies/create">
+                                    <Button size="sm">Create first {ridingCompanyLabel}</Button>
+                                </Link>
+                            </div>
+                        )}
+                    </Card>
+                )}
+
+                {activeTab === 'distribution' && (
+                    <Card className="p-6">
+                        {selectedRidingCompanyData ? (
+                            <div className="space-y-4">
+                                <DistributionSettingsTab
+                                    ridingCompany={{
+                                        id: selectedRidingCompanyData.id,
+                                        name: selectedRidingCompanyData.name,
+                                        distribution_scenarios: selectedRidingCompanyData.distribution_scenarios ?? [],
+                                    }}
+                                    availableUsers={selectedRidingCompanyData.availableUsers ?? []}
+                                    leadSources={selectedRidingCompanyData.leadSources ?? []}
+                                    campaigns={selectedRidingCompanyData.campaigns ?? []}
+                                    roles={selectedRidingCompanyData.roles ?? []}
+                                    partialReloadKey="selectedRidingCompanyData"
+                                    driverLabel={demoReseller ? 'Leads' : 'drivers'}
+                                />
+                            </div>
+                        ) : ridingCompanies && ridingCompanies.length > 0 ? (
+                            <div className="space-y-3">
+                                {ridingCompanies.map((rc) => (
+                                    <div key={rc.id} className="flex items-center justify-between rounded-lg border p-4 dark:border-neutral-700">
+                                        <span className="font-medium">{rc.name}</span>
+                                        <Link href={`/ridingcarcompanies/riding-companies/${rc.id}`}><Button variant="outline" size="sm">Distribution Settings</Button></Link>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="py-6 text-center text-neutral-500">
+                                <p className="mb-4">No {ridingCompaniesLabel.toLowerCase()} yet.</p>
+                                <Link href="/ridingcarcompanies/riding-companies/create">
+                                    <Button size="sm">Create first {ridingCompanyLabel}</Button>
+                                </Link>
+                            </div>
+                        )}
+                    </Card>
+                )}
+
+                {activeTab === 'rotation' && (
+                    <Card className="p-6">
+                        <h2 className="mb-2 text-lg font-semibold">Rotation</h2>
+                        <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+                            Settings for this reseller’s company.
+                        </p>
+                        {selectedRidingCompanyData ? (
+                            <div className="flex flex-wrap items-center gap-2 rounded-lg border p-4 dark:border-neutral-700">
+                                <span className="font-medium mr-2">{selectedRidingCompanyData.name}</span>
+                                <Link href={`/ridingcarcompanies/riding-companies/${selectedRidingCompanyData.id}?tab=rotation`}>
+                                    <Button variant="outline" size="sm">Rotation Settings</Button>
+                                </Link>
+                            </div>
+                        ) : ridingCompanies && ridingCompanies.length > 0 ? (
+                            <div className="space-y-3">
+                                {ridingCompanies.map((rc) => (
+                                    <div key={rc.id} className="flex items-center justify-between rounded-lg border p-4 dark:border-neutral-700">
+                                        <span className="font-medium">{rc.name}</span>
+                                        <Link href={`/ridingcarcompanies/riding-companies/${rc.id}?tab=rotation`}><Button variant="outline" size="sm">Rotation Settings</Button></Link>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="py-6 text-center text-neutral-500">
+                                <p className="mb-4">No {ridingCompaniesLabel.toLowerCase()} yet.</p>
+                                <Link href="/ridingcarcompanies/riding-companies/create">
+                                    <Button size="sm">Create first {ridingCompanyLabel}</Button>
+                                </Link>
+                            </div>
+                        )}
                     </Card>
                 )}
 

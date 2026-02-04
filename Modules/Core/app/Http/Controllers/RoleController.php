@@ -59,6 +59,7 @@ class RoleController extends Controller
             'company' => $companyModel,
             'availableRoles' => $roles,
             'permissions' => $permissions,
+            'demo_reseller' => config('app.demo_reseller', false),
         ]);
     }
 
@@ -118,6 +119,7 @@ class RoleController extends Controller
             'role' => $roleModel,
             'availableRoles' => $availableRoles,
             'permissions' => $permissions,
+            'demo_reseller' => config('app.demo_reseller', false),
         ]);
     }
 

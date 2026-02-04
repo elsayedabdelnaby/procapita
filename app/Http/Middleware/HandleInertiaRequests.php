@@ -172,6 +172,18 @@ class HandleInertiaRequests extends Middleware
             $allPermissions = $user->getAllPermissions();
         }
 
+        // Selected riding company (reseller) from session - for WhatsApp/scoping on Leads
+        $selectedRidingCompany = null;
+        if ($user) {
+            $selectedRidingCompanyId = $request->session()->get('selected_riding_company_id');
+            if ($selectedRidingCompanyId && class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+                $rc = \Modules\RidingCarCompanies\app\Models\RidingCompany::find($selectedRidingCompanyId);
+                if ($rc) {
+                    $selectedRidingCompany = ['id' => $rc->id, 'name' => $rc->name];
+                }
+            }
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -185,6 +197,7 @@ class HandleInertiaRequests extends Middleware
                     'is_super_admin' => $user->is_super_admin ?? false,
                     'is_company_admin' => $user->is_company_admin ?? false,
                     'company_id' => $user->company_id,
+                    'riding_company_id' => $user->riding_company_id ?? null,
                     'company' => $user->company ? [
                         'id' => $user->company->id,
                         'name' => $user->company->name,
@@ -232,6 +245,8 @@ class HandleInertiaRequests extends Middleware
                 'logo' => $c->logo,
                 'logo_url' => $c->logo_url,
             ])->toArray(),
+            'selectedRidingCompany' => $selectedRidingCompany,
+            'demo_reseller' => config('app.demo_reseller', false),
         ];
     }
 
@@ -248,11 +263,13 @@ class HandleInertiaRequests extends Middleware
             'permission_entity' => null,
         ];
 
-        // Core Module - Resellers (Companies) group for Super Admin
-        // Roles, Users, and Hierarchy are now accessed from the Company view
-        if ($user->isSuperAdmin()) {
-            $coreItems = [];
+        // Core Module: Resellers (list, super admin only) + Reseller Company (detail with tabs)
+        $coreItems = [];
+        $resellerCompanyId = $user->isSuperAdmin()
+            ? request()->session()->get('selected_company_id')
+            : $user->company_id;
 
+        if ($user->isSuperAdmin()) {
             $coreItems[] = [
                 'title' => 'Resellers',
                 'href' => '/core/companies',
@@ -260,8 +277,20 @@ class HandleInertiaRequests extends Middleware
                 'permission_module' => 'core',
                 'permission_entity' => 'companies',
             ];
+        }
 
-            // Lead Sources - accessible to super admin
+        // Reseller Company: for super admin (selected company), for company admin (their company)
+        if ($resellerCompanyId) {
+            $coreItems[] = [
+                'title' => 'Reseller Company',
+                'href' => '/core/companies/'.$resellerCompanyId,
+                'icon' => 'Building2',
+                'permission_module' => 'core',
+                'permission_entity' => 'companies',
+            ];
+        }
+
+        if ($user->isSuperAdmin()) {
             $coreItems[] = [
                 'title' => 'Lead Sources',
                 'href' => '/drivers/lead-sources',
@@ -269,8 +298,6 @@ class HandleInertiaRequests extends Middleware
                 'permission_module' => 'drivers',
                 'permission_entity' => 'leadsources',
             ];
-
-            // Lead Statuses - accessible to super admin
             $coreItems[] = [
                 'title' => 'Lead Statuses',
                 'href' => '/drivers/lead-statuses',
@@ -278,15 +305,14 @@ class HandleInertiaRequests extends Middleware
                 'permission_module' => 'drivers',
                 'permission_entity' => 'leadstatuses',
             ];
+        }
 
-            // Only add Core group if there are items
-            if (! empty($coreItems)) {
-                $navigation[] = [
-                    'title' => 'Core',
-                    'icon' => 'Building2',
-                    'items' => $coreItems,
-                ];
-            }
+        if (! empty($coreItems)) {
+            $navigation[] = [
+                'title' => 'Core',
+                'icon' => 'Building2',
+                'items' => $coreItems,
+            ];
         }
 
         // Marketing Module

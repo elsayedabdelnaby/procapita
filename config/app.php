@@ -123,4 +123,13 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Demo Reseller Mode
+    |--------------------------------------------------------------------------
+    | When true, hides riding/campaign/vehicle fields and uses Lead terminology
+    | for reseller demo. Set DEMO_RESELLER=true in .env for the reseller copy.
+    */
+    'demo_reseller' => (bool) env('DEMO_RESELLER', false),
+
 ];

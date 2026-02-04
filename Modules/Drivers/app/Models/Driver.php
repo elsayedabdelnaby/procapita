@@ -36,11 +36,13 @@ class Driver extends Model
         'assigned_to',
         'team_leader_id',
         'account_manager_id',
+        'reseller',
         'resigned_leads',
         'assigned_time',
         'last_assigned_time',
         'last_assigned_by',
         'lead_status_id',
+        'lead_status_set_at',
         'lead_status_comment',
         'next_follow_up',
         'last_follow_up',
@@ -63,6 +65,7 @@ class Driver extends Model
             'last_follow_up' => 'datetime',
             'assigned_time' => 'datetime',
             'last_assigned_time' => 'datetime',
+            'lead_status_set_at' => 'datetime',
             'confirm_duplicate' => 'boolean',
         ];
     }
@@ -78,6 +81,9 @@ class Driver extends Model
         if (! Schema::hasColumn($this->getTable(), 'riding_company_id')) {
             $fillable = array_values(array_diff($fillable, ['riding_company_id']));
         }
+        if (! Schema::hasColumn($this->getTable(), 'lead_status_set_at')) {
+            $fillable = array_values(array_diff($fillable, ['lead_status_set_at']));
+        }
 
         return $fillable;
     }
@@ -89,6 +95,9 @@ class Driver extends Model
         static::creating(function ($model) {
             if (empty($model->uuid)) {
                 $model->uuid = (string) Str::uuid();
+            }
+            if ($model->lead_status_id && \Illuminate\Support\Facades\Schema::hasColumn($model->getTable(), 'lead_status_set_at')) {
+                $model->lead_status_set_at = now();
             }
         });
 
@@ -180,10 +189,13 @@ class Driver extends Model
             // Check if lead_status_id changed BEFORE any saveQuietly calls
             $leadStatusChanged = $driver->wasChanged('lead_status_id') && $driver->lead_status_id;
 
-            // Increment feedback_count when lead_status_id is updated
+            // Increment feedback_count and set lead_status_set_at when lead_status_id is updated
             if ($leadStatusChanged) {
-                $driver->feedback_count = ($driver->getOriginal('feedback_count') ?? 0) + 1;
-                $driver->saveQuietly();
+                $quietUpdates = ['feedback_count' => ($driver->getOriginal('feedback_count') ?? 0) + 1];
+                if (\Illuminate\Support\Facades\Schema::hasColumn($driver->getTable(), 'lead_status_set_at')) {
+                    $quietUpdates['lead_status_set_at'] = now();
+                }
+                $driver->updateQuietly($quietUpdates);
             }
 
             // Check for changes BEFORE any modifications

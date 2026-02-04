@@ -11,9 +11,22 @@ class LeadStatusUpdateRequest extends FormRequest
         return $this->user()->isSuperAdmin() || $this->user()->can('drivers.leadstatuses.update');
     }
 
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+        if ($this->has('duration_value') && $this->duration_value === '') {
+            $merge['duration_value'] = null;
+        }
+        if ($this->has('change_to_lead_status_id') && $this->change_to_lead_status_id === '') {
+            $merge['change_to_lead_status_id'] = null;
+        }
+        if (! empty($merge)) {
+            $this->merge($merge);
+        }
+    }
+
     public function rules(): array
     {
-        $user = $this->user();
         $leadStatusId = $this->route('leadStatus');
         
         $rules = [
@@ -23,11 +36,14 @@ class LeadStatusUpdateRequest extends FormRequest
             'color' => ['nullable', 'string', 'max:50'],
             'order' => ['nullable', 'integer', 'min:0'],
             'active' => ['nullable', 'boolean'],
+            'duration_value' => ['nullable', 'integer', 'min:0'],
+            'duration_unit' => ['nullable', 'string', 'in:minutes,hours,days'],
+            'change_to_lead_status_id' => ['nullable', 'integer', 'exists:lead_statuses,id', function ($attribute, $value, $fail) use ($leadStatusId) {
+                if ($value && (int) $value === (int) $leadStatusId) {
+                    $fail(__('Lead status cannot change to itself.'));
+                }
+            }],
         ];
-
-        if ($user->isSuperAdmin()) {
-            $rules['company_id'] = ['required', 'exists:companies,id'];
-        }
 
         return $rules;
     }

@@ -28,7 +28,7 @@ class DriverFollowUpController extends Controller
         $followUps = $this->followUpService->getAllFollowUps($driverId, $companyId, $user);
 
         return Inertia::render('Drivers/DriverFollowUps/Index', [
-            'followUps' => $followUps->map(fn($followUp) => [
+            'followUps' => $followUps->map(fn ($followUp) => [
                 'id' => $followUp->id,
                 'driver_id' => $followUp->driver_id,
                 'driver' => $followUp->driver ? [
@@ -91,6 +91,7 @@ class DriverFollowUpController extends Controller
                 'created_at' => $followUp->created_at?->toISOString(),
                 'updated_at' => $followUp->updated_at?->toISOString(),
             ]),
+            'demo_reseller' => config('app.demo_reseller', false),
         ]);
     }
 
@@ -183,9 +184,9 @@ class DriverFollowUpController extends Controller
         }
     }
 
-    public function show(int $id): Response
+    public function show(int|string $id): Response
     {
-        $followUp = $this->followUpService->getFollowUpById($id);
+        $followUp = $this->followUpService->getFollowUpById((int) $id);
 
         if (!$followUp) {
             abort(404, 'Follow-up not found.');
@@ -220,9 +221,9 @@ class DriverFollowUpController extends Controller
         ]);
     }
 
-    public function edit(int $id): Response
+    public function edit(int|string $id): Response
     {
-        $followUp = $this->followUpService->getFollowUpById($id);
+        $followUp = $this->followUpService->getFollowUpById((int) $id);
 
         if (!$followUp) {
             abort(404, 'Follow-up not found.');
@@ -258,11 +259,11 @@ class DriverFollowUpController extends Controller
         ]);
     }
 
-    public function update(int $id, DriverFollowUpUpdateRequest $request): RedirectResponse
+    public function update(int|string $id, DriverFollowUpUpdateRequest $request): RedirectResponse
     {
         try {
             $data = $request->validated();
-            $this->followUpService->updateFollowUp($id, $data);
+            $this->followUpService->updateFollowUp((int) $id, $data);
 
             return redirect()
                 ->route('drivers.driverfollowups.index')
@@ -275,10 +276,10 @@ class DriverFollowUpController extends Controller
         }
     }
 
-    public function destroy(int $id): RedirectResponse
+    public function destroy(int|string $id): RedirectResponse
     {
         try {
-            $this->followUpService->deleteFollowUp($id);
+            $this->followUpService->deleteFollowUp((int) $id);
 
             return redirect()
                 ->route('drivers.driverfollowups.index')
@@ -314,8 +315,12 @@ class DriverFollowUpController extends Controller
     public function massEdit(Request $request): Response|RedirectResponse
     {
         $ids = $request->input('ids');
-        
-        if (!$ids || !is_array($ids)) {
+
+        // Accept ids as array (ids[]=1&ids[]=2) or comma-separated string (ids=1,2,3)
+        if (is_string($ids)) {
+            $ids = array_values(array_filter(array_map('intval', explode(',', $ids))));
+        }
+        if (! is_array($ids) || empty($ids)) {
             return redirect()->route('drivers.driverfollowups.index')
                 ->withErrors(['error' => 'No follow-ups selected.']);
         }

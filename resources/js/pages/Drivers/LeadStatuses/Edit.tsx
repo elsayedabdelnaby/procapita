@@ -5,36 +5,46 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
 
-interface Company {
+interface LeadStatusOption {
     id: number;
     name: string;
 }
 
 interface LeadStatus {
     id: number;
-    company_id?: number;
     name: string;
     slug: string;
     description?: string;
     color?: string;
     order: number;
     active: boolean;
+    duration_value?: number | null;
+    duration_unit?: string | null;
+    change_to_lead_status_id?: number | null;
 }
 
 interface LeadStatusesEditProps {
     leadStatus: LeadStatus;
-    companies?: Company[];
+    availableLeadStatuses?: LeadStatusOption[];
 }
 
-export default function LeadStatusesEdit({ leadStatus, companies }: LeadStatusesEditProps) {
+const DURATION_UNITS = [
+    { value: 'minutes', label: 'Minutes' },
+    { value: 'hours', label: 'Hours' },
+    { value: 'days', label: 'Days' },
+];
+
+export default function LeadStatusesEdit({ leadStatus, availableLeadStatuses = [] }: LeadStatusesEditProps) {
     const { data, setData, put, processing, errors } = useForm({
-        company_id: leadStatus.company_id?.toString() || '',
         name: leadStatus.name || '',
         slug: leadStatus.slug || '',
         description: leadStatus.description || '',
         color: leadStatus.color || '#3b82f6',
         order: leadStatus.order || 0,
         active: leadStatus.active ?? true,
+        duration_value: leadStatus.duration_value ?? '',
+        duration_unit: leadStatus.duration_unit || '',
+        change_to_lead_status_id: leadStatus.change_to_lead_status_id?.toString() || '',
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -90,32 +100,6 @@ export default function LeadStatusesEdit({ leadStatus, companies }: LeadStatuses
                     <Card className="p-6">
                         <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {companies && companies.length > 0 && (
-                                <div className="md:col-span-2">
-                                    <Label htmlFor="company_id">
-                                        Company <span className="text-red-500">*</span>
-                                    </Label>
-                                    <select
-                                        id="company_id"
-                                        name="company_id"
-                                        value={data.company_id}
-                                        onChange={(e) => setData('company_id', e.target.value)}
-                                        className="w-full rounded-md border px-3 py-2"
-                                        required
-                                    >
-                                        <option value="">Select a company</option>
-                                        {companies.map((company) => (
-                                            <option key={company.id} value={company.id}>
-                                                {company.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {errors.company_id && (
-                                        <p className="text-sm text-red-500">{errors.company_id}</p>
-                                    )}
-                                </div>
-                            )}
-
                             <div className="md:col-span-2">
                                 <FormField
                                     label="Name"
@@ -184,6 +168,67 @@ export default function LeadStatusesEdit({ leadStatus, companies }: LeadStatuses
                                 </Label>
                                 {errors.active && (
                                     <p className="text-sm text-red-500">{errors.active}</p>
+                                )}
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card className="p-6">
+                        <h2 className="mb-4 text-lg font-semibold">Lead Status Duration</h2>
+                        <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+                            After this duration from when the lead entered this status, automatically change to the selected status. Duration is calculated from the last time the lead&apos;s status was set to this one.
+                        </p>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <Label htmlFor="duration_value">Duration (number)</Label>
+                                <input
+                                    id="duration_value"
+                                    name="duration_value"
+                                    type="number"
+                                    min={0}
+                                    value={data.duration_value}
+                                    onChange={(e) => setData('duration_value', e.target.value ? parseInt(e.target.value, 10) : '')}
+                                    className="w-full rounded-md border px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
+                                    placeholder="e.g. 3"
+                                />
+                                {errors.duration_value && (
+                                    <p className="text-sm text-red-500">{errors.duration_value}</p>
+                                )}
+                            </div>
+                            <div>
+                                <Label htmlFor="duration_unit">Unit</Label>
+                                <select
+                                    id="duration_unit"
+                                    name="duration_unit"
+                                    value={data.duration_unit}
+                                    onChange={(e) => setData('duration_unit', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
+                                >
+                                    <option value="">—</option>
+                                    {DURATION_UNITS.map((u) => (
+                                        <option key={u.value} value={u.value}>{u.label}</option>
+                                    ))}
+                                </select>
+                                {errors.duration_unit && (
+                                    <p className="text-sm text-red-500">{errors.duration_unit}</p>
+                                )}
+                            </div>
+                            <div className="md:col-span-2">
+                                <Label htmlFor="change_to_lead_status_id">Change Lead Status After Duration</Label>
+                                <select
+                                    id="change_to_lead_status_id"
+                                    name="change_to_lead_status_id"
+                                    value={data.change_to_lead_status_id}
+                                    onChange={(e) => setData('change_to_lead_status_id', e.target.value)}
+                                    className="w-full rounded-md border px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
+                                >
+                                    <option value="">— Do not change —</option>
+                                    {availableLeadStatuses.map((ls) => (
+                                        <option key={ls.id} value={ls.id}>{ls.name}</option>
+                                    ))}
+                                </select>
+                                {errors.change_to_lead_status_id && (
+                                    <p className="text-sm text-red-500">{errors.change_to_lead_status_id}</p>
                                 )}
                             </div>
                         </div>
