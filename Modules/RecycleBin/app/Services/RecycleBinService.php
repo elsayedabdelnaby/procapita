@@ -5,6 +5,7 @@ namespace Modules\RecycleBin\app\Services;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Activitylog\Traits\LogsActivity;
 
 class RecycleBinService
@@ -116,6 +117,14 @@ class RecycleBinService
             return collect([]);
         }
 
+        // Check if the table exists before querying
+        $modelInstance = new $modelClass;
+        $tableName = $modelInstance->getTable();
+        
+        if (!Schema::hasTable($tableName)) {
+            return collect([]);
+        }
+
         $query = $modelClass::onlyTrashed();
 
         // Filter by company if applicable and company_id exists in the model
@@ -186,6 +195,14 @@ class RecycleBinService
             return false;
         }
         
+        // Check if the table exists before querying
+        $modelInstance = new $modelClass;
+        $tableName = $modelInstance->getTable();
+        
+        if (!Schema::hasTable($tableName)) {
+            return false;
+        }
+        
         $record = $modelClass::onlyTrashed()->find($recordId);
         
         if (!$record) {
@@ -247,6 +264,14 @@ class RecycleBinService
                 'model_type' => $modelType,
                 'record_id' => $recordId,
             ]);
+            return false;
+        }
+        
+        // Check if the table exists before querying
+        $modelInstance = new $modelClass;
+        $tableName = $modelInstance->getTable();
+        
+        if (!Schema::hasTable($tableName)) {
             return false;
         }
         
@@ -343,6 +368,14 @@ class RecycleBinService
         );
 
         if (!$usesSoftDeletes) {
+            return null;
+        }
+        
+        // Check if the table exists before querying
+        $modelInstance = new $modelClass;
+        $tableName = $modelInstance->getTable();
+        
+        if (!Schema::hasTable($tableName)) {
             return null;
         }
         

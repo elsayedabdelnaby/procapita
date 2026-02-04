@@ -113,7 +113,7 @@ class ResellerUsersAndLeadsSeeder extends Seeder
         }
 
         // Fill Reseller (riding_company_id) for existing leads that have none
-        if (Schema::hasColumn('drivers', 'riding_company_id')) {
+        if (Schema::hasColumn('drivers', 'riding_company_id') && Schema::hasTable('riding_companies')) {
             foreach ($companies as $company) {
                 $ridingCompanies = RidingCompany::where('company_id', $company->id)->where('active', true)->get();
                 if ($ridingCompanies->isEmpty()) {
@@ -155,7 +155,9 @@ class ResellerUsersAndLeadsSeeder extends Seeder
                 continue;
             }
             $campaigns = Campaign::where('company_id', $company->id)->get();
-            $ridingCompanies = RidingCompany::where('company_id', $company->id)->where('active', true)->get();
+            $ridingCompanies = Schema::hasTable('riding_companies') 
+                ? RidingCompany::where('company_id', $company->id)->where('active', true)->get()
+                : collect();
             $leadsCount = $leadCountsPerUser[$index] ?? self::LEADS_PER_USER_MIN;
 
             for ($i = 0; $i < $leadsCount; $i++) {

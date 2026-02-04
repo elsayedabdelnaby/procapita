@@ -62,7 +62,8 @@ class CompanyController extends Controller
             ->get()
             ->map(function ($company) {
                 $ridingCompaniesCount = 0;
-                if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+                if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class) 
+                    && \Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
                     $ridingCompaniesCount = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company->id)->count();
                 }
 

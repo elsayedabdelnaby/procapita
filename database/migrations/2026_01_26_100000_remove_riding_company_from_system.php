@@ -8,6 +8,27 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
+     * Get the name of a foreign key constraint
+     */
+    private function getForeignKeyName(string $table, string $column): ?string
+    {
+        try {
+            $foreignKeys = DB::select("
+                SELECT CONSTRAINT_NAME 
+                FROM information_schema.KEY_COLUMN_USAGE 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = ? 
+                AND COLUMN_NAME = ? 
+                AND REFERENCED_TABLE_NAME IS NOT NULL
+            ", [$table, $column]);
+            
+            return !empty($foreignKeys) ? $foreignKeys[0]->CONSTRAINT_NAME : null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
      * Run the migrations.
      */
     public function up(): void
@@ -42,9 +63,17 @@ return new class extends Migration
         if (! Schema::hasTable('users') || ! Schema::hasColumn('users', 'riding_company_id')) {
             return;
         }
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropForeign(['riding_company_id']);
-        });
+        
+        // Check if foreign key exists before dropping
+        $foreignKeyName = $this->getForeignKeyName('users', 'riding_company_id');
+        if ($foreignKeyName) {
+            try {
+                DB::statement("ALTER TABLE `users` DROP FOREIGN KEY `{$foreignKeyName}`");
+            } catch (\Exception $e) {
+                // Foreign key might not exist, continue
+            }
+        }
+        
         Schema::table('users', function (Blueprint $table) {
             $table->dropIndex(['riding_company_id']);
             $table->dropColumn('riding_company_id');
@@ -57,8 +86,18 @@ return new class extends Migration
         if (! Schema::hasTable($rolesTable) || ! Schema::hasColumn($rolesTable, 'riding_company_id')) {
             return;
         }
+        
+        // Check if foreign key exists before dropping
+        $foreignKeyName = $this->getForeignKeyName($rolesTable, 'riding_company_id');
+        if ($foreignKeyName) {
+            try {
+                DB::statement("ALTER TABLE `{$rolesTable}` DROP FOREIGN KEY `{$foreignKeyName}`");
+            } catch (\Exception $e) {
+                // Foreign key might not exist, continue
+            }
+        }
+        
         Schema::table($rolesTable, function (Blueprint $table) {
-            $table->dropForeign(['riding_company_id']);
             $table->dropIndex(['riding_company_id']);
             $table->dropColumn('riding_company_id');
         });
@@ -69,13 +108,23 @@ return new class extends Migration
         if (! Schema::hasTable('drivers')) {
             return;
         }
-        Schema::table('drivers', function (Blueprint $table) {
-            if (Schema::hasColumn('drivers', 'riding_company_id')) {
-                $table->dropForeign(['riding_company_id']);
+        
+        if (Schema::hasColumn('drivers', 'riding_company_id')) {
+            // Check if foreign key exists before dropping
+            $foreignKeyName = $this->getForeignKeyName('drivers', 'riding_company_id');
+            if ($foreignKeyName) {
+                try {
+                    DB::statement("ALTER TABLE `drivers` DROP FOREIGN KEY `{$foreignKeyName}`");
+                } catch (\Exception $e) {
+                    // Foreign key might not exist, continue
+                }
+            }
+            
+            Schema::table('drivers', function (Blueprint $table) {
                 $table->dropIndex(['riding_company_id']);
                 $table->dropColumn('riding_company_id');
-            }
-        });
+            });
+        }
     }
 
     private function dropRidingCompanyFromLeadStages(): void
@@ -119,8 +168,18 @@ return new class extends Migration
         if (! Schema::hasTable('campaigns') || ! Schema::hasColumn('campaigns', 'riding_company_id')) {
             return;
         }
+        
+        // Check if foreign key exists before dropping
+        $foreignKeyName = $this->getForeignKeyName('campaigns', 'riding_company_id');
+        if ($foreignKeyName) {
+            try {
+                DB::statement("ALTER TABLE `campaigns` DROP FOREIGN KEY `{$foreignKeyName}`");
+            } catch (\Exception $e) {
+                // Foreign key might not exist, continue
+            }
+        }
+        
         Schema::table('campaigns', function (Blueprint $table) {
-            $table->dropForeign(['riding_company_id']);
             $table->dropColumn('riding_company_id');
         });
     }
@@ -145,8 +204,17 @@ return new class extends Migration
             return;
         }
 
+        // Check if foreign key exists before dropping
+        $foreignKeyName = $this->getForeignKeyName('campaign_types', 'riding_company_id');
+        if ($foreignKeyName) {
+            try {
+                DB::statement("ALTER TABLE `campaign_types` DROP FOREIGN KEY `{$foreignKeyName}`");
+            } catch (\Exception $e) {
+                // Foreign key might not exist, continue
+            }
+        }
+
         Schema::table('campaign_types', function (Blueprint $table) {
-            $table->dropForeign(['riding_company_id']);
             $table->dropColumn('riding_company_id');
         });
 
@@ -171,8 +239,18 @@ return new class extends Migration
         if (! Schema::hasTable('campaign_statuses') || ! Schema::hasColumn('campaign_statuses', 'riding_company_id')) {
             return;
         }
+        
+        // Check if foreign key exists before dropping
+        $foreignKeyName = $this->getForeignKeyName('campaign_statuses', 'riding_company_id');
+        if ($foreignKeyName) {
+            try {
+                DB::statement("ALTER TABLE `campaign_statuses` DROP FOREIGN KEY `{$foreignKeyName}`");
+            } catch (\Exception $e) {
+                // Foreign key might not exist, continue
+            }
+        }
+        
         Schema::table('campaign_statuses', function (Blueprint $table) {
-            $table->dropForeign(['riding_company_id']);
             $table->dropColumn('riding_company_id');
         });
     }
@@ -182,8 +260,18 @@ return new class extends Migration
         if (! Schema::hasTable('campaign_channels') || ! Schema::hasColumn('campaign_channels', 'riding_company_id')) {
             return;
         }
+        
+        // Check if foreign key exists before dropping
+        $foreignKeyName = $this->getForeignKeyName('campaign_channels', 'riding_company_id');
+        if ($foreignKeyName) {
+            try {
+                DB::statement("ALTER TABLE `campaign_channels` DROP FOREIGN KEY `{$foreignKeyName}`");
+            } catch (\Exception $e) {
+                // Foreign key might not exist, continue
+            }
+        }
+        
         Schema::table('campaign_channels', function (Blueprint $table) {
-            $table->dropForeign(['riding_company_id']);
             $table->dropColumn('riding_company_id');
         });
     }
@@ -193,8 +281,18 @@ return new class extends Migration
         if (! Schema::hasTable('whatsapp_sessions') || ! Schema::hasColumn('whatsapp_sessions', 'riding_company_id')) {
             return;
         }
+        
+        // Check if foreign key exists before dropping
+        $foreignKeyName = $this->getForeignKeyName('whatsapp_sessions', 'riding_company_id');
+        if ($foreignKeyName) {
+            try {
+                DB::statement("ALTER TABLE `whatsapp_sessions` DROP FOREIGN KEY `{$foreignKeyName}`");
+            } catch (\Exception $e) {
+                // Foreign key might not exist, continue
+            }
+        }
+        
         Schema::table('whatsapp_sessions', function (Blueprint $table) {
-            $table->dropForeign(['riding_company_id']);
             $table->dropColumn('riding_company_id');
         });
     }
@@ -205,8 +303,17 @@ return new class extends Migration
             return;
         }
         if (Schema::hasColumn('driver_documents', 'riding_company_id')) {
+            // Check if foreign key exists before dropping
+            $foreignKeyName = $this->getForeignKeyName('driver_documents', 'riding_company_id');
+            if ($foreignKeyName) {
+                try {
+                    DB::statement("ALTER TABLE `driver_documents` DROP FOREIGN KEY `{$foreignKeyName}`");
+                } catch (\Exception $e) {
+                    // Foreign key might not exist, continue
+                }
+            }
+            
             Schema::table('driver_documents', function (Blueprint $table) {
-                $table->dropForeign(['riding_company_id']);
                 $table->dropColumn('riding_company_id');
             });
         }

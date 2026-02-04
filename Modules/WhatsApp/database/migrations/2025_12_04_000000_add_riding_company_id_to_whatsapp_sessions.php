@@ -13,7 +13,18 @@ return new class extends Migration
     {
         if (!Schema::hasColumn('whatsapp_sessions', 'riding_company_id')) {
             Schema::table('whatsapp_sessions', function (Blueprint $table) {
-                $table->foreignId('riding_company_id')->nullable()->after('company_id')->constrained('riding_companies')->onDelete('cascade');
+                // Create column first, then add foreign key if table exists
+                $table->unsignedBigInteger('riding_company_id')->nullable()->after('company_id');
+            });
+        }
+
+        // Add foreign key constraint only if the referenced table exists
+        if (Schema::hasTable('riding_companies') && Schema::hasColumn('whatsapp_sessions', 'riding_company_id')) {
+            Schema::table('whatsapp_sessions', function (Blueprint $table) {
+                $table->foreign('riding_company_id')
+                    ->references('id')
+                    ->on('riding_companies')
+                    ->onDelete('cascade');
             });
         }
     }

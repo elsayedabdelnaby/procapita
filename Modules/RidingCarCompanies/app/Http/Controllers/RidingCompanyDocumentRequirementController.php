@@ -36,18 +36,21 @@ class RidingCompanyDocumentRequirementController extends Controller
 
         // Get ALL document requirements for all riding companies (not just the one in URL)
         // Filter by company if not super admin
-        $documentRequirementsQuery = \Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement::with(['ridingCompany']);
+        $allRequirements = collect();
+        if (\Illuminate\Support\Facades\Schema::hasTable('riding_company_document_requirements')) {
+            $documentRequirementsQuery = \Modules\RidingCarCompanies\app\Models\RidingCompanyDocumentRequirement::with(['ridingCompany']);
 
-        if ($companyId) {
-            $documentRequirementsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
-                $q->where('company_id', $companyId);
-            });
+            if ($companyId) {
+                $documentRequirementsQuery->whereHas('ridingCompany', function ($q) use ($companyId) {
+                    $q->where('company_id', $companyId);
+                });
+            }
+
+            $allRequirements = $documentRequirementsQuery
+                ->orderBy('name')
+                ->orderBy('riding_company_id')
+                ->get();
         }
-
-        $allRequirements = $documentRequirementsQuery
-            ->orderBy('name')
-            ->orderBy('riding_company_id')
-            ->get();
 
         // Get all driver documents to show which ones are being used
         $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');

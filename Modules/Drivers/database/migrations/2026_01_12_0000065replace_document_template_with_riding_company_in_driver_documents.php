@@ -66,8 +66,19 @@ return new class extends Migration
         // Add riding_company_id if it doesn't exist
         if (!Schema::hasColumn('driver_documents', 'riding_company_id')) {
             Schema::table('driver_documents', function (Blueprint $table) {
-                $table->foreignId('riding_company_id')->nullable()->after('driver_id')->constrained('riding_companies')->onDelete('cascade');
+                // Create column first, then add foreign key if table exists
+                $table->unsignedBigInteger('riding_company_id')->nullable()->after('driver_id');
                 $table->index('riding_company_id');
+            });
+        }
+
+        // Add foreign key constraint only if the referenced table exists
+        if (Schema::hasTable('riding_companies') && Schema::hasColumn('driver_documents', 'riding_company_id')) {
+            Schema::table('driver_documents', function (Blueprint $table) {
+                $table->foreign('riding_company_id')
+                    ->references('id')
+                    ->on('riding_companies')
+                    ->onDelete('cascade');
             });
         }
     }
@@ -84,8 +95,16 @@ return new class extends Migration
             $table->dropColumn('riding_company_id');
 
             // Restore document_template_id
-            $table->foreignId('document_template_id')->after('driver_id')->constrained('riding_company_document_requirements')->cascadeOnDelete();
+            $table->unsignedBigInteger('document_template_id')->after('driver_id');
             $table->index('document_template_id');
+            
+            // Add foreign key constraint only if the referenced table exists
+            if (Schema::hasTable('riding_company_document_requirements')) {
+                $table->foreign('document_template_id')
+                    ->references('id')
+                    ->on('riding_company_document_requirements')
+                    ->onDelete('cascade');
+            }
         });
     }
 };

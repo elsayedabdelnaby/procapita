@@ -17,12 +17,25 @@ return new class extends Migration
             return;
         }
         
-        Schema::table($tableNames['roles'], function (Blueprint $table) use ($tableNames) {
-            if (! Schema::hasColumn($tableNames['roles'], 'riding_company_id')) {
-                $table->foreignId('riding_company_id')->nullable()->after('team_id')->constrained('riding_companies')->nullOnDelete();
+        $rolesTable = $tableNames['roles'];
+        
+        Schema::table($rolesTable, function (Blueprint $table) use ($rolesTable) {
+            if (! Schema::hasColumn($rolesTable, 'riding_company_id')) {
+                // Create column first, then add foreign key if table exists
+                $table->unsignedBigInteger('riding_company_id')->nullable()->after('team_id');
                 $table->index('riding_company_id');
             }
         });
+
+        // Add foreign key constraint only if the referenced table exists
+        if (Schema::hasTable('riding_companies') && Schema::hasColumn($rolesTable, 'riding_company_id')) {
+            Schema::table($rolesTable, function (Blueprint $table) {
+                $table->foreign('riding_company_id')
+                    ->references('id')
+                    ->on('riding_companies')
+                    ->onDelete('set null');
+            });
+        }
     }
 
     /**

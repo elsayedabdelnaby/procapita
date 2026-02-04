@@ -99,6 +99,11 @@ class RidingCompany extends Model
         $originalSlug = $slug;
         $counter = 1;
 
+        // Check if table exists before querying
+        if (!\Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
+            return $slug;
+        }
+
         // Check for existing slug within company (including soft deleted because RidingCompany uses SoftDeletes)
         $query = static::withTrashed()->where('slug', $slug);
         if ($companyId) {

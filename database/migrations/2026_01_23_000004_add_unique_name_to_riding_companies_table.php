@@ -8,13 +8,29 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Only proceed if the riding_companies table exists
+        if (!Schema::hasTable('riding_companies')) {
+            return;
+        }
+
         Schema::table('riding_companies', function (Blueprint $table) {
             // Ensure company_id column exists
             if (! Schema::hasColumn('riding_companies', 'company_id')) {
-                $table->foreignId('company_id')->nullable()->after('id')->constrained('companies')->onDelete('cascade');
+                // Create column first, then add foreign key if table exists
+                $table->unsignedBigInteger('company_id')->nullable()->after('id');
                 $table->index('company_id');
             }
         });
+
+        // Add foreign key constraint only if the referenced table exists
+        if (Schema::hasTable('companies') && Schema::hasColumn('riding_companies', 'company_id')) {
+            Schema::table('riding_companies', function (Blueprint $table) {
+                $table->foreign('company_id')
+                    ->references('id')
+                    ->on('companies')
+                    ->onDelete('cascade');
+            });
+        }
         
         // Try to drop existing unique constraint on slug (global) if exists
         try {
@@ -36,6 +52,11 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Only proceed if the riding_companies table exists
+        if (!Schema::hasTable('riding_companies')) {
+            return;
+        }
+
         Schema::table('riding_companies', function (Blueprint $table) {
             // Drop unique constraints
             $table->dropUnique(['company_id', 'name']);

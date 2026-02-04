@@ -9,18 +9,40 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('campaign_statuses', function (Blueprint $table) {
-            // Add riding_company_id column
-            $table->foreignId('riding_company_id')->after('company_id')->nullable()->constrained('riding_companies')->cascadeOnDelete();
+            // Add riding_company_id column first, then add foreign key if table exists
+            if (!Schema::hasColumn('campaign_statuses', 'riding_company_id')) {
+                $table->unsignedBigInteger('riding_company_id')->nullable()->after('company_id');
+                $table->index('riding_company_id');
+            }
             
-            // Add index
-            $table->index('riding_company_id');
-            
-            // Drop old unique constraint
-            $table->dropUnique(['company_id', 'slug']);
-            
-            // Add new unique constraint on riding_company_id and slug
-            $table->unique(['riding_company_id', 'slug']);
+            // Drop old unique constraint if it exists
+            try {
+                $table->dropUnique(['company_id', 'slug']);
+            } catch (\Exception $e) {
+                // Unique constraint might not exist, continue
+            }
         });
+
+        // Add foreign key constraint only if the referenced table exists
+        if (Schema::hasTable('riding_companies') && Schema::hasColumn('campaign_statuses', 'riding_company_id')) {
+            Schema::table('campaign_statuses', function (Blueprint $table) {
+                $table->foreign('riding_company_id')
+                    ->references('id')
+                    ->on('riding_companies')
+                    ->onDelete('cascade');
+            });
+        }
+
+        // Add new unique constraint on riding_company_id and slug
+        if (Schema::hasColumn('campaign_statuses', 'riding_company_id')) {
+            Schema::table('campaign_statuses', function (Blueprint $table) {
+                try {
+                    $table->unique(['riding_company_id', 'slug']);
+                } catch (\Exception $e) {
+                    // Unique constraint might already exist, continue
+                }
+            });
+        }
     }
 
     public function down(): void
