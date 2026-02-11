@@ -4,7 +4,7 @@
     "type": "module",
     "scripts": {
         "build": "npx vite build",
-        "build:with-wayfinder": "php artisan wayfinder:generate --with-form 2>/dev/null || true && npx vite build",
+        "build:with-wayfinder": "php artisan wayfinder:generate --with-form 2>/dev/null || true && set ENABLE_WAYFINDER=true && npx vite build",
         "build:skip-wayfinder": "npx vite build",
         "build:ssr": "npx vite build && npx vite build --ssr",
         "dev": "concurrently -n vite,whatsapp,schedule \"npx vite\" \"node whatsapp-service/index.js\" \"php artisan schedule:work\"",
