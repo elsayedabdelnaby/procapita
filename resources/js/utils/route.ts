@@ -26,7 +26,10 @@ export function route(name: string, params?: Record<string, any> | any): string 
         'two-factor.confirm': '/user/confirmed-two-factor-authentication',
         'two-factor.login': '/two-factor-challenge',
         'profile.edit': '/settings/profile',
+        'profile.update': '/settings/profile',
+        'profile.destroy': '/settings/profile',
         'user-password.edit': '/settings/password',
+        'user-password.update': '/settings/password',
         'appearance.edit': '/settings/appearance',
     };
 
@@ -42,5 +45,42 @@ export function route(name: string, params?: Record<string, any> | any): string 
     }
     
     return url;
+}
+
+/**
+ * Create a route object with form() method for Inertia forms
+ * This mimics wayfinder's form variant functionality
+ */
+export function routeWithForm(name: string, httpMethod: string = 'post'): { 
+    url: string;
+    form: () => { action: string; method: string };
+} {
+    const url = route(name);
+    const formMethod = httpMethod.toLowerCase() === 'delete' || httpMethod.toLowerCase() === 'put' || httpMethod.toLowerCase() === 'patch' 
+        ? 'post' 
+        : httpMethod.toLowerCase();
+    
+    return {
+        url,
+        form: () => {
+            const action = httpMethod.toLowerCase() === 'delete' || httpMethod.toLowerCase() === 'put' || httpMethod.toLowerCase() === 'patch'
+                ? `${url}?_method=${httpMethod.toUpperCase()}`
+                : url;
+            
+            return {
+                action,
+                method: formMethod,
+            };
+        },
+    };
+}
+
+/**
+ * Create a route function that returns an object with url property
+ * Used for navigation links
+ */
+export function routeWithUrl(name: string): () => { url: string } {
+    const url = route(name);
+    return () => ({ url });
 }
 
