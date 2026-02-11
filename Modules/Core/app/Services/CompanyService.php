@@ -5,6 +5,7 @@ namespace Modules\Core\app\Services;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 use Modules\Core\app\Models\Company;
+use Modules\Core\app\Models\Permission;
 use Modules\Core\app\Models\Role;
 
 class CompanyService
@@ -42,12 +43,27 @@ class CompanyService
         $slugChangeInfo = Company::$slugChangeInfo ?? null;
 
         // Create default CEO role (root role) for the company
-        $this->roleService->createRootRole($company);
+        $ceoRole = $this->roleService->createRootRole($company);
 
         // Seed default data for the company
         $this->seedDefaultDataForCompany($company);
 
-        // If admin user data is provided and has required fields, create the admin user
+        // Create reseller role (child of CEO) named after the company
+        $resellerRole = $this->roleService->createRole([
+            'name' => $company->name,
+            'guard_name' => 'web',
+            'team_id' => $company->id,
+            'parent_id' => $ceoRole->id,
+            'is_root' => false,
+        ]);
+
+        // Give reseller role full permissions inside the company (same as CEO)
+        $this->assignAllModulePermissionsToRole($resellerRole, $company);
+
+        // Create reseller admin user: {slug}-admin display, admin@{slug}.com, role = reseller role
+        $resellerAdminResult = $this->createResellerAdminUser($company, $resellerRole);
+
+        // If admin user data is provided and has required fields, create the admin user (CEO)
         if (isset($data['admin_user']) && is_array($data['admin_user'])) {
             // Only create admin user if name and email are provided and not empty
             $adminName = trim($data['admin_user']['name'] ?? '');
@@ -63,6 +79,8 @@ class CompanyService
             'slug_was_duplicate' => $slugChangeInfo['was_duplicate'] ?? false,
             'original_slug' => $slugChangeInfo['original_slug'] ?? null,
             'new_slug' => $slugChangeInfo['new_slug'] ?? null,
+            'reseller_admin_email' => $resellerAdminResult['email'] ?? null,
+            'reseller_admin_password' => $resellerAdminResult['password'] ?? null,
         ];
     }
 
@@ -202,6 +220,58 @@ class CompanyService
         }
 
         return $user;
+    }
+
+    /**
+     * Create the reseller admin user for a new company: name "{Company} Admin", email admin@{slug}.com,
+     * role = the company-named role (child of CEO). Returns email and plain password for one-time display.
+     *
+     * @return array{email: string, password: string}
+     */
+    protected function createResellerAdminUser(Company $company, Role $resellerRole): array
+    {
+        $slug = $company->slug ?? Str::slug($company->name);
+        $baseEmail = 'admin@'.$slug.'.com';
+        $email = $baseEmail;
+        $suffix = 0;
+        while (\App\Models\User::where('email', $email)->exists()) {
+            $suffix++;
+            $email = 'admin@'.$slug.'-'.$suffix.'.com';
+        }
+
+        $plainPassword = Str::password(12);
+        $user = \App\Models\User::create([
+            'name' => $company->name.' Admin',
+            'email' => $email,
+            'password' => bcrypt($plainPassword),
+            'company_id' => $company->id,
+            'is_company_admin' => true,
+            'is_active' => true,
+        ]);
+
+        setPermissionsTeamId($company->id);
+        $user->assignRole($resellerRole);
+
+        return [
+            'email' => $email,
+            'password' => $plainPassword,
+        ];
+    }
+
+    /**
+     * Assign all module permissions to a role (e.g. reseller role = full access inside company).
+     */
+    protected function assignAllModulePermissionsToRole(Role $role, Company $company): void
+    {
+        setPermissionsTeamId($company->id);
+
+        $modules = ['core', 'marketing', 'ridingcarcompanies', 'drivers'];
+        $allPermissions = collect();
+        foreach ($modules as $module) {
+            $permissions = Permission::forModule($module)->get();
+            $allPermissions = $allPermissions->merge($permissions);
+        }
+        $role->syncPermissions($allPermissions);
     }
 
     protected function grantModulePermissionsToAdmin(Company $company, string $moduleName): void

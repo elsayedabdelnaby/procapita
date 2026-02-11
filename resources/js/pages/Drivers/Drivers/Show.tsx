@@ -344,7 +344,7 @@ export default function DriversShow({
         formData.append('file', file);
 
         axios
-            .post(`/drivers/driver-documents/${docId}/upload`, formData, {
+            .post(`/leads/lead-documents/${docId}/upload`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
@@ -367,7 +367,7 @@ export default function DriversShow({
 
     const handleUpdateStatus = async (docId: number, status: string) => {
         try {
-            await axios.post(`/drivers/driver-documents/${docId}/update-status`, { status });
+            await axios.post(`/leads/lead-documents/${docId}/update-status`, { status });
             // Reload the page to get updated documents
             router.reload({ only: ['driver'] });
         } catch (error) {
@@ -377,7 +377,7 @@ export default function DriversShow({
     };
 
     const handleViewFile = (docId: number) => {
-        const url = `/drivers/driver-documents/${docId}/view`;
+        const url = `/leads/lead-documents/${docId}/view`;
         window.open(url, '_blank');
     };
 
@@ -386,7 +386,7 @@ export default function DriversShow({
             return;
         }
         try {
-            await axios.delete(`/drivers/driver-documents/${docId}/delete-file`);
+            await axios.delete(`/leads/lead-documents/${docId}/delete-file`);
             // Reload the page to get updated documents
             router.reload({ only: ['driver'] });
         } catch (error) {
@@ -464,7 +464,7 @@ export default function DriversShow({
                 <div className="p-6">
                     <div className="text-center py-12">
                         <p className="text-neutral-500">Lead not found.</p>
-                        <Link href="/drivers/drivers" className="mt-4 inline-block">
+                        <Link href="/leads/leads" className="mt-4 inline-block">
                             <Button variant="outline">Back to List</Button>
                         </Link>
                     </div>
@@ -480,7 +480,7 @@ export default function DriversShow({
                 {/* Header */}
                 <div className="mb-6 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <Link href="/drivers/drivers">
+                        <Link href="/leads/leads">
                             <Button variant="ghost" size="sm">
                                 <ArrowLeft className="h-4 w-4 mr-2" />
                                 Back
@@ -495,21 +495,21 @@ export default function DriversShow({
                     </div>
                     <div className="flex items-center gap-2">
                         {(filteredPreviousId !== null ? filteredPreviousId : previous_driver_id) && (
-                            <Link href={`/drivers/drivers/${filteredPreviousId !== null ? filteredPreviousId : previous_driver_id}`}>
+                            <Link href={`/leads/leads/${filteredPreviousId !== null ? filteredPreviousId : previous_driver_id}`}>
                                 <Button variant="outline" size="sm">
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
                             </Link>
                         )}
                         {(filteredNextId !== null ? filteredNextId : next_driver_id) && (
-                            <Link href={`/drivers/drivers/${filteredNextId !== null ? filteredNextId : next_driver_id}`}>
+                            <Link href={`/leads/leads/${filteredNextId !== null ? filteredNextId : next_driver_id}`}>
                                 <Button variant="outline" size="sm">
                                     <ChevronRight className="h-4 w-4" />
                                 </Button>
                             </Link>
                         )}
                         {canEdit() && (
-                            <Link href={`/drivers/drivers/${driver.id}/edit`}>
+                            <Link href={`/leads/leads/${driver.id}/edit`}>
                                 <Button variant="outline" size="sm">
                                     <Edit className="h-4 w-4 mr-2" />
                                     Edit
@@ -1266,7 +1266,7 @@ export default function DriversShow({
                                                     if ((e.target as HTMLElement).closest('input[type="checkbox"]') || (e.target as HTMLElement).closest('button')) {
                                                         return;
                                                     }
-                                                    window.location.href = `/drivers/drivers/${dup.id}`;
+                                                    window.location.href = `/leads/leads/${dup.id}`;
                                                 }}
                                             >
                                                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -1301,7 +1301,7 @@ export default function DriversShow({
                                                     {dup.assigned_to?.name || '-'}
                                                 </td>
                                                 <td className="px-4 py-3 text-sm">
-                                                    <Link href={`/drivers/drivers/${dup.id}`} onClick={(e) => e.stopPropagation()}>
+                                                    <Link href={`/leads/leads/${dup.id}`} onClick={(e) => e.stopPropagation()}>
                                                         <Button variant="outline" size="sm">
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
@@ -1345,7 +1345,7 @@ export default function DriversShow({
                                                                 defaultChecked={index === 0}
                                                                 className="w-4 h-4"
                                                             />
-                                                            <Link href={`/drivers/drivers/${driver.id}`} className="text-blue-600 hover:underline" target="_blank">
+                                                            <Link href={`/leads/leads/${driver.id}`} className="text-blue-600 hover:underline" target="_blank">
                                                                 Record #{driver.id}
                                                             </Link>
                                                         </div>
@@ -1684,7 +1684,7 @@ export default function DriversShow({
                                             const driverIds = mergeDrivers.map(d => d.id);
                                             
                                             try {
-                                                await router.post('/drivers/drivers/merge', {
+                                                await router.post('/leads/leads/merge', {
                                                     primary_driver_id: primaryRecordId,
                                                     driver_ids: driverIds,
                                                     field_mappings: fieldMappings,

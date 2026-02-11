@@ -49,11 +49,11 @@ export default function LeadStatusesIndex({
     }, [availableLeadStatuses, deleteDialog.status]);
 
     const handleToggleStatus = (id: number) => {
-        router.post(`/drivers/lead-statuses/${id}/toggle-active`);
+        router.post(`/leads/lead-statuses/${id}/toggle-active`);
     };
 
     const handleMoveUp = (id: number) => {
-        router.post(`/drivers/lead-statuses/${id}/move-up`, {}, {
+        router.post(`/leads/lead-statuses/${id}/move-up`, {}, {
             preserveScroll: true,
             onSuccess: () => {
                 router.reload({ only: ['leadStatuses'] });
@@ -62,7 +62,7 @@ export default function LeadStatusesIndex({
     };
 
     const handleMoveDown = (id: number) => {
-        router.post(`/drivers/lead-statuses/${id}/move-down`, {}, {
+        router.post(`/leads/lead-statuses/${id}/move-down`, {}, {
             preserveScroll: true,
             onSuccess: () => {
                 router.reload({ only: ['leadStatuses'] });
@@ -87,17 +87,17 @@ export default function LeadStatusesIndex({
                             type="button"
                             variant="outline"
                             onClick={() => {
-                                window.location.href = '/drivers/lead-statuses/export';
+                                window.location.href = '/leads/lead-statuses/export';
                             }}
                         >
                                 Export
                             </Button>
-                        <Link href="/drivers/lead-statuses/import">
+                        <Link href="/leads/lead-statuses/import">
                             <Button type="button" variant="outline">
                                 Import
                             </Button>
                         </Link>
-                        <Link href="/drivers/lead-statuses/create">
+                        <Link href="/leads/lead-statuses/create">
                             <Button>Create Lead Status</Button>
                         </Link>
                     </div>
@@ -149,7 +149,7 @@ export default function LeadStatusesIndex({
                                     header: 'Name',
                                     accessor: (row) => (
                                         <Link
-                                            href={`/drivers/lead-statuses/${row.id}`}
+                                            href={`/leads/lead-statuses/${row.id}`}
                                             className="font-medium hover:underline"
                                         >
                                             {row.name}
@@ -183,7 +183,7 @@ export default function LeadStatusesIndex({
                                     header: 'Actions',
                                     accessor: (row) => (
                                         <div className="flex items-center gap-2">
-                                            <Link href={`/drivers/lead-statuses/${row.id}/edit`}>
+                                            <Link href={`/leads/lead-statuses/${row.id}/edit`}>
                                                 <Button type="button" variant="outline" size="sm">
                                                     Edit
                                                 </Button>
@@ -212,7 +212,7 @@ export default function LeadStatusesIndex({
                     ) : (
                         <div className="py-12 text-center">
                             <p className="text-neutral-500">No lead statuses found.</p>
-                            <Link href="/drivers/lead-statuses/create" className="mt-4 inline-block">
+                            <Link href="/leads/lead-statuses/create" className="mt-4 inline-block">
                                 <Button>Create First Lead Status</Button>
                             </Link>
                         </div>

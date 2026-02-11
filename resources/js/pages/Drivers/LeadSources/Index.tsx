@@ -46,7 +46,7 @@ export default function LeadSourcesIndex({
     }, [availableLeadSources, deleteDialog.source]);
 
     const handleToggleStatus = (id: number) => {
-        router.post(`/drivers/lead-sources/${id}/toggle-active`);
+        router.post(`/leads/lead-sources/${id}/toggle-active`);
     };
 
     return (
@@ -66,17 +66,17 @@ export default function LeadSourcesIndex({
                             type="button"
                             variant="outline"
                             onClick={() => {
-                                window.location.href = '/drivers/lead-sources/export';
+                                window.location.href = '/leads/lead-sources/export';
                             }}
                         >
                                 Export
                             </Button>
-                        <Link href="/drivers/lead-sources/import">
+                        <Link href="/leads/lead-sources/import">
                             <Button type="button" variant="outline">
                                 Import
                             </Button>
                         </Link>
-                        <Link href="/drivers/lead-sources/create">
+                        <Link href="/leads/lead-sources/create">
                             <Button>Create Lead Source</Button>
                         </Link>
                     </div>
@@ -91,7 +91,7 @@ export default function LeadSourcesIndex({
                                     header: 'Name',
                                     accessor: (row) => (
                                         <Link
-                                            href={`/drivers/lead-sources/${row.id}`}
+                                            href={`/leads/lead-sources/${row.id}`}
                                             className="font-medium hover:underline"
                                         >
                                             {row.name}
@@ -120,7 +120,7 @@ export default function LeadSourcesIndex({
                                     header: 'Actions',
                                     accessor: (row) => (
                                         <div className="flex items-center gap-2">
-                                            <Link href={`/drivers/lead-sources/${row.id}/edit`}>
+                                            <Link href={`/leads/lead-sources/${row.id}/edit`}>
                                                 <Button type="button" variant="outline" size="sm">
                                                     Edit
                                                 </Button>
@@ -153,7 +153,7 @@ export default function LeadSourcesIndex({
                     ) : (
                         <div className="py-12 text-center">
                             <p className="text-neutral-500">No lead sources found.</p>
-                            <Link href="/drivers/lead-sources/create" className="mt-4 inline-block">
+                            <Link href="/leads/lead-sources/create" className="mt-4 inline-block">
                                 <Button>Create First Lead Source</Button>
                             </Link>
                         </div>

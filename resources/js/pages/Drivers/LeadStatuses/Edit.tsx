@@ -49,7 +49,7 @@ export default function LeadStatusesEdit({ leadStatus, availableLeadStatuses = [
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/drivers/lead-statuses/${leadStatus.id}`);
+        put(`/leads/lead-statuses/${leadStatus.id}`);
     };
 
     return (
@@ -235,7 +235,7 @@ export default function LeadStatusesEdit({ leadStatus, availableLeadStatuses = [
                     </Card>
 
                     <div className="flex justify-end gap-4">
-                        <Link href="/drivers/lead-statuses">
+                        <Link href="/leads/lead-statuses">
                             <Button type="button" variant="outline">
                                 Cancel
                             </Button>

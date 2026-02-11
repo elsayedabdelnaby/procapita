@@ -36,3 +36,22 @@ createInertiaApp({
 
 // This will set light / dark mode on load...
 initializeTheme();
+
+// Suppress uncaught promise rejections for aborted/cancelled requests (Inertia or axios when navigating away)
+function isAbortError(event: PromiseRejectionEvent): boolean {
+    const e = event?.reason;
+    if (!e || typeof e !== 'object') return false;
+    const msg = String(e?.message ?? '');
+    const code = e?.code;
+    const name = e?.name;
+    if (code === 'ECONNABORTED' || name === 'CanceledError') return true;
+    if (msg.includes('aborted') || msg.includes('canceled') || msg.includes('cancelled')) return true;
+    if (name === 'AxiosError' && (code === 'ECONNABORTED' || msg.includes('aborted'))) return true;
+    return false;
+}
+window.addEventListener('unhandledrejection', (event) => {
+    if (isAbortError(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+});

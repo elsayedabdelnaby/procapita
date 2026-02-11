@@ -3,6 +3,7 @@
 namespace Modules\Core\app\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -12,6 +13,7 @@ use Modules\Core\app\Http\Requests\CompanyUpdateRequest;
 use Modules\Core\app\Models\Company;
 use Modules\Core\app\Models\Role;
 use Modules\Core\app\Services\CompanyService;
+use Modules\Core\app\Services\RoleService;
 use Modules\Drivers\app\Models\LeadSource;
 use Modules\Marketing\app\Models\Campaign;
 use Modules\RidingCarCompanies\app\Models\RidingCompanyIntegrationSetting;
@@ -19,7 +21,8 @@ use Modules\RidingCarCompanies\app\Models\RidingCompanyIntegrationSetting;
 class CompanyController extends Controller
 {
     public function __construct(
-        protected CompanyService $companyService
+        protected CompanyService $companyService,
+        protected RoleService $roleService
     ) {}
 
     public function index(): Response
@@ -107,6 +110,11 @@ class CompanyController extends Controller
                 $message = 'Company created successfully. The slug "' . $result['original_slug'] . '" was already taken, so it was automatically changed to "' . $result['new_slug'] . '".';
             }
 
+            // Append reseller admin credentials (one-time display)
+            if (! empty($result['reseller_admin_email']) && ! empty($result['reseller_admin_password'])) {
+                $message .= ' Reseller admin user: ' . $result['reseller_admin_email'] . ' / Password: ' . $result['reseller_admin_password'] . ' (save this password; it will not be shown again).';
+            }
+
             return redirect()
                 ->route('core.companies.index')
                 ->with('success', $message);
@@ -132,11 +140,6 @@ class CompanyController extends Controller
             abort(403, 'You can only view your own company.');
         }
 
-        // Keep sidebar company selector in sync when super admin views a company
-        if ($user && $user->isSuperAdmin()) {
-            session(['selected_company_id' => $id]);
-        }
-
         $statistics = $this->companyService->getCompanyStatistics($id);
 
         // Set team context for Spatie Permission to load roles correctly
@@ -159,20 +162,31 @@ class CompanyController extends Controller
             ->orderBy('name', 'asc')
             ->get();
 
-        // Build role hierarchy tree - load all roles with recursive children
-        // Get root roles (is_root = true AND parent_id is null)
-        // Roles with is_root = true but parent_id != null should appear as children, not roots
+        // Reseller admin: show only their role(s) and descendants (no CEO, no roles above)
+        $roles = $this->roleService->getVisibleRolesForUser($user, $id);
+
+        // Build role hierarchy tree: for reseller admin start from their role(s); else from root (CEO)
         $rootRoles = $company->roles()
             ->where('is_root', true)
             ->whereNull('parent_id')
             ->orderBy('hierarchy_level')
             ->orderBy('name')
             ->get();
-        
-        // Build complete hierarchy tree recursively
-        $roleHierarchy = $rootRoles->map(function ($role) {
-            return $this->buildRoleHierarchyTree($role);
-        })->values()->toArray();
+
+        setPermissionsTeamId($id);
+        $userRoleIds = $user ? $user->roles()->where('roles.team_id', $id)->pluck('id')->toArray() : [];
+        $userRoles = $user && ! empty($userRoleIds)
+            ? Role::whereIn('id', $userRoleIds)->with('parent', 'children')->orderBy('hierarchy_level')->orderBy('name')->get()
+            : collect();
+        $hasRootRole = $userRoles->contains(fn (Role $r) => $r->parent_id === null);
+
+        if ($user && ! $user->isSuperAdmin() && ! $hasRootRole && $userRoles->isNotEmpty()) {
+            $roleHierarchy = $userRoles->map(fn (Role $role) => $this->buildRoleHierarchyTree($role))->values()->toArray();
+        } else {
+            $roleHierarchy = $rootRoles->map(function ($role) {
+                return $this->buildRoleHierarchyTree($role);
+            })->values()->toArray();
+        }
 
         // Load activity logs
         $activities = \Spatie\Activitylog\Models\Activity::forSubject($company)
@@ -380,6 +394,7 @@ class CompanyController extends Controller
             }
         }
 
+        // Riding Companies (small reseller entities) are hidden; Reseller = main Company only
         return Inertia::render('Core/Companies/Show', [
             'company' => $company->load('users', 'roles'),
             'statistics' => $statistics,
@@ -388,11 +403,12 @@ class CompanyController extends Controller
             'roles' => $roles,
             'roleHierarchy' => $roleHierarchy,
             'activities' => $activities,
-            'ridingCompanies' => $ridingCompanies,
+            'ridingCompanies' => [],
+            'hideRidingCompanies' => true,
             'availableCompanies' => $availableCompanies,
             'documentRequirements' => $documentRequirements,
-            'selected_riding_company_id' => $selectedRidingCompanyId ?: null,
-            'selectedRidingCompanyData' => $selectedRidingCompanyData,
+            'selected_riding_company_id' => null,
+            'selectedRidingCompanyData' => null,
         ]);
     }
 
@@ -505,15 +521,19 @@ class CompanyController extends Controller
         }
     }
 
-    public function select(Request $request): RedirectResponse
+    public function select(Request $request): RedirectResponse|JsonResponse
     {
         $request->validate([
             'company_id' => ['required', 'integer', 'exists:companies,id'],
         ]);
 
-        $company = $this->companyService->getCompanyById($request->company_id);
-        
+        // Lightweight fetch: only id and name (avoid loading users, modules, roles)
+        $company = Company::where('id', $request->company_id)->first(['id', 'name']);
+
         if (! $company) {
+            if ($this->wantsJsonResponse($request)) {
+                return response()->json(['success' => false, 'error' => 'Company not found.'], 404);
+            }
             return redirect()
                 ->back()
                 ->with('error', 'Company not found.');
@@ -521,18 +541,35 @@ class CompanyController extends Controller
 
         session(['selected_company_id' => $request->company_id]);
 
+        // Return JSON only for our axios call (not Inertia); Inertia sends X-Inertia header
+        if ($this->wantsJsonResponse($request)) {
+            return response()->json(['success' => true, 'company' => ['id' => $company->id, 'name' => $company->name]]);
+        }
+
         return redirect()
             ->back()
             ->with('success', "Now viewing data for: {$company->name}");
     }
 
-    public function clearSelection(): RedirectResponse
+    public function clearSelection(Request $request): RedirectResponse|JsonResponse
     {
         session()->forget('selected_company_id');
+
+        if ($this->wantsJsonResponse($request)) {
+            return response()->json(['success' => true]);
+        }
 
         return redirect()
             ->back()
             ->with('success', 'Company filter cleared. Showing all companies.');
+    }
+
+    /**
+     * True only for our axios company-select requests (custom header); Inertia requests must get redirect.
+     */
+    private function wantsJsonResponse(Request $request): bool
+    {
+        return $request->header('X-Ajax-Company-Select') === '1';
     }
 
     /**

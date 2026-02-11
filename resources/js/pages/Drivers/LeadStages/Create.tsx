@@ -18,7 +18,7 @@ export default function LeadStagesCreate() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post('/drivers/lead-stages');
+        post('/leads/lead-stages');
     };
 
     return (
@@ -168,7 +168,7 @@ export default function LeadStagesCreate() {
                     </Card>
 
                     <div className="flex justify-end gap-4">
-                        <Link href="/drivers/lead-stages">
+                        <Link href="/leads/lead-stages">
                             <Button type="button" variant="outline">
                                 Cancel
                             </Button>

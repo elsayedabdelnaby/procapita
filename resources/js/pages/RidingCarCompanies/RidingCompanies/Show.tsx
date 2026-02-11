@@ -936,7 +936,7 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                                         <div className="flex-1">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <Link
-                                                    href={`/drivers/driver-documents/${docName.id}/edit`}
+                                                    href={`/leads/lead-documents/${docName.id}/edit`}
                                                     className="font-medium hover:underline"
                                                 >
                                                     {docName.name}
@@ -963,7 +963,7 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                                         </div>
                                         <div className="ml-4 flex items-center gap-2">
                                             <Link
-                                                href={`/drivers/driver-documents/${docName.id}/edit`}
+                                                href={`/leads/lead-documents/${docName.id}/edit`}
                                             >
                                                 <Button variant="ghost" size="sm">
                                                     Edit

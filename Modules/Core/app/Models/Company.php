@@ -32,6 +32,7 @@ class Company extends Model
         'address',
         'logo',
         'is_active',
+        'is_system',
         'settings',
     ];
 
@@ -39,8 +40,21 @@ class Company extends Model
     {
         return [
             'is_active' => 'boolean',
+            'is_system' => 'boolean',
             'settings' => 'array',
         ];
+    }
+
+    /**
+     * Get the system company (Procapita). Essential like super admin when cleaning the database.
+     */
+    public static function getSystemCompany(): ?self
+    {
+        $name = config('app.system_company_name', 'Procapita');
+
+        return static::where('name', $name)
+            ->orWhere('is_system', true)
+            ->first();
     }
 
     protected static function boot(): void

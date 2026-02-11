@@ -16,6 +16,8 @@ import { dashboard } from '@/routes';
 import { type SharedData } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
 import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import axios from 'axios';
 import AppLogo from './app-logo';
 
 function SidebarRightTrigger() {
@@ -46,28 +48,39 @@ export function AppSidebar() {
     const page = usePage<SharedData>();
     const { navigation, selectedCompany, companies, auth } = page.props;
     const isSuperAdmin = auth?.user?.is_super_admin;
+    const [companySelectLoading, setCompanySelectLoading] = useState(false);
 
-    // Use selectedCompany or fallback to first company or user's company
-    const currentCompany = selectedCompany || 
-        (companies && companies.length > 0 ? companies[0] : null) ||
-        (auth?.user?.company ? {
-            id: auth.user.company.id,
-            name: auth.user.company.name,
-            logo: auth.user.company.logo,
-            logo_url: auth.user.company.logo_url,
-        } : null);
+    // For super admin: "All Companies" when no selection; otherwise show selected company name
+    const selectValue = selectedCompany ? selectedCompany.id.toString() : 'all';
+    const selectLabel = companySelectLoading ? 'Switching…' : (selectedCompany ? selectedCompany.name : 'All Companies');
 
-    const handleCompanySelect = (companyId: string) => {
-            // If already on a Reseller Company page, navigate to the new company so the whole page updates
-            const onCompanyPage = typeof window !== 'undefined' && /^\/core\/companies\/\d+$/.test(window.location.pathname);
-            if (onCompanyPage) {
-                router.visit(`/core/companies/${companyId}`);
-                return;
+    const handleCompanySelect = (value: string) => {
+        const onCompanyPage = typeof window !== 'undefined' && /^\/core\/companies\/\d+$/.test(window.location.pathname);
+        if (onCompanyPage) {
+            if (value === 'all') {
+                router.post('/core/companies/clear-selection', {}, { preserveScroll: true });
+            } else {
+                router.visit(`/core/companies/${value}`);
             }
-            router.post('/core/companies/select', {
-                company_id: parseInt(companyId),
-            }, {
-                preserveScroll: true,
+            return;
+        }
+        // Use AJAX + reload to avoid slow redirect and session lock wait
+        setCompanySelectLoading(true);
+        const url = value === 'all' ? '/core/companies/clear-selection' : '/core/companies/select';
+        const body = value === 'all' ? {} : { company_id: parseInt(value, 10) };
+        axios
+            .post(url, body, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'X-Ajax-Company-Select': '1',
+                },
+            })
+            .then(() => {
+                router.reload({ preserveScroll: true });
+            })
+            .finally(() => {
+                setCompanySelectLoading(false);
             });
     };
 
@@ -83,19 +96,23 @@ export function AppSidebar() {
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                 </SidebarMenu>
-                {isSuperAdmin && companies && companies.length > 0 && currentCompany && (
+                {isSuperAdmin && companies && companies.length > 0 && (
                     <div className="px-2 py-2">
                         <Select
-                            value={currentCompany.id.toString()}
+                            value={selectValue}
                             onValueChange={handleCompanySelect}
+                            disabled={companySelectLoading}
                         >
-                            <SelectTrigger className="w-full">
+                            <SelectTrigger className="w-full" aria-busy={companySelectLoading}>
                                 <Building2 className="mr-2 h-4 w-4" />
                                 <SelectValue>
-                                    {currentCompany.name}
+                                    {selectLabel}
                                 </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="all">
+                                    All Companies
+                                </SelectItem>
                                 {companies.map((company) => (
                                     <SelectItem key={company.id} value={company.id.toString()}>
                                         {company.name}

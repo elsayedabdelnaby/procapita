@@ -51,10 +51,10 @@ export default function DriverFollowUpsShow({ followUp }: DriverFollowUpsShowPro
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Link href={`/drivers/driver-follow-ups/${followUp.id}/edit`}>
+                        <Link href={`/leads/lead-follow-ups/${followUp.id}/edit`}>
                             <Button variant="outline">Edit</Button>
                         </Link>
-                        <Link href="/drivers/driver-follow-ups">
+                        <Link href="/leads/lead-follow-ups">
                             <Button variant="outline">Back to List</Button>
                         </Link>
                     </div>

@@ -97,9 +97,10 @@ interface CompanyShowProps {
         roles?: Array<{ id: number; name: string }>;
         availableUsers?: Array<{ id: number; name: string; email?: string }>;
     } | null;
+    hideRidingCompanies?: boolean;
 }
 
-export default function CompanyShow({ company, statistics, users, deletedUsers = [], roles, roleHierarchy, ridingCompanies = [], availableCompanies = [], documentRequirements = [], activities = [], selected_riding_company_id, selectedRidingCompanyData = null }: CompanyShowProps) {
+export default function CompanyShow({ company, statistics, users, deletedUsers = [], roles, roleHierarchy, ridingCompanies = [], availableCompanies = [], documentRequirements = [], activities = [], selected_riding_company_id, selectedRidingCompanyData = null, hideRidingCompanies = false }: CompanyShowProps) {
     const demoReseller = (usePage().props as { demo_reseller?: boolean }).demo_reseller ?? false;
     const ridingCompaniesLabel = demoReseller ? 'Reseller Companies' : 'Riding Companies';
     const ridingCompanyLabel = demoReseller ? 'Reseller Company' : 'Riding Company';
@@ -114,6 +115,11 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
         open: false,
         role: null,
     });
+    useEffect(() => {
+        if (hideRidingCompanies && ['integration', 'whatsapp', 'distribution', 'rotation'].includes(activeTab)) {
+            setActiveTab('overview');
+        }
+    }, [hideRidingCompanies, activeTab]);
     const [userFilters, setUserFilters] = useState<Record<string, string>>({
         name: '',
         email: '',
@@ -203,7 +209,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
             const emailMatch = !userFilters.email || 
                 user.email.toLowerCase().includes(userFilters.email.toLowerCase());
             
-            const ridingCompanyMatch = !userFilters.ridingCompany || 
+            const ridingCompanyMatch = hideRidingCompanies || !userFilters.ridingCompany || 
                 userFilters.ridingCompany === '' ||
                 (user.riding_company_id && user.riding_company_id.toString() === userFilters.ridingCompany);
             
@@ -307,7 +313,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                         >
                             <div className="flex items-center gap-2">
                                 <ShieldCheck className="h-4 w-4" />
-                                Roles ({statistics.total_roles})
+                                Roles ({roles?.length ?? statistics.total_roles})
                             </div>
                         </button>
                         <button
@@ -323,6 +329,8 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                 Hierarchy
                             </div>
                         </button>
+                        {!hideRidingCompanies && (
+                        <>
                         <button
                             onClick={() => setActiveTab('integration')}
                             className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
@@ -334,19 +342,6 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                             <div className="flex items-center gap-2">
                                 <Plug className="h-4 w-4" />
                                 Integration
-                            </div>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('whatsapp')}
-                            className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
-                                activeTab === 'whatsapp'
-                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                                    : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
-                            }`}
-                        >
-                            <div className="flex items-center gap-2">
-                                <MessageCircle className="h-4 w-4" />
-                                WhatsApp
                             </div>
                         </button>
                         <button
@@ -375,6 +370,8 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                 Rotation
                             </div>
                         </button>
+                        </>
+                        )}
                         <button
                             onClick={() => setActiveTab('updates')}
                             className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
@@ -396,7 +393,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                     onOpenChange={setDeleteDialogOpen}
                     company={company}
                     availableCompanies={availableCompanies}
-                    ridingCompaniesCount={ridingCompanies.length}
+                    ridingCompaniesCount={hideRidingCompanies ? 0 : ridingCompanies.length}
                     demoReseller={demoReseller}
                 />
 
@@ -523,7 +520,9 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                             </div>
                         </Card>
 
-                        {/* Reseller Companies (Riding Companies) */}
+                        {!hideRidingCompanies && (
+                        <>
+                        {/* Reseller Companies (Riding Companies) - hidden when Reseller = main Company only */}
                         <Card className="p-6">
                             <div className="mb-4 flex items-center justify-between">
                                 <h2 className="text-lg font-semibold">{ridingCompaniesLabel}</h2>
@@ -557,16 +556,18 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                 </div>
                             )}
                         </Card>
+                        </>
+                        )}
 
                         {/* Document Requirements */}
                         <Card className="p-6">
                             <div className="mb-4 flex items-center justify-between">
                                 <h2 className="text-lg font-semibold">Document Requirements</h2>
                                 <div className="flex gap-2">
-                                    <Link href="/drivers/driver-documents">
+                                    <Link href="/leads/lead-documents">
                                         <Button variant="outline" size="sm">View All</Button>
                                     </Link>
-                                    <Link href="/drivers/driver-documents/create">
+                                    <Link href="/leads/lead-documents/create">
                                         <Button size="sm">Create New Requirement</Button>
                                     </Link>
                                 </div>
@@ -581,7 +582,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-3 mb-2">
                                                     <Link
-                                                        href={`/drivers/driver-documents/${req.id}/edit`}
+                                                        href={`/leads/lead-documents/${req.id}/edit`}
                                                         className="font-medium hover:underline"
                                                     >
                                                         {req.name}
@@ -606,7 +607,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                                 )}
                                             </div>
                                             <div className="flex gap-2">
-                                                <Link href={`/drivers/driver-documents/${req.id}/edit`}>
+                                                <Link href={`/leads/lead-documents/${req.id}/edit`}>
                                                     <Button variant="ghost" size="sm">
                                                         Edit
                                                     </Button>
@@ -618,7 +619,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                             ) : (
                                 <div className="py-8 text-center text-neutral-500">
                                     <p className="mb-2">No document requirements found.</p>
-                                    <Link href="/drivers/driver-documents/create">
+                                    <Link href="/leads/lead-documents/create">
                                         <Button size="sm" className="mt-2">Create First Document Requirement</Button>
                                     </Link>
                                 </div>
@@ -708,9 +709,11 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
                                                 Mobile 2
                                             </th>
+                                            {!hideRidingCompanies && (
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
                                                 Reseller
                                             </th>
+                                            )}
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
                                                 Roles
                                             </th>
@@ -764,6 +767,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                             </th>
                                             <th className="px-4 py-2"></th>
                                             <th className="px-4 py-2"></th>
+                                            {!hideRidingCompanies && (
                                             <th className="px-4 py-2">
                                                 <Select
                                                     value={userFilters.ridingCompany || undefined}
@@ -784,6 +788,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                                     </SelectContent>
                                                 </Select>
                                             </th>
+                                            )}
                                             <th className="px-4 py-2">
                                                 <Select
                                                     value={userFilters.roles || undefined}
@@ -851,9 +856,11 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                                     <td className="px-4 py-3 text-sm">{user.email}</td>
                                                     <td className="px-4 py-3 text-sm">{user.mobile1 || '-'}</td>
                                                     <td className="px-4 py-3 text-sm">{user.mobile2 || '-'}</td>
+                                                    {!hideRidingCompanies && (
                                                     <td className="px-4 py-3 text-sm">
                                                         {user.ridingCompany?.name || '-'}
                                                     </td>
+                                                    )}
                                                     <td className="px-4 py-3 text-sm">
                                                         {user.roles && user.roles.length > 0
                                                             ? user.roles.map((r: any) => r.name).join(', ')
@@ -985,9 +992,11 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                         <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
                                             Mobile 2
                                         </th>
+                                        {!hideRidingCompanies && (
                                         <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
                                             Reseller
                                         </th>
+                                        )}
                                         <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">
                                             Roles
                                         </th>
@@ -1003,7 +1012,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                     {deletedUsers.length === 0 ? (
                                         <tr>
                                             <td
-                                                colSpan={8}
+                                                colSpan={hideRidingCompanies ? 7 : 8}
                                                 className="px-4 py-8 text-center text-sm text-neutral-500"
                                             >
                                                 No deleted users found
@@ -1026,9 +1035,11 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                                                 <td className="px-4 py-3 text-sm">{user.email}</td>
                                                 <td className="px-4 py-3 text-sm">{user.mobile1 || '-'}</td>
                                                 <td className="px-4 py-3 text-sm">{user.mobile2 || '-'}</td>
+                                                {!hideRidingCompanies && (
                                                 <td className="px-4 py-3 text-sm">
                                                     {user.ridingCompany?.name || '-'}
                                                 </td>
+                                                )}
                                                 <td className="px-4 py-3 text-sm">
                                                     {user.roles && user.roles.length > 0
                                                         ? user.roles.map((r: any) => r.name).join(', ')
@@ -1164,8 +1175,9 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                         {roleHierarchy && roleHierarchy.length > 0 ? (
                             <div className="mt-4">
                                 <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
-                                    Visual representation of the company's role structure showing parent-child
-                                    relationships.
+                                    {roleHierarchy.length === 1 && !roleHierarchy[0]?.parent_id
+                                        ? "Visual representation of the company's role structure showing parent-child relationships."
+                                        : 'Your role and the roles under it (parent-child structure).'}
                                 </p>
                                 <RoleTree roles={roleHierarchy} companyId={company.id} />
                             </div>
@@ -1220,7 +1232,7 @@ export default function CompanyShow({ company, statistics, users, deletedUsers =
                     </Card>
                 )}
 
-                {activeTab === 'whatsapp' && (
+                {false && activeTab === 'whatsapp' && (
                     <Card className="p-6">
                         <h2 className="mb-2 text-lg font-semibold">WhatsApp &amp; Settings</h2>
                         <p className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">

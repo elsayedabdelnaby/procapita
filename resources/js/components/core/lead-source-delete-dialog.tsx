@@ -61,7 +61,7 @@ export function LeadSourceDeleteDialog({
             data.transfer_lead_source_id = transferLeadSourceId;
         }
 
-        router.delete(`/drivers/lead-sources/${leadSource.id}`, {
+        router.delete(`/leads/lead-sources/${leadSource.id}`, {
             data,
             onSuccess: () => {
                 onOpenChange(false);

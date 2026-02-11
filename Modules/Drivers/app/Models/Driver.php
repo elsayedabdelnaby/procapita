@@ -36,7 +36,6 @@ class Driver extends Model
         'assigned_to',
         'team_leader_id',
         'account_manager_id',
-        'reseller',
         'resigned_leads',
         'assigned_time',
         'last_assigned_time',

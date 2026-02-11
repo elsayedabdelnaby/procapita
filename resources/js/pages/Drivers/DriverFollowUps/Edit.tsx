@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 
 interface Driver {
     id: number;
@@ -38,6 +38,8 @@ export default function DriverFollowUpsEdit({
     drivers,
     users,
 }: DriverFollowUpsEditProps) {
+    const page = usePage();
+    const isSuperAdmin = (page.props as any).auth?.user?.is_super_admin ?? false;
     const { data, setData, put, processing, errors } = useForm({
         assigned_to: followUp.assigned_to?.toString() || '',
         user_name: followUp.user_name || '',
@@ -50,7 +52,7 @@ export default function DriverFollowUpsEdit({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/drivers/driver-follow-ups/${followUp.id}`);
+        put(`/leads/lead-follow-ups/${followUp.id}`);
     };
 
     return (
@@ -90,13 +92,13 @@ export default function DriverFollowUpsEdit({
                             </div>
 
                             <FormField
-                                label="User Name *"
+                                label={isSuperAdmin ? 'User Name (Signed 2)' : 'User Name *'}
                                 name="user_name"
                                 value={data.user_name}
                                 onChange={(e) => setData('user_name', e.target.value)}
                                 error={errors.user_name}
                                 placeholder="Enter the name of the user who made the change"
-                                required
+                                required={!isSuperAdmin}
                             />
 
                             <div className="space-y-2">
@@ -142,7 +144,7 @@ export default function DriverFollowUpsEdit({
                         </div>
 
                         <div className="flex justify-end gap-4">
-                            <Link href="/drivers/driver-follow-ups">
+                            <Link href="/leads/lead-follow-ups">
                                 <Button type="button" variant="outline">
                                     Cancel
                                 </Button>

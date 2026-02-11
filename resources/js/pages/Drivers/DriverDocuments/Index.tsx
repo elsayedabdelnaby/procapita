@@ -59,7 +59,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
     const confirmDelete = () => {
         if (deleteDialog.document && deleteDialog.document.id) {
             // Delete the document name (which will cascade delete all related lead documents)
-            router.delete(`/drivers/driver-documents/${deleteDialog.document.id}`, {
+            router.delete(`/leads/lead-documents/${deleteDialog.document.id}`, {
                 onSuccess: () => {
                     setDeleteDialog({ open: false, document: null });
                     router.reload({ only: ['driverDocuments'] });
@@ -73,7 +73,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
     };
 
     const confirmDeleteAll = () => {
-        router.delete('/drivers/driver-documents', {
+        router.delete('/leads/lead-documents', {
             onSuccess: () => {
                 setDeleteAllDialog(false);
             },
@@ -149,12 +149,12 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                             type="button"
                             variant="outline"
                             onClick={() => {
-                                window.location.href = '/drivers/driver-documents/export';
+                                window.location.href = '/leads/lead-documents/export';
                             }}
                         >
                             Export
                         </Button>
-                        <Link href="/drivers/driver-documents/create">
+                        <Link href="/leads/lead-documents/create">
                             <Button>Create Lead Document</Button>
                         </Link>
                     </div>
@@ -259,7 +259,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                                     header: 'Actions',
                                     accessor: (row) => (
                                         <div className="flex items-center gap-2">
-                                            <Link href={`/drivers/driver-documents/${row.id}/edit`}>
+                                            <Link href={`/leads/lead-documents/${row.id}/edit`}>
                                                 <Button
                                                     type="button"
                                                     variant="outline"
@@ -288,7 +288,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                         <div className="py-12 text-center">
                             <p className="text-neutral-500">No lead documents found.</p>
                             <Link
-                                href="/drivers/driver-documents/create"
+                                href="/leads/lead-documents/create"
                                 className="mt-4 inline-block"
                             >
                                 <Button>Create First Lead Document</Button>

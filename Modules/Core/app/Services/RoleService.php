@@ -20,6 +20,54 @@ class RoleService
         return $query->orderBy('hierarchy_level')->orderBy('name')->get();
     }
 
+    /**
+     * Get roles visible to the current user in a company. Reseller admins (users whose
+     * roles all have a parent, e.g. company-named role under CEO) see only their role(s)
+     * and descendants. Super admin and users with a root role (CEO) see all roles.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, Role>
+     */
+    public function getVisibleRolesForUser(?\App\Models\User $user, int $companyId): Collection
+    {
+        $all = $this->getAllRoles($companyId);
+        if (! $user) {
+            return $all;
+        }
+        if ($user->isSuperAdmin()) {
+            return $all;
+        }
+        setPermissionsTeamId($companyId);
+        $userRoles = $user->roles()->where('roles.team_id', $companyId)->get();
+        if ($userRoles->isEmpty()) {
+            return $all;
+        }
+        $hasRootRole = $userRoles->contains(fn (Role $r) => $r->parent_id === null);
+        if ($hasRootRole) {
+            return $all;
+        }
+        $visibleIds = $this->collectRoleAndDescendantIds($userRoles);
+        return $all->filter(fn (Role $r) => in_array($r->id, $visibleIds))->values();
+    }
+
+    /**
+     * Collect role IDs: the given roles plus all their descendants (same company).
+     *
+     * @param  \Illuminate\Support\Collection<int, Role>  $roles
+     * @return array<int, int>
+     */
+    public function collectRoleAndDescendantIds($roles): array
+    {
+        $ids = [];
+        foreach ($roles as $role) {
+            $ids[] = $role->id;
+            $children = Role::where('parent_id', $role->id)->where('team_id', $role->team_id)->get();
+            if ($children->isNotEmpty()) {
+                $ids = array_merge($ids, $this->collectRoleAndDescendantIds($children));
+            }
+        }
+        return array_values(array_unique($ids));
+    }
+
     public function getRoleById(int $id): ?Role
     {
         return Role::with(['parent', 'children', 'permissions', 'company'])->find($id);
@@ -157,6 +205,30 @@ class RoleService
         return $roles->map(function ($role) {
             return $this->buildRoleTree($role);
         })->toArray();
+    }
+
+    /**
+     * Get role hierarchy visible to the user. Reseller admins see only their role(s) and descendants.
+     */
+    public function getVisibleRoleHierarchyForUser(?\App\Models\User $user, int $companyId): array
+    {
+        $allRoles = $this->getAllRoles($companyId);
+        if (! $user || $user->isSuperAdmin()) {
+            return $this->getRoleHierarchy($companyId);
+        }
+        setPermissionsTeamId($companyId);
+        $userRoles = $user->roles()->where('roles.team_id', $companyId)->get();
+        if ($userRoles->isEmpty()) {
+            return $this->getRoleHierarchy($companyId);
+        }
+        $hasRootRole = $userRoles->contains(fn (Role $r) => $r->parent_id === null);
+        if ($hasRootRole) {
+            return $this->getRoleHierarchy($companyId);
+        }
+        $userRoles->load(['children' => function ($q) {
+            $q->orderBy('name');
+        }]);
+        return $userRoles->map(fn (Role $role) => $this->buildRoleTree($role))->toArray();
     }
 
     protected function buildRoleTree(Role $role): array

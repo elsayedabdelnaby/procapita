@@ -29,8 +29,14 @@ interface NavMainProps {
 
 const STORAGE_KEY = 'sidebar_open_groups';
 
+function getResellerCompanyHref(item: NavigationItem, selectedCompany: SharedData['selectedCompany']): string | undefined {
+    if (item.title !== 'Reseller Company') return item.href;
+    return selectedCompany?.id ? `/core/companies/${selectedCompany.id}` : item.href;
+}
+
 export function NavMain({ navigation }: NavMainProps) {
     const page = usePage<SharedData>();
+    const selectedCompany = page.props.selectedCompany ?? null;
     const { hasEntityPermission } = usePermissions();
     const { state } = useSidebar();
     const isCollapsed = state === 'collapsed';
@@ -139,7 +145,7 @@ export function NavMain({ navigation }: NavMainProps) {
                                         isActive={page.url.startsWith(resolveUrl(group.href))}
                                         tooltip={{ children: group.title }}
                                     >
-                                        <Link href={group.href} prefetch>
+                                        <Link href={group.href} prefetch={group.href !== '/leads/leads'}>
                                             {getIcon(group.icon)}
                                             <span>{group.title}</span>
                                         </Link>
@@ -159,27 +165,30 @@ export function NavMain({ navigation }: NavMainProps) {
                         return (
                             <SidebarGroup key={group.title} className="px-2 py-0">
                                 <SidebarMenu>
-                                    {group.items.map((item) => (
+                                    {group.items.map((item) => {
+                                        const href = getResellerCompanyHref(item, selectedCompany) ?? item.href ?? '#';
+                                        return (
                                         <SidebarMenuItem key={item.title}>
                                             <SidebarMenuButton
                                                 asChild
                                                 isActive={
                                                     !!(
-                                                    item.href &&
+                                                    href &&
+                                                    href !== '#' &&
                                                     page.url.startsWith(
-                                                        resolveUrl(item.href)
+                                                        resolveUrl(href)
                                                         )
                                                     )
                                                 }
                                                 tooltip={{ children: item.title }}
                                             >
-                                                <Link href={item.href || '#'} prefetch>
+                                                <Link href={href} prefetch={href !== '/leads/leads'}>
                                                     {getIcon(item.icon)}
                                                     <span>{item.title}</span>
                                                 </Link>
                                             </SidebarMenuButton>
                                         </SidebarMenuItem>
-                                    ))}
+                                    );})}
                                 </SidebarMenu>
                             </SidebarGroup>
                         );
@@ -210,26 +219,29 @@ export function NavMain({ navigation }: NavMainProps) {
                                         </CollapsibleTrigger>
                                         <CollapsibleContent>
                                             <SidebarMenuSub>
-                                                {group.items.map((item) => (
+{group.items.map((item) => {
+                                                    const href = getResellerCompanyHref(item, selectedCompany) ?? item.href ?? '#';
+                                                    return (
                                                     <SidebarMenuSubItem key={item.title}>
                                                         <SidebarMenuSubButton
                                                             asChild
                                                             isActive={
                                                                 !!(
-                                                                item.href &&
+                                                                href &&
+                                                                href !== '#' &&
                                                                 page.url.startsWith(
-                                                                    resolveUrl(item.href)
-                                                                    )
+                                                                    resolveUrl(href)
                                                                 )
-                                                            }
-                                                        >
-                                                            <Link href={item.href || '#'} prefetch>
+                                                            )
+                                                        }
+                                                    >
+                                                            <Link href={href} prefetch={href !== '/leads/leads'}>
                                                                 {getIcon(item.icon)}
                                                                 <span>{item.title}</span>
                                                             </Link>
                                                         </SidebarMenuSubButton>
                                                     </SidebarMenuSubItem>
-                                                ))}
+                                                );})}
                                             </SidebarMenuSub>
                                         </CollapsibleContent>
                                     </SidebarMenuItem>

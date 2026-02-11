@@ -47,9 +47,13 @@ class DriverController extends Controller
             $leadSources = LeadSource::active()->orderBy('name')->get(['id', 'name']);
             $leadStatuses = LeadStatus::active()->ordered()->get(['id', 'name']);
             $ridingCompanies = $this->getRidingCompaniesForUser($user, $companyId);
-            // Get users - for non-super admin, only show subordinate users
+            // Get users - for non-super admin, only show subordinate users; for super admin include self so they can assign to themselves
             if ($user->isSuperAdmin()) {
                 $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+                if (! $users->contains('id', $user->id)) {
+                    $users->push($user);
+                    $users = $users->sortBy('name')->values();
+                }
             } else {
                 $subordinateUserIds = $user->getSubordinateUserIds() ?? [];
                 if (empty($subordinateUserIds)) {
@@ -232,24 +236,25 @@ class DriverController extends Controller
             // Do NOT merge with requirements - columns should only show actual Driver Documents
             $allUniqueDocumentNames = $allDocumentNames;
 
-            // Load documents for each driver
+            // Skip loading documents on index to keep first load fast; documents are shown on lead detail
             $hasNameColumn = \Illuminate\Support\Facades\Schema::hasColumn('driver_documents', 'name');
-            $driversWithDocuments = $drivers->load('documents'.($hasNameColumn ? '' : '.documentName'));
+            $loadDocumentsForIndex = false;
 
             return Inertia::render('Drivers/Drivers/Index', [
-                'drivers' => $driversWithDocuments->map(function ($driver) use ($hasNameColumn) {
-                    // Get documents for this driver, mapped by name
+                'drivers' => $drivers->map(function ($driver) use ($hasNameColumn, $loadDocumentsForIndex) {
                     $driverDocuments = [];
-                    foreach ($driver->documents as $doc) {
-                        $docName = $hasNameColumn ? $doc->name : ($doc->documentName?->name ?? null);
-                        if ($docName) {
-                            $driverDocuments[$docName] = [
-                                'id' => $doc->id,
-                                'name' => $docName,
-                                'status' => $doc->status,
-                                'uploaded_path' => $doc->uploaded_path,
-                                'original_filename' => $doc->original_filename ?? null,
-                            ];
+                    if ($loadDocumentsForIndex && isset($driver->documents)) {
+                        foreach ($driver->documents as $doc) {
+                            $docName = $hasNameColumn ? $doc->name : ($doc->documentName?->name ?? null);
+                            if ($docName) {
+                                $driverDocuments[$docName] = [
+                                    'id' => $doc->id,
+                                    'name' => $docName,
+                                    'status' => $doc->status,
+                                    'uploaded_path' => $doc->uploaded_path,
+                                    'original_filename' => $doc->original_filename ?? null,
+                                ];
+                            }
                         }
                     }
 
@@ -311,7 +316,7 @@ class DriverController extends Controller
                         ] : null,
                         'notes' => $driver->notes,
                         'cancel_reason' => $driver->cancel_reason,
-                        'reseller' => $driver->reseller ?? null,
+                        'reseller' => $driver->company?->name ?? null,
                         'worked_with_us_before' => $driver->worked_with_us_before,
                         'vehicle_type' => $driver->vehicle_type,
                         'car_or_scooter' => $driver->car_or_scooter,
@@ -341,6 +346,8 @@ class DriverController extends Controller
                 'lists' => $this->driverListService->getAccessibleLists($user, $companyId),
                 'allDocumentNames' => $allUniqueDocumentNames,
                 'documentsByRidingCompany' => $documentsByRidingCompany,
+                'leadsLimitReached' => $drivers->count() >= DriverService::INDEX_LEADS_LIMIT,
+                'leadsLimit' => DriverService::INDEX_LEADS_LIMIT,
                 'allDocumentRequirements' => $allDocumentRequirements->map(function ($req) {
                     return [
                         'id' => $req->id,
@@ -417,9 +424,13 @@ class DriverController extends Controller
         $campaigns = Campaign::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get(['id', 'name']);
         $leadSources = LeadSource::active()->orderBy('name')->get(['id', 'name']);
         $leadStatuses = LeadStatus::active()->ordered()->get(['id', 'name']);
-        // Get users - for non-super admin, only show subordinate users
+        // Get users - for non-super admin, only show subordinate users; for super admin include self
         if ($user->isSuperAdmin()) {
             $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+            if (! $users->contains('id', $user->id)) {
+                $users->push($user);
+                $users = $users->sortBy('name')->values();
+            }
         } else {
             $subordinateUserIds = $user->getSubordinateUserIds();
             $users = User::whereIn('id', $subordinateUserIds)->where('is_active', true)->orderBy('name')->get(['id', 'name']);
@@ -484,7 +495,7 @@ class DriverController extends Controller
                 'resigned_leads' => $driver->resigned_leads,
                 'notes' => $driver->notes,
                 'cancel_reason' => $driver->cancel_reason,
-                'reseller' => $driver->reseller ?? null,
+                'reseller' => $driver->company?->name ?? null,
                 'created_at' => $driver->created_at,
                 'updated_at' => $driver->updated_at,
                 'deleted_at' => $driver->deleted_at?->format('Y-m-d H:i:s'),
@@ -512,7 +523,13 @@ class DriverController extends Controller
         $campaigns = Campaign::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
         $leadSources = LeadSource::active()->orderBy('name')->get();
         $leadStatuses = LeadStatus::active()->ordered()->get();
-        $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
+        $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        // When All Companies (companyId null) or super admin: ensure current user is in list so they can assign leads to themselves
+        if ($user->isSuperAdmin() && ! $users->contains('id', $user->id)) {
+            $users->push($user);
+            $users = $users->sortBy('name')->values();
+        }
+        $usersPayload = $users->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->all();
 
         $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
         $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_id');
@@ -540,6 +557,8 @@ class DriverController extends Controller
             ->ordered()
             ->get($selectColumns);
 
+        $systemCompany = Company::getSystemCompany();
+
         return Inertia::render('Drivers/Drivers/Create', [
             'companies' => $companies,
             'ridingCompanies' => $ridingCompanies,
@@ -547,10 +566,11 @@ class DriverController extends Controller
             'campaigns' => $campaigns,
             'leadSources' => $leadSources,
             'leadStatuses' => $leadStatuses,
-            'users' => $users,
+            'users' => $usersPayload,
             'leadStages' => $leadStages,
             'demo_reseller' => config('app.demo_reseller', false),
             'cancelReasonOptions' => $this->getCustomDropdownOptions('cancel_reason', $companyId),
+            'systemCompanyId' => $systemCompany?->id,
         ]);
     }
 
@@ -575,13 +595,16 @@ class DriverController extends Controller
                 $duplicateDrivers = $this->checkForDuplicates($data);
 
                 if ($duplicateDrivers->isNotEmpty()) {
-                    // Return with duplicate drivers info for frontend handling
+                    $currentCompanyId = isset($data['company_id']) ? (int) $data['company_id'] : null;
+                    // Return with duplicate drivers info + company for same/other company logic
                     $duplicatesArray = $duplicateDrivers->map(function ($driver) {
                         return [
                             'id' => $driver->id,
                             'full_name' => $driver->full_name,
                             'phone' => $driver->phone,
                             'whatsapp_phone' => $driver->whatsapp_phone,
+                            'company_id' => $driver->company_id,
+                            'company_name' => $driver->company?->name ?? null,
                         ];
                     })->toArray();
 
@@ -589,6 +612,7 @@ class DriverController extends Controller
                         ->back()
                         ->with('duplicates_found', true)
                         ->with('duplicate_drivers', $duplicatesArray)
+                        ->with('duplicate_current_company_id', $currentCompanyId)
                         ->withErrors(['duplicate' => 'Duplicate phone or WhatsApp number found.']);
                 }
             }
@@ -616,29 +640,26 @@ class DriverController extends Controller
                 $data['last_follow_up'] = now();
             }
 
-            // Auto-fill team_leader_id, account_manager_id, riding_company_id, and reseller from assigned user
+            // Auto-fill team_leader_id, account_manager_id, riding_company_id, company_id (Reseller Company) from assigned user
             if (isset($data['assigned_to']) && $data['assigned_to']) {
                 $assignedUser = User::find($data['assigned_to']);
                 if ($assignedUser) {
-                    // Set team_leader_id from assigned user's team_leader_id
                     $data['team_leader_id'] = $assignedUser->team_leader_id;
-                    // Set account_manager_id from assigned user's account_manager_id
                     $data['account_manager_id'] = $assignedUser->account_manager_id;
-                    // Set riding_company_id from assigned user's riding_company_id if not already set
                     if (! isset($data['riding_company_id']) || ! $data['riding_company_id']) {
                         $data['riding_company_id'] = $assignedUser->riding_company_id;
                     }
-                    // Set reseller to assigned user's company name (for reseller demo)
-                    if ($assignedUser->company_id && $assignedUser->company) {
-                        $data['reseller'] = $assignedUser->company->name;
-                    }
+                    // Reseller Company = assigned user's company; if assigned to super admin, use system company (Procapita)
+                    $data['company_id'] = ($assignedUser->is_super_admin ?? false)
+                        ? (Company::getSystemCompany()?->id)
+                        : $assignedUser->company_id;
                 }
             }
 
             $this->driverService->createDriver($data);
 
             return redirect()
-                ->route('drivers.drivers.index')
+                ->route('leads.leads.index')
                 ->with('success', config('app.demo_reseller', false) ? 'Lead created successfully.' : 'Driver created successfully.');
         } catch (\Exception $e) {
             if ($request->wantsJson() || $request->expectsJson()) {
@@ -654,19 +675,18 @@ class DriverController extends Controller
     }
 
     /**
-     * Check for duplicate phone or whatsapp numbers
+     * Check for duplicate phone or whatsapp numbers system-wide (all reseller companies).
      */
     private function checkForDuplicates(array $data): \Illuminate\Support\Collection
     {
         $phone = $data['phone'] ?? null;
         $whatsappPhone = $data['whatsapp_phone'] ?? null;
-        $companyId = $data['company_id'] ?? null;
 
         $duplicateIds = [];
 
         if ($phone) {
             $formattedPhone = $this->driverService->reformatPhoneNumber($phone);
-            $phoneDuplicates = Driver::where('company_id', $companyId)
+            $phoneDuplicates = Driver::query()
                 ->where(function ($q) use ($formattedPhone) {
                     $q->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone])
                         ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedPhone]);
@@ -678,7 +698,7 @@ class DriverController extends Controller
 
         if ($whatsappPhone && $whatsappPhone !== $phone) {
             $formattedWhatsapp = $this->driverService->reformatPhoneNumber($whatsappPhone);
-            $whatsappDuplicates = Driver::where('company_id', $companyId)
+            $whatsappDuplicates = Driver::query()
                 ->where(function ($q) use ($formattedWhatsapp) {
                     $q->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp])
                         ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_phone, "+", ""), " ", ""), "-", ""), ".", "") = ?', [$formattedWhatsapp]);
@@ -694,9 +714,9 @@ class DriverController extends Controller
             return collect([]);
         }
 
-        return Driver::whereIn('id', $uniqueIds)
-            ->select('id', 'full_name', 'phone', 'whatsapp_phone')
-            ->get();
+        return Driver::with('company:id,name')
+            ->whereIn('id', $uniqueIds)
+            ->get(['id', 'full_name', 'phone', 'whatsapp_phone', 'company_id']);
     }
 
     public function show(int $driver): Response
@@ -820,7 +840,7 @@ class DriverController extends Controller
                     ] : null,
                     'notes' => $driverModel->notes,
                     'cancel_reason' => $driverModel->cancel_reason,
-                    'reseller' => $driverModel->reseller ?? null,
+                    'reseller' => $driverModel->company?->name ?? null,
                     'worked_with_us_before' => $driverModel->worked_with_us_before,
                     'vehicle_type_and_year' => $driverModel->vehicle_type_and_year,
                     'city' => $driverModel->city,
@@ -1004,7 +1024,7 @@ class DriverController extends Controller
                 ] : null,
                 'notes' => $driverModel->notes,
                 'cancel_reason' => $driverModel->cancel_reason,
-                'reseller' => $driverModel->reseller ?? null,
+                'reseller' => $driverModel->company?->name ?? null,
                 'worked_with_us_before' => $driverModel->worked_with_us_before,
                 'vehicle_type_and_year' => $driverModel->vehicle_type_and_year,
                 'city' => $driverModel->city,
@@ -1108,7 +1128,14 @@ class DriverController extends Controller
         $campaigns = Campaign::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
         $leadSources = LeadSource::active()->orderBy('name')->get();
         $leadStatuses = LeadStatus::active()->ordered()->get();
-        $users = User::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get();
+        // Filter Assigned To by lead's Reseller Company (or session company): only users from that company
+        $companyIdForUsers = $driverModel->company_id ?? $companyId;
+        $users = User::when($companyIdForUsers, fn ($q) => $q->where('company_id', $companyIdForUsers))->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        if ($user->isSuperAdmin() && ! $users->contains('id', $user->id)) {
+            $users->push($user);
+            $users = $users->sortBy('name')->values();
+        }
+        $usersPayload = $users->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->all();
 
         $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
         $hasRidingCompanyId = \Illuminate\Support\Facades\Schema::hasColumn('lead_stages', 'riding_company_id');
@@ -1158,7 +1185,7 @@ class DriverController extends Controller
                 'lead_stage_id' => $driverModel->lead_stage_id,
                 'notes' => $driverModel->notes,
                 'cancel_reason' => $driverModel->cancel_reason,
-                'reseller' => $driverModel->reseller ?? null,
+                'reseller' => $driverModel->company?->name ?? null,
                 'next_time' => $driverModel->next_time,
                 'resigned_leads' => $driverModel->resigned_leads,
                 'confirm_duplicate' => $driverModel->confirm_duplicate ?? false,
@@ -1168,7 +1195,7 @@ class DriverController extends Controller
             'campaigns' => $campaigns,
             'leadSources' => $leadSources,
             'leadStatuses' => $leadStatuses,
-            'users' => $users,
+            'users' => $usersPayload,
             'leadStages' => $leadStages,
             'demo_reseller' => config('app.demo_reseller', false),
             'cancelReasonOptions' => $this->getCustomDropdownOptions('cancel_reason', $companyId),
@@ -1289,22 +1316,19 @@ class DriverController extends Controller
                     }
                 }
 
-                // Update team_leader_id, account_manager_id, and riding_company_id from new assigned user
+                // Update team_leader_id, account_manager_id, riding_company_id, and company_id (Reseller Company) from new assigned user
                 if ($newAssignedTo) {
                     $newAssignedUser = User::find($newAssignedTo);
                     $oldAssignedUser = $oldAssignedTo ? User::find($oldAssignedTo) : null;
 
                     if ($newAssignedUser) {
-                        // Update team_leader_id from new assigned user's team_leader_id
                         $data['team_leader_id'] = $newAssignedUser->team_leader_id;
-                        // Update account_manager_id from new assigned user's account_manager_id
                         $data['account_manager_id'] = $newAssignedUser->account_manager_id;
-                        // Update riding_company_id from new assigned user's riding_company_id
                         $data['riding_company_id'] = $newAssignedUser->riding_company_id;
-                        // Set reseller to assigned user's company name (for reseller demo)
-                        if ($newAssignedUser->company_id && $newAssignedUser->company) {
-                            $data['reseller'] = $newAssignedUser->company->name;
-                        }
+                        // Reseller Company = new sales person's company; if assigned to super admin, lead has no Reseller Company
+                        $data['company_id'] = ($newAssignedUser->is_super_admin ?? false)
+                            ? (Company::getSystemCompany()?->id)
+                            : $newAssignedUser->company_id;
 
                         // Handle Follow-ups reassignment
                         if ($oldAssignedUser) {
@@ -1341,10 +1365,10 @@ class DriverController extends Controller
                         }
                     }
                 } else {
-                    // If assigned_to is null, set these fields to null as well
+                    // If assigned_to is null, clear these fields (lead has no Reseller Company when unassigned)
                     $data['team_leader_id'] = null;
                     $data['account_manager_id'] = null;
-                    $data['reseller'] = null;
+                    $data['company_id'] = null;
                     // Note: riding_company_id might be kept if it was set manually, so we don't clear it here
                 }
             }
@@ -1383,7 +1407,7 @@ class DriverController extends Controller
             $this->driverService->deleteDriver($driver);
 
             return redirect()
-                ->route('drivers.drivers.index')
+                ->route('leads.leads.index')
                 ->with('success', config('app.demo_reseller', false) ? 'Lead deleted successfully.' : 'Driver deleted successfully.');
         } catch (\Exception $e) {
             return redirect()
@@ -1623,7 +1647,7 @@ class DriverController extends Controller
                 $driver->phone,
                 $driver->whatsapp_phone ?? '',
                 $driver->email ?? '',
-                $driver->reseller ?? $driver->ridingCompany?->name ?? '',
+                $driver->company?->name ?? '',
                 $driver->campaign?->name ?? '',
                 $driver->next_time ?? '',
                 $driver->assignedTo?->name ?? '', // Fixed: Use name, not date
@@ -2018,7 +2042,7 @@ class DriverController extends Controller
 
             // Redirect to import results page
             return redirect()
-                ->route('drivers.drivers.import.results')
+                ->route('leads.leads.import.results')
                 ->with('importResults', $importResults);
         } catch (\Exception $e) {
             \Log::error('Import error: '.$e->getMessage(), [
@@ -2399,7 +2423,7 @@ class DriverController extends Controller
 
         if (! $importResults) {
             return redirect()
-                ->route('drivers.drivers.index');
+                ->route('leads.leads.index');
         }
 
         return Inertia::render('Drivers/Drivers/ImportResults', [
@@ -2513,7 +2537,7 @@ class DriverController extends Controller
         }
 
         return redirect()
-            ->route('drivers.drivers.index')
+            ->route('leads.leads.index')
             ->with('success', "{$count} driver(s) deleted successfully.");
     }
 
@@ -2548,8 +2572,6 @@ class DriverController extends Controller
             ? Company::active()->orderBy('name')->get(['id', 'name'])
             : collect([$user->company])->filter();
 
-        $ridingCompanies = $this->getRidingCompaniesForUser($user, $companyId);
-
         $campaigns = $user->isSuperAdmin()
             ? Campaign::orderBy('name')->get(['id', 'name'])
             : Campaign::when($companyId, fn ($q) => $q->where('company_id', $companyId))->orderBy('name')->get(['id', 'name']);
@@ -2566,7 +2588,7 @@ class DriverController extends Controller
             'drivers' => $drivers,
             'ids' => $ids,
             'companies' => $companies,
-            'ridingCompanies' => $ridingCompanies,
+            'ridingCompanies' => [],
             'campaigns' => $campaigns,
             'leadSources' => $leadSources,
             'leadStatuses' => $leadStatuses,
@@ -2630,7 +2652,10 @@ class DriverController extends Controller
 
         // Only include fields that have values (not empty) and are not in clear_fields
         if ($request->filled('company_id') && ! in_array('company_id', $clearFields)) {
-            $updateData['company_id'] = $request->company_id ? (int) $request->company_id : null;
+            $newCompanyId = $request->company_id ? (int) $request->company_id : null;
+            $updateData['company_id'] = $newCompanyId;
+            // When super admin moves leads to another company, clear reseller (riding_company) so it belongs to the new company
+            $updateData['riding_company_id'] = null;
         }
         if ($request->filled('riding_company_id') && ! in_array('riding_company_id', $clearFields)) {
             $updateData['riding_company_id'] = $request->riding_company_id ? (int) $request->riding_company_id : null;
@@ -2665,22 +2690,22 @@ class DriverController extends Controller
             $updateData['last_assigned_time'] = now();
             $updateData['last_assigned_by'] = $user->id;
 
-            // Update team_leader_id, account_manager_id, and riding_company_id from new assigned user
+            // Update team_leader_id, account_manager_id, riding_company_id, and company_id (Reseller Company) from new assigned user
             if ($newAssignedTo) {
                 $newAssignedUser = User::find($newAssignedTo);
                 if ($newAssignedUser) {
-                    // Update team_leader_id from new assigned user's team_leader_id
                     $updateData['team_leader_id'] = $newAssignedUser->team_leader_id;
-                    // Update account_manager_id from new assigned user's account_manager_id
                     $updateData['account_manager_id'] = $newAssignedUser->account_manager_id;
-                    // Update riding_company_id from new assigned user's riding_company_id
                     $updateData['riding_company_id'] = $newAssignedUser->riding_company_id;
+                    // Reseller Company = new sales person's company; if assigned to super admin, lead has no Reseller Company
+                    $updateData['company_id'] = ($newAssignedUser->is_super_admin ?? false)
+                        ? (Company::getSystemCompany()?->id)
+                        : $newAssignedUser->company_id;
                 }
             } else {
-                // If assigned_to is null, set these fields to null as well
                 $updateData['team_leader_id'] = null;
                 $updateData['account_manager_id'] = null;
-                // Note: riding_company_id might be kept if it was set manually, so we don't clear it here
+                $updateData['company_id'] = null;
             }
         }
 
@@ -2709,7 +2734,7 @@ class DriverController extends Controller
         $count = $drivers->count();
 
         return redirect()
-            ->route('drivers.drivers.index', ['updated' => now()->timestamp])
+            ->route('leads.leads.index', ['updated' => now()->timestamp])
             ->with('success', "{$count} driver(s) updated successfully.");
     }
 
@@ -2732,7 +2757,7 @@ class DriverController extends Controller
         // Ensure primary driver is in the list
         if (! in_array($primaryDriverId, $driverIds)) {
             return redirect()
-                ->route('drivers.drivers.index')
+                ->route('leads.leads.index')
                 ->with('error', 'Primary driver must be in the list of drivers to merge.');
         }
 
@@ -2743,7 +2768,7 @@ class DriverController extends Controller
 
         if (! $primaryDriver) {
             return redirect()
-                ->route('drivers.drivers.index')
+                ->route('leads.leads.index')
                 ->with('error', 'Primary driver not found.');
         }
 
@@ -2852,13 +2877,13 @@ class DriverController extends Controller
             \DB::commit();
 
             return redirect()
-                ->route('drivers.drivers.index')
+                ->route('leads.leads.index')
                 ->with('success', config('app.demo_reseller', false) ? 'Leads merged successfully.' : 'Drivers merged successfully.');
         } catch (\Exception $e) {
             \DB::rollBack();
 
             return redirect()
-                ->route('drivers.drivers.index')
+                ->route('leads.leads.index')
                 ->with('error', 'Failed to merge drivers: '.$e->getMessage());
         }
     }
@@ -2897,7 +2922,7 @@ class DriverController extends Controller
 
     /**
      * When the current user belongs to a reseller company (riding_company_id), set the lead's
-     * company_id, riding_company_id and reseller to that user's company so the lead shows under that reseller.
+     * company_id and riding_company_id to that user's company so the lead shows under that reseller.
      */
     protected function syncDriverCompanyToCurrentUser(Driver $driver): void
     {
@@ -2913,11 +2938,6 @@ class DriverController extends Controller
         if (Schema::hasColumn($driver->getTable(), 'riding_company_id') && $driver->riding_company_id != $user->riding_company_id) {
             $updates['riding_company_id'] = $user->riding_company_id;
         }
-        $resellerName = $user->company ? $user->company->name : null;
-        if ($resellerName !== null && $driver->reseller !== $resellerName) {
-            $updates['reseller'] = $resellerName;
-        }
-
         if (! empty($updates)) {
             $driver->update($updates);
             $driver->refresh();

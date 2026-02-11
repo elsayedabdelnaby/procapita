@@ -789,7 +789,7 @@ export default function DriverFollowUpsIndex({ followUps = [], demo_reseller = f
 
     const confirmDelete = () => {
         if (deleteDialog.followUp) {
-            router.delete(`/drivers/driver-follow-ups/${deleteDialog.followUp.id}`, {
+            router.delete(`/leads/lead-follow-ups/${deleteDialog.followUp.id}`, {
                 onSuccess: () => {
                     router.reload({ only: ['followUps'] });
                 },
@@ -803,7 +803,7 @@ export default function DriverFollowUpsIndex({ followUps = [], demo_reseller = f
 
     const confirmMassDelete = () => {
         if (selectedFollowUps.size > 0) {
-            router.post('/drivers/driver-follow-ups/mass-delete', {
+            router.post('/leads/lead-follow-ups/mass-delete', {
                 ids: Array.from(selectedFollowUps),
             }, {
                 onSuccess: () => {
@@ -818,7 +818,7 @@ export default function DriverFollowUpsIndex({ followUps = [], demo_reseller = f
     const handleMassEdit = () => {
         if (selectedFollowUps.size > 0) {
             const ids = Array.from(selectedFollowUps);
-            router.visit(`/drivers/driver-follow-ups/mass-edit?ids=${ids.join(',')}`);
+            router.visit(`/leads/lead-follow-ups/mass-edit?ids=${ids.join(',')}`);
         }
     };
 
@@ -895,16 +895,16 @@ export default function DriverFollowUpsIndex({ followUps = [], demo_reseller = f
                                 if (selectedFollowUps.size > 0) {
                                     // Export selected follow-ups
                                     const ids = Array.from(selectedFollowUps);
-                                    window.location.href = `/drivers/driver-follow-ups/export?ids=${ids.join(',')}`;
+                                    window.location.href = `/leads/lead-follow-ups/export?ids=${ids.join(',')}`;
                                 } else {
                                     // Export all visible follow-ups
-                                    window.location.href = '/drivers/driver-follow-ups/export';
+                                    window.location.href = '/leads/lead-follow-ups/export';
                                 }
                             }}
                         >
                             Export
                         </Button>
-                        <Link href="/drivers/driver-follow-ups/create">
+                        <Link href="/leads/lead-follow-ups/create">
                             <Button>Create Follow-up</Button>
                         </Link>
                     </div>
@@ -1339,7 +1339,7 @@ export default function DriverFollowUpsIndex({ followUps = [], demo_reseller = f
                                                             return (
                                                                 <td key={col.id} className="px-4 py-3 text-center">
                                                                     <div className="flex items-center justify-center gap-2">
-                                                                        <Link href={`/drivers/driver-follow-ups/${followUp.id}`}>
+                                                                        <Link href={`/leads/lead-follow-ups/${followUp.id}`}>
                                                                             <button
                                                                                 className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                                                                                 title="View Details"
@@ -1347,7 +1347,7 @@ export default function DriverFollowUpsIndex({ followUps = [], demo_reseller = f
                                                                                 <Eye className="h-4 w-4" />
                                                                             </button>
                                                                         </Link>
-                                                                        <Link href={`/drivers/driver-follow-ups/${followUp.id}/edit`}>
+                                                                        <Link href={`/leads/lead-follow-ups/${followUp.id}/edit`}>
                                                                             <button
                                                                                 className="text-yellow-600 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
                                                                                 title="Edit"
@@ -1373,7 +1373,7 @@ export default function DriverFollowUpsIndex({ followUps = [], demo_reseller = f
                                                             case 'driver_num':
                                                                 cellContent = (
                                                                     <Link
-                                                                        href={`/drivers/drivers/${followUp.driver_id}`}
+                                                                        href={`/leads/leads/${followUp.driver_id}`}
                                                                         className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline font-medium"
                                                                     >
                                                                         {followUp.driver_num || followUp.driver_id}
@@ -1383,7 +1383,7 @@ export default function DriverFollowUpsIndex({ followUps = [], demo_reseller = f
                                                             case 'driver':
                                                                 cellContent = (
                                                                     <Link
-                                                                        href={`/drivers/drivers/${followUp.driver_id}`}
+                                                                        href={`/leads/leads/${followUp.driver_id}`}
                                                                         className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline font-medium"
                                                                     >
                                                                         {followUp.driver?.full_name || 'N/A'}

@@ -52,7 +52,7 @@ interface DriversMassEditProps {
     drivers: Driver[];
     ids: number[];
     companies?: Company[];
-    ridingCompanies: RidingCompany[];
+    ridingCompanies?: RidingCompany[];
     campaigns: Campaign[];
     leadSources: LeadSource[];
     leadStatuses: LeadStatus[];
@@ -63,19 +63,17 @@ export default function DriversMassEdit({
     drivers,
     ids,
     companies,
-    ridingCompanies: initialRidingCompanies,
+    ridingCompanies,
     campaigns: initialCampaigns,
     leadSources: initialLeadSources,
     leadStatuses: initialLeadStatuses,
     users: initialUsers,
 }: DriversMassEditProps) {
-    const [ridingCompanies, setRidingCompanies] = useState<RidingCompany[]>(initialRidingCompanies || []);
     const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns || []);
     const [leadSources, setLeadSources] = useState<LeadSource[]>(initialLeadSources || []);
     const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>(initialLeadStatuses || []);
     const [users, setUsers] = useState<User[]>(initialUsers || []);
 
-    const [loadingRidingCompanies, setLoadingRidingCompanies] = useState(false);
     const [loadingCampaigns, setLoadingCampaigns] = useState(false);
     const [loadingLeadSources, setLoadingLeadSources] = useState(false);
     const [loadingLeadStatuses, setLoadingLeadStatuses] = useState(false);
@@ -84,7 +82,6 @@ export default function DriversMassEdit({
     const { data, setData, transform, post, processing, errors } = useForm({
         ids: ids,
         company_id: '',
-        riding_company_id: '',
         campaign_id: '',
         lead_source_id: '',
         assigned_to: '',
@@ -111,22 +108,6 @@ export default function DriversMassEdit({
     // Fetch data when company changes (for super admin)
     useEffect(() => {
         if (companies && data.company_id) {
-            // Fetch riding companies
-            setLoadingRidingCompanies(true);
-            axios
-                .get(`/api/drivers/companies/${data.company_id}/riding-companies`)
-                .then((response) => {
-                    setRidingCompanies(response.data);
-                    setData('riding_company_id', '');
-                })
-                .catch((error) => {
-                    console.error('Error fetching riding companies:', error);
-                    setRidingCompanies([]);
-                })
-                .finally(() => {
-                    setLoadingRidingCompanies(false);
-                });
-
             // Fetch campaigns
             setLoadingCampaigns(true);
             axios
@@ -190,8 +171,22 @@ export default function DriversMassEdit({
                 .finally(() => {
                     setLoadingUsers(false);
                 });
+        } else if (companies && !data.company_id) {
+            // Super admin with "All Companies" – load all users
+            setLoadingUsers(true);
+            axios
+                .get('/api/drivers/users/all')
+                .then((response) => {
+                    setUsers(response.data);
+                })
+                .catch((error) => {
+                    console.error('Error fetching all users:', error);
+                    setUsers(initialUsers || []);
+                })
+                .finally(() => {
+                    setLoadingUsers(false);
+                });
         } else if (!companies) {
-            setRidingCompanies(initialRidingCompanies || []);
             setCampaigns(initialCampaigns || []);
             setLeadSources(initialLeadSources || []);
             setLeadStatuses(initialLeadStatuses || []);
@@ -202,7 +197,7 @@ export default function DriversMassEdit({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         transform((payload) => ({ ...payload, clear_fields: Array.from(clearFields) }));
-        post('/drivers/drivers/mass-update', { preserveState: false });
+        post('/leads/leads/mass-update', { preserveState: false });
     };
 
     return (
@@ -240,7 +235,7 @@ export default function DriversMassEdit({
                                             onCheckedChange={(checked) => handleClearField('company_id', checked as boolean)}
                                         />
                                         <Label htmlFor="company_id" className="text-sm font-medium">
-                                            Reseller
+                                            Reseller Company
                                         </Label>
                                     </div>
                                     <select
@@ -262,35 +257,6 @@ export default function DriversMassEdit({
                                     )}
                                 </div>
                             )}
-
-                            <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <Checkbox
-                                        checked={clearFields.has('riding_company_id')}
-                                        onCheckedChange={(checked) => handleClearField('riding_company_id', checked as boolean)}
-                                    />
-                                    <Label htmlFor="riding_company_id" className="text-sm font-medium">
-                                        Reseller
-                                    </Label>
-                                </div>
-                                <select
-                                    id="riding_company_id"
-                                    value={data.riding_company_id}
-                                    onChange={(e) => setData('riding_company_id', e.target.value)}
-                                    disabled={loadingRidingCompanies || clearFields.has('riding_company_id')}
-                                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
-                                >
-                                    <option value="">-- Keep existing --</option>
-                                    {ridingCompanies.map((ridingCompany) => (
-                                        <option key={ridingCompany.id} value={ridingCompany.id}>
-                                            {ridingCompany.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.riding_company_id && (
-                                    <p className="text-sm text-red-500">{errors.riding_company_id}</p>
-                                )}
-                            </div>
 
                             <div className="space-y-2">
                                 <div className="flex items-center gap-2">
@@ -582,7 +548,7 @@ export default function DriversMassEdit({
                         </div>
 
                         <div className="flex justify-end gap-2 pt-6 border-t mt-6">
-                            <Link href="/drivers/drivers">
+                            <Link href="/leads/leads">
                                 <Button type="button" variant="outline">
                                     Cancel
                                 </Button>

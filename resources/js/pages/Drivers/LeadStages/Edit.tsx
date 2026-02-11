@@ -33,7 +33,7 @@ export default function LeadStagesEdit({ leadStage }: LeadStagesEditProps) {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/drivers/lead-stages/${leadStage.id}`);
+        put(`/leads/lead-stages/${leadStage.id}`);
     };
 
     return (
@@ -182,7 +182,7 @@ export default function LeadStagesEdit({ leadStage }: LeadStagesEditProps) {
                     </Card>
 
                     <div className="flex justify-end gap-4">
-                        <Link href="/drivers/lead-stages">
+                        <Link href="/leads/lead-stages">
                             <Button type="button" variant="outline">
                                 Cancel
                             </Button>

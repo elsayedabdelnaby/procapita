@@ -100,62 +100,10 @@ class RidingCompanyController extends Controller
         ]);
     }
 
-    public function recycleBin(): Response
+    public function recycleBin(): RedirectResponse
     {
-        $user = Auth::user();
-        $companyId = $this->getCompanyId();
-
-        // Check if the riding_companies table exists before querying
-        if (!\Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
-            return Inertia::render('RidingCarCompanies/RidingCompanies/RecycleBin', [
-                'ridingCompanies' => [],
-                'usersCounts' => [],
-            ]);
-        }
-
-        $query = \Modules\RidingCarCompanies\app\Models\RidingCompany::onlyTrashed();
-
-        // Filter by company if applicable
-        if ($companyId) {
-            $query->where('company_id', $companyId);
-        } elseif (!$user->isSuperAdmin()) {
-            // Non-super admin without company_id sees nothing
-            $query->whereRaw('1 = 0');
-        }
-
-        $ridingCompanies = $query->orderBy('deleted_at', 'desc')->get();
-
-        // Get users count for each riding company
-        $usersCounts = [];
-        foreach ($ridingCompanies as $rc) {
-            $usersCounts[$rc->id] = \App\Models\User::where('riding_company_id', $rc->id)->count();
-        }
-
-        return Inertia::render('RidingCarCompanies/RidingCompanies/RecycleBin', [
-            'ridingCompanies' => $ridingCompanies->map(fn ($company) => [
-                'id' => $company->id,
-                'uuid' => $company->uuid,
-                'company_id' => $company->company_id,
-                'company' => $company->company ? [
-                    'id' => $company->company->id,
-                    'name' => $company->company->name,
-                ] : null,
-                'name' => $company->name,
-                'slug' => $company->slug,
-                'description' => $company->description,
-                'country' => $company->country,
-                'city' => $company->city,
-                'logo_path' => $company->logo_path,
-                'logo_url' => $company->logo_url,
-                'contact_email' => $company->contact_email,
-                'contact_phone' => $company->contact_phone,
-                'active' => $company->active,
-                'created_at' => $company->created_at?->toISOString(),
-                'updated_at' => $company->updated_at?->toISOString(),
-                'deleted_at' => $company->deleted_at?->toISOString(),
-            ]),
-            'usersCounts' => $usersCounts,
-        ]);
+        // Riding Companies recycle bin is hidden for all users (including admin)
+        return redirect()->route('recyclebin.index');
     }
 
     public function create(): Response

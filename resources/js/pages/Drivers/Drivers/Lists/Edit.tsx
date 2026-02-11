@@ -247,9 +247,9 @@ export default function DriversListsEdit({
         });
 
         if (isEdit && list?.id) {
-            put(`/drivers/drivers/lists/${list.id}`, {
+            put(`/leads/leads/lists/${list.id}`, {
                 onSuccess: () => {
-                    router.visit('/drivers/drivers');
+                    router.visit('/leads/leads');
                 },
                 onError: (errors) => {
                     console.error('Error updating list:', errors);
@@ -262,9 +262,9 @@ export default function DriversListsEdit({
                 },
             });
         } else {
-            post('/drivers/drivers/lists', {
+            post('/leads/leads/lists', {
                 onSuccess: () => {
-                    router.visit('/drivers/drivers');
+                    router.visit('/leads/leads');
                 },
                 onError: (errors) => {
                     console.error('Error creating list:', errors);
@@ -818,7 +818,7 @@ export default function DriversListsEdit({
                             <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => router.visit('/drivers/drivers')}
+                                onClick={() => router.visit('/leads/leads')}
                             >
                                 Cancel
                             </Button>

@@ -17,6 +17,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router, usePage, useForm } from '@inertiajs/react';
 import { Search, X, Pencil, Check, Eye, Phone, MessageCircle, ArrowUp, ArrowDown, User, Mail, CheckCircle2, FileText, Activity, Settings2, GripVertical, ChevronLeft, ChevronRight, ChevronDown, Upload, Edit, Users, UserPlus, Calendar, AlertCircle, Plus, MapPin, Car } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { type SharedData } from '@/types';
 import axios from 'axios';
 import { formatDate } from '@/utils/date-format';
@@ -150,6 +151,8 @@ interface DriversIndexProps {
         riding_company_id: number;
         active: boolean;
     }>;
+    leadsLimitReached?: boolean;
+    leadsLimit?: number;
 }
 
 // Define all available columns outside component to avoid hoisting issues
@@ -161,9 +164,8 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'phone', label: 'Phone', defaultVisible: true, defaultOrder: 2 },
     { id: 'whatsapp', label: 'WhatsApp', defaultVisible: true, defaultOrder: 3 },
     { id: 'email', label: 'Email', defaultVisible: true, defaultOrder: 4 },
-    { id: 'company', label: 'Company', defaultVisible: false, defaultOrder: 4.5 },
+    { id: 'company', label: 'Reseller Company', defaultVisible: true, defaultOrder: 4.5 },
     { id: 'campaign', label: 'Campaign', defaultVisible: true, defaultOrder: 5 },
-    { id: 'riding_company', label: 'Reseller', defaultVisible: true, defaultOrder: 5.5 },
     { id: 'lead_source', label: 'Lead Source', defaultVisible: true, defaultOrder: 7 },
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 8 },
     { id: 'lead_status_comment', label: 'Feedback Comment', defaultVisible: false, defaultOrder: 8.5 },
@@ -202,7 +204,7 @@ const generateTimeOptions = (): string[] => {
 
 const TIME_OPTIONS = generateTimeOptions();
 
-// Custom Dropdown Component for Filters
+// Custom Dropdown Component for Filters - menu rendered in portal so it is not clipped by table overflow
 function FilterDropdown({ 
     options, 
     value, 
@@ -219,13 +221,24 @@ function FilterDropdown({
     hasActiveFilter: boolean;
 }) {
     const [isOpen, setIsOpen] = useState(false);
+    const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     
     useEffect(() => {
+        if (isOpen && triggerRef.current && typeof document !== 'undefined') {
+            const rect = triggerRef.current.getBoundingClientRect();
+            setMenuRect({ top: rect.bottom, left: rect.left, width: rect.width });
+        } else {
+            setMenuRect(null);
+        }
+    }, [isOpen]);
+    
+    useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
-                triggerRef.current && !triggerRef.current.contains(event.target as Node)) {
+            const target = event.target as Node;
+            if (dropdownRef.current && !dropdownRef.current.contains(target) &&
+                triggerRef.current && !triggerRef.current.contains(target)) {
                 setIsOpen(false);
             }
         };
@@ -239,49 +252,57 @@ function FilterDropdown({
         };
     }, [isOpen]);
     
+    const menuContent = isOpen && menuRect && typeof document !== 'undefined' ? createPortal(
+        <div
+            ref={dropdownRef}
+            className="fixed z-[9999] max-h-[200px] overflow-y-auto rounded-b-md rounded-t-none shadow-lg border border-t-0 bg-popover text-popover-foreground"
+            style={{
+                top: menuRect.top,
+                left: menuRect.left,
+                width: menuRect.width,
+            }}
+        >
+            <div 
+                onClick={() => {
+                    onClear();
+                    setIsOpen(false);
+                }}
+                className="text-[10px] px-2 py-1.5 cursor-pointer hover:bg-accent"
+            >
+                -- All --
+            </div>
+            {options.map((option: any) => (
+                <div 
+                    key={option.id} 
+                    onClick={() => {
+                        const optionId = typeof option.id === 'string' ? option.id : Number(option.id);
+                        onSelect(optionId);
+                        setIsOpen(false);
+                    }}
+                    className="text-[10px] px-2 py-1.5 cursor-pointer hover:bg-accent"
+                >
+                    {option.name}
+                </div>
+            ))}
+        </div>,
+        document.body
+    ) : null;
+    
     return (
         <div className="relative w-full">
             <button
                 ref={triggerRef}
+                type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full text-[10px] h-6 px-1.5 pr-6 bg-neutral-100 dark:bg-neutral-800/50 rounded-md flex items-center justify-between text-left"
+                className="w-full text-[10px] h-6 px-1.5 pr-6 bg-neutral-100 dark:bg-neutral-800/50 rounded-md flex items-center justify-between text-left border-0"
             >
                 <span className="truncate">{displayValue || 'Select...'}</span>
                 <ChevronDown className={`h-3 w-3 opacity-50 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
-            {isOpen && (
-                <div
-                    ref={dropdownRef}
-                    className="absolute top-full left-0 right-0 z-50 max-h-[200px] overflow-y-auto bg-popover text-popover-foreground border border-t-0 rounded-b-md rounded-t-none shadow-md"
-                    style={{ marginTop: 0 }}
-                >
-                    <div 
-                        onClick={() => {
-                            onClear();
-                            setIsOpen(false);
-                        }}
-                        className="text-[10px] px-2 py-1.5 cursor-pointer hover:bg-accent"
-                    >
-                        -- All --
-                    </div>
-                    {options.map((option: any) => (
-                        <div 
-                            key={option.id} 
-                            onClick={() => {
-                                // Support both number and string IDs
-                                const optionId = typeof option.id === 'string' ? option.id : Number(option.id);
-                                onSelect(optionId);
-                                setIsOpen(false);
-                            }}
-                            className="text-[10px] px-2 py-1.5 cursor-pointer hover:bg-accent"
-                        >
-                            {option.name}
-                        </div>
-                    ))}
-                </div>
-            )}
+            {menuContent}
             {hasActiveFilter && (
                 <button
+                    type="button"
                     onClick={onClear}
                     className="absolute right-6 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-700 z-10"
                     title="Clear filter"
@@ -293,7 +314,7 @@ function FilterDropdown({
     );
 }
 
-export default function DriversIndex({ drivers = [], lists = [], importAvailableFields, filterOptions = {}, allDocumentNames = [], documentsByRidingCompany = {}, allDocumentRequirements = [], demo_reseller = false, cancelReasonOptions: cancelReasonOptionsProp = [] }: DriversIndexProps) {
+export default function DriversIndex({ drivers = [], lists = [], importAvailableFields, filterOptions = {}, allDocumentNames = [], documentsByRidingCompany = {}, allDocumentRequirements = [], demo_reseller = false, cancelReasonOptions: cancelReasonOptionsProp = [], leadsLimitReached = false, leadsLimit = 2000 }: DriversIndexProps) {
     // Field permissions hook
     const { canViewDriverField } = useFieldPermissions();
     const page = usePage<SharedData>();
@@ -301,7 +322,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
         if (!demo_reseller) return ALL_DRIVER_COLUMNS;
         const filtered = ALL_DRIVER_COLUMNS.filter((col) => !DEMO_RESELLER_HIDDEN_COLUMNS.includes(col.id));
         // Add reseller column (company name from assigned user) for demo
-        filtered.push({ id: 'reseller', label: 'Reseller', defaultVisible: true, defaultOrder: 5.5 });
         return filtered.sort((a, b) => (a.defaultOrder ?? 0) - (b.defaultOrder ?? 0));
     }, [demo_reseller]);
     
@@ -338,74 +358,54 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
         }
     }, [localDrivers]);
     
-    // Auto-refresh data periodically and on window focus
+    // Avoid overlapping reloads (prevents NS_BINDING_ABORTED / ECONNABORTED)
+    const reloadInProgressRef = useRef(false);
+    const lastHiddenAtRef = useRef<number | null>(null);
+
+    // Auto-refresh data periodically; avoid reload on every focus to prevent request aborts
     useEffect(() => {
-        let intervalId: NodeJS.Timeout | null = null;
-        
+        let intervalId: ReturnType<typeof setInterval> | null = null;
+
         const refreshData = () => {
-            // Reload drivers and related data
-            router.reload({ 
-                only: ['drivers', 'filterOptions', 'allDocumentNames', 'documentsByRidingCompany', 'allDocumentRequirements'], 
-                preserveState: true, 
-                preserveScroll: true 
+            if (reloadInProgressRef.current) return;
+            reloadInProgressRef.current = true;
+            router.reload({
+                only: ['drivers', 'filterOptions', 'allDocumentNames', 'documentsByRidingCompany', 'allDocumentRequirements'],
+                preserveState: true,
+                preserveScroll: true,
+                onFinish: () => {
+                    reloadInProgressRef.current = false;
+                },
+                onCancel: () => {
+                    reloadInProgressRef.current = false;
+                },
             });
         };
-        
-        const handleFocus = () => {
-            // Reload data when window gains focus
-            refreshData();
-        };
-        
+
         const handleVisibilityChange = () => {
-            // Reload data when tab becomes visible
-            if (!document.hidden) {
-                refreshData();
+            if (document.hidden) {
+                lastHiddenAtRef.current = Date.now();
+            } else {
+                // Only refresh when tab becomes visible if it was hidden for at least 60 seconds
+                const hiddenAt = lastHiddenAtRef.current;
+                if (hiddenAt != null && Date.now() - hiddenAt >= 60000) {
+                    refreshData();
+                }
+                lastHiddenAtRef.current = null;
             }
         };
-        
-        // Set up polling: refresh every 30 seconds
-        intervalId = setInterval(refreshData, 30000);
-        
-        // Listen to window focus events
-        window.addEventListener('focus', handleFocus);
+
+        // Poll less often (90s) to reduce server load and avoid overlapping requests
+        intervalId = setInterval(refreshData, 90000);
+
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        
+
         return () => {
-            if (intervalId) {
-                clearInterval(intervalId);
-            }
-            window.removeEventListener('focus', handleFocus);
+            if (intervalId) clearInterval(intervalId);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, []);
 
-    // Track if we've already loaded data to avoid reloading on initial mount
-    const hasLoadedRef = useRef(false);
-    
-    // Reload data when page becomes visible (after navigation from other modules)
-    useEffect(() => {
-        // Only reload if we've already loaded once (i.e., returning to this page)
-        if (hasLoadedRef.current) {
-            const reloadOnReturn = () => {
-                router.reload({ 
-                    only: ['drivers', 'filterOptions'],
-                    preserveState: true,
-                    preserveScroll: true
-                });
-            };
-
-            // Small delay to ensure navigation is complete
-            const timeoutId = setTimeout(reloadOnReturn, 300);
-            
-            return () => {
-                clearTimeout(timeoutId);
-            };
-        } else {
-            // Mark as loaded on first mount
-            hasLoadedRef.current = true;
-        }
-    }, []);
-    
     // Close more lists when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -430,8 +430,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
 
     // Debug: Log available lists when they change
     useEffect(() => {
-        console.log('Available lists for user:', lists);
-        console.log('Lists count:', lists?.length || 0);
         if (lists && lists.length > 0) {
             console.log('List details:', lists.map((l: any) => ({
                 id: l.id,
@@ -649,6 +647,13 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
     const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [viewingDocument, setViewingDocument] = useState<{ id: number; url: string; extension?: string } | null>(null);
 
+    const getWhatsAppSendUrl = (phone: string) => {
+        const digits = String(phone || '').replace(/\D/g, '');
+        const withCountry = digits.startsWith('0') ? '20' + digits.slice(1) : digits.startsWith('20') ? digits : '20' + digits;
+        const withPlus = withCountry ? '+' + withCountry : '';
+        return `https://api.whatsapp.com/send/?phone=${encodeURIComponent(withPlus)}&text&type=phone_number&app_absent=0`;
+    };
+
     // Sort states
     const [sortField, setSortField] = useState<string | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -824,8 +829,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
         { value: 'phone', label: 'Phone' },
         { value: 'whatsapp_phone', label: 'WhatsApp Phone' },
         { value: 'email', label: 'Email' },
-        { value: 'company_id', label: 'Company' },
-        { value: 'riding_company_id', label: 'Reseller' },
+        { value: 'company_id', label: 'Reseller Company' },
         { value: 'campaign_id', label: 'Campaign' },
         { value: 'lead_source_id', label: 'Lead Source' },
         { value: 'lead_status_id', label: 'Lead Status' },
@@ -843,7 +847,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
 
     const confirmDelete = () => {
         if (deleteDialog.driver) {
-            router.delete(`/drivers/drivers/${deleteDialog.driver.id}`, {
+            router.delete(`/leads/leads/${deleteDialog.driver.id}`, {
                 preserveScroll: true,
                 preserveState: true,
                 onSuccess: () => {
@@ -924,7 +928,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                 driverValue = driver.campaign?.id;
                 break;
             case 'riding_company_id':
-                driverValue = driver.riding_company?.id;
+                driverValue = driver.company_id;
                 break;
             case 'lead_source_id':
                 driverValue = driver.lead_source?.id;
@@ -1383,16 +1387,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                     return false;
                 }
             }
-            // Resellers (riding_company) filter
-            if (filters.riding_company_id) {
-                if (filters.riding_company_id === 'is_empty') {
-                    if (driver.riding_company?.id) {
-                        return false;
-                    }
-                } else if (driver.riding_company?.id !== filters.riding_company_id) {
-                    return false;
-                }
-            }
             // Lead Source filter
             if (filters.lead_source_id) {
                 if (filters.lead_source_id === 'is_empty') {
@@ -1769,16 +1763,6 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                         return false;
                     }
                 } else if (driver.company_id !== filters.company_id) {
-                    return false;
-                }
-            }
-            // Resellers (riding_company) filter
-            if (filters.riding_company_id) {
-                if (filters.riding_company_id === 'is_empty') {
-                    if (driver.riding_company?.id) {
-                        return false;
-                    }
-                } else if (driver.riding_company?.id !== filters.riding_company_id) {
                     return false;
                 }
             }
@@ -2302,8 +2286,8 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                         bValue = b.company_id ?? 0;
                         break;
                     case 'riding_company':
-                        aValue = a.riding_company?.name || '';
-                        bValue = b.riding_company?.name || '';
+                        aValue = (a as any).reseller || a.riding_company?.name || '';
+                        bValue = (b as any).reseller || b.riding_company?.name || '';
                         break;
                     case 'reseller':
                         aValue = (a as any).reseller || a.riding_company?.name || '';
@@ -2584,7 +2568,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
     // Handle document status update
     const handleUpdateDocumentStatus = async (driverId: number, documentId: number, status: string) => {
         try {
-            await axios.put(`/drivers/driver-documents/${documentId}`, {
+            await axios.put(`/leads/lead-documents/${documentId}`, {
                 status: status,
             });
             // Refresh the page to update the data
@@ -2601,7 +2585,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
     // Handle document file deletion
     const handleDeleteDocumentFile = async (driverId: number, documentId: number) => {
         try {
-            await axios.delete(`/drivers/driver-documents/${documentId}/file`);
+            await axios.delete(`/leads/lead-documents/${documentId}/file`);
             // Refresh the page to update the data
             router.reload({ 
                 only: ['drivers', 'filterOptions'],
@@ -2623,7 +2607,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
 
     const confirmMassDelete = () => {
         if (selectedDrivers.size > 0) {
-            router.post('/drivers/drivers/mass-delete', {
+            router.post('/leads/leads/mass-delete', {
                 ids: Array.from(selectedDrivers),
             }, {
                 onSuccess: () => {
@@ -2639,7 +2623,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
     const handleMassEdit = () => {
         if (selectedDrivers.size > 0) {
             const ids = Array.from(selectedDrivers);
-            router.visit(`/drivers/drivers/mass-edit?ids=${ids.join(',')}`);
+            router.visit(`/leads/leads/mass-edit?ids=${ids.join(',')}`);
         }
     };
 
@@ -2766,7 +2750,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
         }
 
         router.put(
-            `/drivers/drivers/${driverId}`,
+            `/leads/leads/${driverId}`,
             submitData,
             {
                 preserveScroll: true,
@@ -2830,7 +2814,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
         setLoadingDetails(true);
         
         try {
-            const response = await fetch(`/drivers/drivers/${driver.id}/details`, {
+            const response = await fetch(`/leads/leads/${driver.id}/details`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -2958,7 +2942,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
         formData.append('file', file);
 
         axios
-            .post(`/drivers/driver-documents/${docId}/upload`, formData, {
+            .post(`/leads/lead-documents/${docId}/upload`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
@@ -2966,7 +2950,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
             .then(() => {
                 // Reload driver details
                 if (viewingDriver) {
-                    fetch(`/drivers/drivers/${viewingDriver.id}/details`, {
+                    fetch(`/leads/leads/${viewingDriver.id}/details`, {
                         method: 'GET',
                         headers: {
                             'Accept': 'application/json',
@@ -3000,10 +2984,10 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
 
     const handleUpdateStatus = async (docId: number, status: string) => {
         try {
-            await axios.post(`/drivers/driver-documents/${docId}/update-status`, { status });
+            await axios.post(`/leads/lead-documents/${docId}/update-status`, { status });
             // Reload driver details to get updated documents
             if (viewingDriver) {
-                const response = await fetch(`/drivers/drivers/${viewingDriver.id}/details`, {
+                const response = await fetch(`/leads/leads/${viewingDriver.id}/details`, {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json',
@@ -3029,7 +3013,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
     };
 
     const handleViewFile = (docId: number) => {
-        const url = `/drivers/driver-documents/${docId}/view`;
+        const url = `/leads/lead-documents/${docId}/view`;
         const doc = driverDetails?.documents?.find((d: any) => d.id === docId);
         const extension = getFileExtension(doc?.original_filename, doc?.uploaded_path)?.toLowerCase();
         setViewingDocument({ id: docId, url, extension: extension || undefined });
@@ -3040,10 +3024,10 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
             return;
         }
         try {
-            await axios.delete(`/drivers/driver-documents/${docId}/delete-file`);
+            await axios.delete(`/leads/lead-documents/${docId}/delete-file`);
             // Reload driver details and drivers list
             if (viewingDriver) {
-                const response = await fetch(`/drivers/drivers/${viewingDriver.id}/details`, {
+                const response = await fetch(`/leads/leads/${viewingDriver.id}/details`, {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json',
@@ -3102,10 +3086,10 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                 if (selectedDrivers.size > 0) {
                                     // Export selected drivers
                                     const ids = Array.from(selectedDrivers);
-                                    window.location.href = `/drivers/drivers/export?ids=${ids.join(',')}`;
+                                    window.location.href = `/leads/leads/export?ids=${ids.join(',')}`;
                                 } else {
                                     // Export all visible drivers
-                                    window.location.href = '/drivers/drivers/export';
+                                    window.location.href = '/leads/leads/export';
                                 }
                             }}
                         >
@@ -3119,30 +3103,18 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                 Import
                             </Button>
                         <div className="flex items-center gap-2 ml-auto">
-                            {showWhatsAppButton && whatsAppRidingCompanyId && (
-                                <Button
-                                    type="button"
-                                    variant={whatsappWindowOpen ? "default" : "outline"}
-                                    onClick={() => {
-                                        if (whatsappWindowOpen) {
-                                            setWhatsappWindowOpen(false);
-                                            setWhatsappFloating(false);
-                                        } else {
-                                            setWhatsappWindowOpen(true);
-                                        }
-                                    }}
-                                    className={whatsappWindowOpen ? "bg-[#25d366] hover:bg-[#20ba5a] text-white border-[#25d366]" : "border-[#25d366] text-[#25d366] hover:bg-[#25d366] hover:text-white"}
-                                >
-                                    <MessageCircle className="h-4 w-4 mr-2" />
-                                    {whatsappWindowOpen ? 'Hide WhatsApp' : 'Open WhatsApp Chats'}
-                                </Button>
-                            )}
-                            <Link href="/drivers/drivers/create">
+                            <Link href="/leads/leads/create">
                                 <Button>Create Lead</Button>
                             </Link>
                         </div>
                     </div>
                 </div>
+
+                {leadsLimitReached && (
+                    <div className="mx-6 mb-2 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm">
+                        Showing the most recent {leadsLimit.toLocaleString()} leads. Use filters to narrow down results.
+                    </div>
+                )}
 
                 <Card className="flex-1 flex flex-col min-h-0 py-2 gap-2">
                     {safeDrivers.length > 0 ? (
@@ -3316,7 +3288,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                router.get(`/drivers/drivers/lists/${list.id}/edit`);
+                                                                router.get(`/leads/leads/lists/${list.id}/edit`);
                                                             }}
                                                             className="p-1 hover:bg-accent rounded"
                                                         >
@@ -3326,7 +3298,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (confirm(`Are you sure you want to delete "${list.name}"?`)) {
-                                                                        router.delete(`/drivers/drivers/lists/${list.id}`);
+                                                                        router.delete(`/leads/leads/lists/${list.id}`);
                                                                     }
                                                                 }}
                                                                 className="p-1 hover:bg-destructive/10 text-destructive rounded"
@@ -3344,7 +3316,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                window.location.href = '/drivers/drivers/lists/create';
+                                                window.location.href = '/leads/leads/lists/create';
                                             }}
                                             className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded transition-all"
                                             title="Add new list"
@@ -3714,7 +3686,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                   col.id === 'city' ? 'city' :
                                                                   col.id === 'cancel_reason' ? 'cancel_reason' :
                                                                   col.id === 'campaign' ? 'campaign_id' :
-                                                                  col.id === 'riding_company' ? 'riding_company_id' :
+                                                                  col.id === 'riding_company' ? 'company_id' :
                                                                   col.id === 'company' ? 'company_id' :
                                                                   col.id === 'last_assigned_date' ? 'last_assigned_date' :
                                                                   col.id;
@@ -4059,7 +4031,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                         </th>
                                                     );
                                                 }
-                                                if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to', 'team_leader', 'account_manager', 'city', 'cancel_reason', 'last_assigned_by'].includes(col.id)) {
+                                                if (['campaign', 'lead_source', 'lead_status', 'lead_stage', 'assigned_to', 'team_leader', 'account_manager', 'city', 'cancel_reason', 'last_assigned_by', 'company', 'riding_company'].includes(col.id)) {
                                                     const cancelReasonOptions = cancelReasonOptionsProp?.length
                                                         ? cancelReasonOptionsProp.map((o) => ({ id: o.value, name: o.label }))
                                                         : [
@@ -4076,7 +4048,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                   col.id === 'team_leader' ? (filterOptions?.users || []) :
                                                                   col.id === 'account_manager' ? (filterOptions?.users || []) :
                                                                   col.id === 'last_assigned_by' ? (filterOptions?.users || []) :
-                                                                  col.id === 'riding_company' ? (filterOptions?.ridingCompanies || []) :
+                                                                  col.id === 'riding_company' ? (filterOptions?.companies || []) :
                                                                   col.id === 'company' ? (filterOptions?.companies || []) :
                                                                   col.id === 'city' ? EGYPT_GOVERNORATES.map((gov) => ({ id: gov, name: gov })) :
                                                                   col.id === 'cancel_reason' ? cancelReasonOptions.map((val) => ({ id: val, name: val })) : [];
@@ -4205,7 +4177,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                             } catch (e) {
                                                                 console.error('Error saving filtered IDs:', e);
                                                             }
-                                                            router.visit(`/drivers/drivers/${driver.id}`);
+                                                            router.visit(`/leads/leads/${driver.id}`);
                                                         }, 500);
                                                         
                                                         lastClickTimeRef.current = now;
@@ -4305,190 +4277,66 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                 break;
                                                             case 'phone':
                                                                 cellContent = driver.phone ? (
-                                                                    <div className="relative group" onClick={(e) => e.stopPropagation()}>
-                                                                        <span
-                                                                            onMouseEnter={(e) => {
-                                                                                if (hoverTimeoutRef.current) {
-                                                                                    clearTimeout(hoverTimeoutRef.current);
-                                                                                }
-                                                                                setHoveredPhone(driver.phone || null);
-                                                                                setPhoneMousePosition({ x: e.clientX, y: e.clientY });
-                                                                            }}
-                                                                            onMouseMove={(e) => {
-                                                                                setPhoneMousePosition({ x: e.clientX, y: e.clientY });
-                                                                            }}
-                                                                            onMouseLeave={() => {
-                                                                                hoverTimeoutRef.current = setTimeout(() => {
-                                                                                    setHoveredPhone(null);
-                                                                                    setPhoneMousePosition(null);
-                                                                                }, 200);
-                                                                            }}
+                                                                    <div className="flex items-center gap-1.5 font-sans antialiased">
+                                                                        <span className="text-sm font-sans antialiased shrink-0">{driver.phone}</span>
+                                                                        <a
+                                                                            href={`tel:${driver.phone}`}
+                                                                            className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-neutral-200 dark:bg-neutral-600 hover:bg-neutral-300 dark:hover:bg-neutral-500 text-neutral-700 dark:text-neutral-200 transition-colors shrink-0"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            title="اتصال"
                                                                         >
-                                                                            {driver.phone}
-                                                                        </span>
-                                                                        {hoveredPhone === driver.phone && phoneMousePosition && (
-                                                                            <div className="absolute z-[9999] flex gap-2 bg-white dark:bg-neutral-800 p-3 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 pointer-events-auto"
-                                                                                style={{ 
-                                                                                    left: '100%',
-                                                                                    top: '50%',
-                                                                                    marginLeft: '8px',
-                                                                                    transform: 'translateY(-50%)'
-                                                                                }}
-                                                                                onMouseEnter={() => {
-                                                                                    if (hoverTimeoutRef.current) {
-                                                                                        clearTimeout(hoverTimeoutRef.current);
-                                                                                    }
-                                                                                }}
-                                                                                onMouseLeave={() => {
-                                                                                    hoverTimeoutRef.current = setTimeout(() => {
-                                                                                        setHoveredPhone(null);
-                                                                                        setPhoneMousePosition(null);
-                                                                                    }, 200);
-                                                                                }}
-                                                                            >
-                                                                                <a
-                                                                                    href={`tel:${driver.phone}`}
-                                                                                    className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
-                                                                                >
-                                                                                    <Phone className="h-5 w-5" />
-                                                                                </a>
-                                                                                <button
-                                                                                    onClick={(e) => {
-                                                                                        e.preventDefault();
-                                                                                        e.stopPropagation();
-                                                                                        // Use phone directly (not whatsapp_phone)
-                                                                                        setSelectedDriverForWhatsApp(driver.phone);
-                                                                                        setWhatsappWindowOpen(true);
-                                                                                        setWhatsappFloating(false); // Ensure it opens in side panel, not floating
-                                                                                    }}
-                                                                                    className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
-                                                                                >
-                                                                                    <MessageCircle className="h-5 w-5" />
-                                                                                </button>
-                                                                            </div>
-                                                                        )}
+                                                                            <Phone className="h-4 w-4" />
+                                                                        </a>
+                                                                        <a
+                                                                            href={getWhatsAppSendUrl(driver.phone)}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#25d366] hover:bg-[#20ba5a] text-white transition-colors shrink-0"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            title="واتساب"
+                                                                        >
+                                                                            <MessageCircle className="h-4 w-4" />
+                                                                        </a>
                                                                     </div>
                                                                 ) : '-';
                                                                 break;
                                                             case 'whatsapp':
                                                                 cellContent = driver.whatsapp_phone ? (
-                                                                    <div className="relative group" onClick={(e) => e.stopPropagation()}>
-                                                                        <span
-                                                                            onMouseEnter={(e) => {
-                                                                                if (hoverTimeoutRef.current) {
-                                                                                    clearTimeout(hoverTimeoutRef.current);
-                                                                                }
-                                                                                setHoveredPhone(driver.whatsapp_phone || null);
-                                                                                setWhatsappMousePosition({ x: e.clientX, y: e.clientY });
-                                                                            }}
-                                                                            onMouseMove={(e) => {
-                                                                                setWhatsappMousePosition({ x: e.clientX, y: e.clientY });
-                                                                            }}
-                                                                            onMouseLeave={() => {
-                                                                                hoverTimeoutRef.current = setTimeout(() => {
-                                                                                    setHoveredPhone(null);
-                                                                                    setWhatsappMousePosition(null);
-                                                                                }, 200);
-                                                                            }}
+                                                                    <div className="flex items-center gap-1.5 font-sans antialiased">
+                                                                        <span className="text-sm font-sans antialiased shrink-0">{driver.whatsapp_phone}</span>
+                                                                        <a
+                                                                            href={`tel:${driver.whatsapp_phone}`}
+                                                                            className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-neutral-200 dark:bg-neutral-600 hover:bg-neutral-300 dark:hover:bg-neutral-500 text-neutral-700 dark:text-neutral-200 transition-colors shrink-0"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            title="اتصال"
                                                                         >
-                                                                            {driver.whatsapp_phone}
-                                                                        </span>
-                                                                        {hoveredPhone === driver.whatsapp_phone && whatsappMousePosition && (
-                                                                            <div className="absolute z-[9999] flex gap-2 bg-white dark:bg-neutral-800 p-3 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 pointer-events-auto"
-                                                                                style={{ 
-                                                                                    left: '100%',
-                                                                                    top: '50%',
-                                                                                    marginLeft: '8px',
-                                                                                    transform: 'translateY(-50%)'
-                                                                                }}
-                                                                                onMouseEnter={() => {
-                                                                                    if (hoverTimeoutRef.current) {
-                                                                                        clearTimeout(hoverTimeoutRef.current);
-                                                                                    }
-                                                                                }}
-                                                                                onMouseLeave={() => {
-                                                                                    hoverTimeoutRef.current = setTimeout(() => {
-                                                                                        setHoveredPhone(null);
-                                                                                        setWhatsappMousePosition(null);
-                                                                                    }, 200);
-                                                                                }}
-                                                                            >
-                                                                                <a
-                                                                                    href={`tel:${driver.whatsapp_phone}`}
-                                                                                    className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
-                                                                                >
-                                                                                    <Phone className="h-5 w-5" />
-                                                                                </a>
-                                                                                <button
-                                                                                    onClick={(e) => {
-                                                                                        e.preventDefault();
-                                                                                        e.stopPropagation();
-                                                                                        // Use whatsapp_phone directly
-                                                                                        if (driver.whatsapp_phone) {
-                                                                                            setSelectedDriverForWhatsApp(driver.whatsapp_phone);
-                                                                                            setWhatsappWindowOpen(true);
-                                                                                            setWhatsappFloating(false); // Ensure it opens in side panel, not floating
-                                                                                        }
-                                                                                    }}
-                                                                                    className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
-                                                                                >
-                                                                                    <MessageCircle className="h-5 w-5" />
-                                                                                </button>
-                                                                            </div>
-                                                                        )}
+                                                                            <Phone className="h-4 w-4" />
+                                                                        </a>
+                                                                        <a
+                                                                            href={getWhatsAppSendUrl(driver.whatsapp_phone)}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#25d366] hover:bg-[#20ba5a] text-white transition-colors shrink-0"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            title="واتساب"
+                                                                        >
+                                                                            <MessageCircle className="h-4 w-4" />
+                                                                        </a>
                                                                     </div>
                                                                 ) : '-';
                                                                 break;
                                                             case 'email':
                                                                 cellContent = driver.email ? (
-                                                                    <div className="relative group" onClick={(e) => e.stopPropagation()}>
-                                                                        <span
-                                                                            onMouseEnter={(e) => {
-                                                                                if (emailHoverTimeoutRef.current) {
-                                                                                    clearTimeout(emailHoverTimeoutRef.current);
-                                                                                }
-                                                                                setHoveredEmail(driver.email || null);
-                                                                                setEmailMousePosition({ x: e.clientX, y: e.clientY });
-                                                                            }}
-                                                                            onMouseMove={(e) => {
-                                                                                setEmailMousePosition({ x: e.clientX, y: e.clientY });
-                                                                            }}
-                                                                            onMouseLeave={() => {
-                                                                                emailHoverTimeoutRef.current = setTimeout(() => {
-                                                                                    setHoveredEmail(null);
-                                                                                    setEmailMousePosition(null);
-                                                                                }, 200);
-                                                                            }}
+                                                                    <div className="flex items-center gap-1.5 font-sans antialiased">
+                                                                        <span className="text-sm font-sans antialiased shrink-0 min-w-0 truncate max-w-[180px]" title={driver.email}>{driver.email}</span>
+                                                                        <a
+                                                                            href={`mailto:${driver.email}`}
+                                                                            className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors shrink-0"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            title="إرسال بريد"
                                                                         >
-                                                                            {driver.email}
-                                                                        </span>
-                                                                        {hoveredEmail === driver.email && emailMousePosition && (
-                                                                            <div className="fixed z-[9999] bg-white dark:bg-neutral-800 p-3 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 pointer-events-auto"
-                                                                                style={{ 
-                                                                                    left: `${emailMousePosition.x}px`,
-                                                                                    top: `${emailMousePosition.y - 60}px`,
-                                                                                    transform: 'translate(-50%, 0)'
-                                                                                }}
-                                                                                onMouseEnter={() => {
-                                                                                    if (emailHoverTimeoutRef.current) {
-                                                                                        clearTimeout(emailHoverTimeoutRef.current);
-                                                                                    }
-                                                                                }}
-                                                                                onMouseLeave={() => {
-                                                                                    emailHoverTimeoutRef.current = setTimeout(() => {
-                                                                                        setHoveredEmail(null);
-                                                                                        setEmailMousePosition(null);
-                                                                                    }, 200);
-                                                                                }}
-                                                                            >
-                                                                                <a
-                                                                                    href={`mailto:${driver.email}`}
-                                                                                    className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors"
-                                                                                >
-                                                                                    <Mail className="h-5 w-5" />
-                                                                                </a>
-                                                                            </div>
-                                                                        )}
+                                                                            <Mail className="h-4 w-4" />
+                                                                        </a>
                                                                     </div>
                                                                 ) : '-';
                                                                 break;
@@ -4499,7 +4347,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                 cellContent = (filterOptions?.companies?.find((c: { id: number; name: string }) => c.id === driver.company_id)?.name) ?? '-';
                                                                 break;
                                                             case 'riding_company':
-                                                                cellContent = driver.riding_company?.name || '-';
+                                                                cellContent = (driver as any).reseller || driver.riding_company?.name || '-';
                                                                 break;
                                                             case 'reseller':
                                                                 cellContent = (driver as any).reseller || driver.riding_company?.name || '-';
@@ -4806,7 +4654,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                 defaultChecked={index === 0}
                                                                 className="w-4 h-4"
                                                             />
-                                                            <Link href={`/drivers/drivers/${driver.id}`} className="text-blue-600 hover:underline" target="_blank">
+                                                            <Link href={`/leads/leads/${driver.id}`} className="text-blue-600 hover:underline" target="_blank">
                                                                 Record #{driver.id}
                                                             </Link>
                                                         </div>
@@ -5127,7 +4975,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                             const driverIds = mergeDrivers.map(d => d.id);
                                             
                                             try {
-                                                await router.post('/drivers/drivers/merge', {
+                                                await router.post('/leads/leads/merge', {
                                                     primary_driver_id: primaryRecordId,
                                                     driver_ids: driverIds,
                                                     field_mappings: fieldMappings,
@@ -5159,7 +5007,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                 <ImportModal
                     open={importModalOpen}
                     onOpenChange={setImportModalOpen}
-                    importStoreUrl="/drivers/drivers/import"
+                    importStoreUrl="/leads/leads/import"
                     availableFields={availableFields}
                     entityName="Leads"
                 />
@@ -5253,19 +5101,71 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                     )}
                                                     {canViewDriverField('phone') && (
                                                         <div className="flex items-start gap-2">
-                                                            <Phone className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                                            <div className="flex-1">
+                                                            <Phone className="mt-0.5 h-4 w-4 text-neutral-500 shrink-0" />
+                                                            <div className="flex-1 min-w-0">
                                                                 <p className="text-sm text-neutral-500">Phone</p>
-                                                                <p className="font-medium">{driverDetails.phone}</p>
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <span className="font-medium">{driverDetails.phone}</span>
+                                                                    {driverDetails.phone && (
+                                                                        <>
+                                                                            <a
+                                                                                href={`tel:${driverDetails.phone}`}
+                                                                                className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 text-neutral-600 dark:text-neutral-300 transition-colors"
+                                                                                title="اتصال"
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                            >
+                                                                                <Phone className="h-4 w-4" />
+                                                                            </a>
+                                                                            <a
+                                                                                href={getWhatsAppSendUrl(driverDetails.phone)}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#25d366] hover:bg-[#20ba5a] text-white transition-colors"
+                                                                                title="واتساب"
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                            >
+                                                                                <MessageCircle className="h-4 w-4" />
+                                                                            </a>
+                                                                        </>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     )}
                                                     {canViewDriverField('whatsapp_phone') && driverDetails.whatsapp_phone && (
                                                         <div className="flex items-start gap-2">
-                                                            <Phone className="mt-0.5 h-4 w-4 text-neutral-500" />
-                                                            <div className="flex-1">
+                                                            <MessageCircle className="mt-0.5 h-4 w-4 text-[#25d366] shrink-0" />
+                                                            <div className="flex-1 min-w-0">
                                                                 <p className="text-sm text-neutral-500">WhatsApp</p>
-                                                                <p className="font-medium">{driverDetails.whatsapp_phone}</p>
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <a
+                                                                        href={getWhatsAppSendUrl(driverDetails.whatsapp_phone)}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="font-medium text-[#25d366] hover:underline"
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    >
+                                                                        {driverDetails.whatsapp_phone}
+                                                                    </a>
+                                                                    <a
+                                                                        href={`tel:${driverDetails.whatsapp_phone}`}
+                                                                        className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 text-neutral-600 dark:text-neutral-300 transition-colors"
+                                                                        title="اتصال"
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    >
+                                                                        <Phone className="h-4 w-4" />
+                                                                    </a>
+                                                                    <a
+                                                                        href={getWhatsAppSendUrl(driverDetails.whatsapp_phone)}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#25d366] hover:bg-[#20ba5a] text-white transition-colors"
+                                                                        title="واتساب"
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    >
+                                                                        <MessageCircle className="h-4 w-4" />
+                                                                    </a>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     )}
@@ -5289,7 +5189,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                     )}
                                                     {canViewDriverField('feedback_count') && driverDetails.feedback_count !== undefined && (
                                                         <div className="flex items-start gap-2">
-                                                            <MessageCircle className="mt-0.5 h-4 w-4 text-neutral-500" />
+                                                            <Activity className="mt-0.5 h-4 w-4 text-neutral-500" />
                                                             <div className="flex-1">
                                                                 <p className="text-sm text-neutral-500">Feedback Count</p>
                                                                 <p className="font-medium">{driverDetails.feedback_count ?? 0}</p>
@@ -5744,7 +5644,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                 `} 
                                                                 onClick={() => {
                                                                 setViewDialogOpen(false);
-                                                                router.visit(`/drivers/drivers/${dup.id}`);
+                                                                router.visit(`/leads/leads/${dup.id}`);
                                                             }}>
                                                                 <td className="px-4 py-3 text-sm">{dup.full_name || '-'}</td>
                                                                 <td className="px-4 py-3 text-sm">{dup.phone || '-'}</td>
@@ -5767,7 +5667,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                     <button
                                                                         onClick={() => {
                                                                             setViewDialogOpen(false);
-                                                                            router.visit(`/drivers/drivers/${dup.id}`);
+                                                                            router.visit(`/leads/leads/${dup.id}`);
                                                                         }}
                                                                         className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                                                                         title="View Details"
@@ -5826,91 +5726,10 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                 </Dialog>
                     </div>
                     
-                    {/* WhatsApp Window - Side Panel */}
-                    {whatsAppRidingCompanyId && whatsappWindowOpen && !whatsappFloating && (
-                        <div 
-                            className="flex-shrink-0 h-[calc(100vh-8rem)] border-l border-neutral-200 dark:border-neutral-700 relative group"
-                            style={{ width: `${whatsappWindowWidth}px`, minWidth: '300px', maxWidth: '80vw' }}
-                        >
-                            {/* Resize Handle - Left Side */}
-                            <div
-                                className="absolute left-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-500 cursor-col-resize z-10 transition-colors"
-                                onMouseDown={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    const startX = e.clientX;
-                                    const startWidth = whatsappWindowWidth;
-                                    
-                                    const handleMouseMove = (moveEvent: MouseEvent) => {
-                                        const diff = startX - moveEvent.clientX; // Inverted because we're resizing from left
-                                        const newWidth = Math.max(300, Math.min(window.innerWidth * 0.8, startWidth + diff));
-                                        setWhatsappWindowWidth(newWidth);
-                                    };
-                                    
-                                    const handleMouseUp = () => {
-                                        document.removeEventListener('mousemove', handleMouseMove);
-                                        document.removeEventListener('mouseup', handleMouseUp);
-                                        document.body.style.cursor = '';
-                                        document.body.style.userSelect = '';
-                                    };
-                                    
-                                    document.addEventListener('mousemove', handleMouseMove);
-                                    document.addEventListener('mouseup', handleMouseUp);
-                                    document.body.style.cursor = 'col-resize';
-                                    document.body.style.userSelect = 'none';
-                                }}
-                                title="Drag to resize"
-                            />
-                            <WhatsAppWindow
-                                ridingCompanyId={whatsAppRidingCompanyId}
-                                driverPhoneNumbers={userDriverPhoneNumbers}
-                                drivers={drivers
-                                    .filter(d => {
-                                        // Only include drivers that have phone or whatsapp_phone
-                                        const hasPhone = d.phone && d.phone.trim().length >= 5 && d.phone.trim() !== '0' && /\d{5,}/.test(d.phone.trim());
-                                        const hasWhatsapp = d.whatsapp_phone && d.whatsapp_phone.trim().length >= 5 && d.whatsapp_phone.trim() !== '0' && /\d{5,}/.test(d.whatsapp_phone.trim());
-                                        return hasPhone || hasWhatsapp;
-                                    })
-                                    .map(d => ({ id: d.id, name: d.full_name, phone: d.phone, whatsapp_phone: d.whatsapp_phone }))}
-                                isOpen={whatsappWindowOpen}
-                                onClose={() => {
-                                    setWhatsappWindowOpen(false);
-                                    setSelectedDriverForWhatsApp(null);
-                                }}
-                                initialChatPhone={selectedDriverForWhatsApp || undefined}
-                                isFloating={whatsappFloating}
-                                onToggleFloating={() => setWhatsappFloating(!whatsappFloating)}
-                            />
-                        </div>
-                    )}
                 </div>
             </div>
         </AppLayout>
         
-        {/* WhatsApp Window - Floating */}
-        {whatsAppRidingCompanyId && whatsappWindowOpen && whatsappFloating && (
-            <WhatsAppWindow
-                ridingCompanyId={whatsAppRidingCompanyId}
-                driverPhoneNumbers={userDriverPhoneNumbers}
-                drivers={drivers
-                    .filter(d => {
-                        // Only include drivers that have phone or whatsapp_phone
-                        const hasPhone = d.phone && d.phone.trim().length >= 5 && d.phone.trim() !== '0' && /\d{5,}/.test(d.phone.trim());
-                        const hasWhatsapp = d.whatsapp_phone && d.whatsapp_phone.trim().length >= 5 && d.whatsapp_phone.trim() !== '0' && /\d{5,}/.test(d.whatsapp_phone.trim());
-                        return hasPhone || hasWhatsapp;
-                    })
-                    .map(d => ({ id: d.id, name: d.full_name, phone: d.phone, whatsapp_phone: d.whatsapp_phone }))}
-                isOpen={whatsappWindowOpen}
-                onClose={() => {
-                    setWhatsappWindowOpen(false);
-                    setSelectedDriverForWhatsApp(null);
-                    setWhatsappFloating(false);
-                }}
-                initialChatPhone={selectedDriverForWhatsApp || undefined}
-                isFloating={whatsappFloating}
-                onToggleFloating={() => setWhatsappFloating(!whatsappFloating)}
-            />
-        )}
         </>
     );
 }
@@ -6115,7 +5934,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/drivers/drivers/${driver.id}`, {
+        put(`/leads/leads/${driver.id}`, {
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => {

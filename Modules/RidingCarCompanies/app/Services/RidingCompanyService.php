@@ -345,7 +345,7 @@ class RidingCompanyService
                     $roleUsers = \App\Models\User::whereHas('roles', function ($q) use ($roleId, $companyId) {
                         $q->where('roles.id', $roleId);
                         if ($companyId) {
-                            $q->where('team_id', $companyId);
+                            $q->where('roles.team_id', $companyId);
                         }
                     })
                         ->where('is_active', true)

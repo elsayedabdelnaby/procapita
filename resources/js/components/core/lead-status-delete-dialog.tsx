@@ -61,7 +61,7 @@ export function LeadStatusDeleteDialog({
             data.transfer_lead_status_id = transferLeadStatusId;
         }
 
-        router.delete(`/drivers/lead-statuses/${leadStatus.id}`, {
+        router.delete(`/leads/lead-statuses/${leadStatus.id}`, {
             data,
             onSuccess: () => {
                 onOpenChange(false);

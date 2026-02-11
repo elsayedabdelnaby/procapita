@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { type SharedData } from '@/types';
 import { formatDate } from '@/utils/date-format';
 import { EGYPT_GOVERNORATES } from '@/constants/egypt-governorates';
@@ -76,6 +76,7 @@ interface DriversCreateProps {
     leadStages?: LeadStage[];
     defaultRidingCompanyId?: number;
     cancelReasonOptions?: Array<{ value: string; label: string }>;
+    systemCompanyId?: number | null;
 }
 
 export default function DriversCreate({
@@ -88,6 +89,7 @@ export default function DriversCreate({
     leadStages: initialLeadStages = [],
     defaultRidingCompanyId,
     cancelReasonOptions: cancelReasonOptionsProp = [],
+    systemCompanyId = null,
 }: DriversCreateProps) {
     const page = usePage<SharedData>();
     const selectedCompany = (page.props as any)?.selectedCompany || null;
@@ -213,15 +215,29 @@ export default function DriversCreate({
         }
     }, [selectedCompany?.id, data.company_id, setData]);
 
+    // Track last company we fetched for to avoid refetching on mount when server already sent initial data
+    const lastFetchedCompanyIdRef = useRef<number | null | undefined>(undefined);
+
     // Fetch data when company/selectedCompany changes (for super admin)
     useEffect(() => {
         const companyId = selectedCompany ? selectedCompany.id : (data.company_id ? Number(data.company_id) : null);
         
         if (companies) {
+            // On first load we already have initial data from server for this company — skip redundant API calls
+            if (companyId != null && initialCampaigns.length > 0 && lastFetchedCompanyIdRef.current === undefined) {
+                lastFetchedCompanyIdRef.current = companyId;
+                return;
+            }
+            // If company didn't change, skip (avoid duplicate fetches)
+            if (companyId != null && companyId === lastFetchedCompanyIdRef.current) {
+                return;
+            }
+            lastFetchedCompanyIdRef.current = companyId ?? null;
+
             // Fetch riding companies
             setLoadingRidingCompanies(true);
             
-            // If "All Companies" is selected (selectedCompany is null and no company_id), load all riding companies
+            // If "All Companies" is selected (selectedCompany is null and no company_id), load all riding companies and all users
             if (!selectedCompany && !data.company_id) {
                 axios
                     .get('/api/drivers/riding-companies/all')
@@ -234,6 +250,19 @@ export default function DriversCreate({
                     })
                     .finally(() => {
                         setLoadingRidingCompanies(false);
+                    });
+                setLoadingUsers(true);
+                axios
+                    .get('/api/drivers/users/all')
+                    .then((response) => {
+                        setUsers(response.data);
+                    })
+                    .catch((error) => {
+                        console.error('Error fetching all users:', error);
+                        setUsers(initialUsers || []);
+                    })
+                    .finally(() => {
+                        setLoadingUsers(false);
                     });
             } else if (companyId) {
                 axios
@@ -325,7 +354,7 @@ export default function DriversCreate({
             setLeadStatuses(initialLeadStatuses || []);
             setUsers(initialUsers || []);
         }
-    }, [selectedCompany?.id, data.company_id, companies, setData, initialRidingCompanies, initialCampaigns, initialLeadSources, initialLeadStatuses, initialUsers]);
+    }, [selectedCompany?.id, data.company_id, companies, setData, initialRidingCompanies, initialCampaigns, initialLeadSources, initialLeadStatuses, initialUsers, initialLeadStages]);
 
     // Use all lead stages (no riding company filter)
     useEffect(() => {
@@ -335,7 +364,8 @@ export default function DriversCreate({
     const [showValidation, setShowValidation] = useState(false);
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
     const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
-    const [duplicateDrivers, setDuplicateDrivers] = useState<Array<{id: number; full_name: string; phone?: string; whatsapp_phone?: string}>>([]);
+    const [duplicateDrivers, setDuplicateDrivers] = useState<Array<{id: number; full_name: string; phone?: string; whatsapp_phone?: string; company_id?: number | null; company_name?: string | null}>>([]);
+    const [duplicateCurrentCompanyId, setDuplicateCurrentCompanyId] = useState<number | null>(null);
     const [viewDriverDialogOpen, setViewDriverDialogOpen] = useState(false);
     const [viewingDriverId, setViewingDriverId] = useState<number | null>(null);
     const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
@@ -383,7 +413,7 @@ export default function DriversCreate({
         
         // If allowDuplicate is checked, use router.post with force_create flag
         if (allowDuplicate) {
-            router.post('/drivers/drivers', {
+            router.post('/leads/leads', {
                 ...data,
                 force_create: true,
             }, {
@@ -403,7 +433,7 @@ export default function DriversCreate({
             });
         } else {
             // Normal submission without force_create
-            post('/drivers/drivers', {
+            post('/leads/leads', {
                 preserveScroll: true,
                 preserveState: true,
                 onSuccess: (page) => {
@@ -425,7 +455,7 @@ export default function DriversCreate({
     const handleAddAsNew = () => {
         setDuplicateDialogOpen(false);
         // Force create by adding a flag in the request
-        router.post('/drivers/drivers', {
+        router.post('/leads/leads', {
             ...data,
             force_create: true,
         }, {
@@ -458,7 +488,7 @@ export default function DriversCreate({
         try {
             const responses = await Promise.all(
                 duplicateIds.map(id => 
-                    axios.get(`/drivers/drivers/${id}/details`)
+                    axios.get(`/leads/leads/${id}/details`)
                 )
             );
             const fullDuplicateDrivers = responses.map(res => res.data?.driver).filter(Boolean);
@@ -504,6 +534,8 @@ export default function DriversCreate({
                 : (pageProps.duplicate_drivers ? [pageProps.duplicate_drivers] : []);
             if (duplicates.length > 0) {
                 setDuplicateDrivers(duplicates);
+                const currentId = pageProps.duplicate_current_company_id != null ? Number(pageProps.duplicate_current_company_id) : null;
+                setDuplicateCurrentCompanyId(currentId);
                 setDuplicateDialogOpen(true);
             }
         }
@@ -561,7 +593,7 @@ export default function DriversCreate({
                             {companies && companies.length > 0 && !selectedCompany && (
                                 <div className="md:col-span-2">
                                     <Label htmlFor="company_id">
-                                        Company <span className="text-red-500">*</span>
+                                        Reseller Company <span className="text-red-500">*</span>
                                     </Label>
                                     <select
                                         id="company_id"
@@ -706,33 +738,13 @@ export default function DriversCreate({
                                 </div>
                             )}
 
-                            {(canViewDriverField('riding_company') || canViewDriverField('riding_company_id')) && (
+                            {false && (canViewDriverField('riding_company') || canViewDriverField('riding_company_id')) && (
                                 <div>
-                                    <Label htmlFor="riding_company_id">Reseller</Label>
-                                    <select
-                                        id="riding_company_id"
-                                        name="riding_company_id"
-                                        value={data.riding_company_id}
-                                        onChange={(e) => setData('riding_company_id', e.target.value)}
-                                        className="w-full rounded-md border px-3 py-2"
-                                        disabled={loadingRidingCompanies || (companies && !data.company_id) || (!canEditDriverField('riding_company') && !canEditDriverField('riding_company_id'))}
-                                    >
-                                        <option value="">
-                                            {loadingRidingCompanies
-                                                ? 'Loading...'
-                                                : companies && !data.company_id
-                                                  ? 'Select a company first'
-                                                  : 'Select a reseller'}
-                                        </option>
-                                        {ridingCompanies.map((rc) => (
-                                            <option key={rc.id} value={String(rc.id)}>
-                                                {rc.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {errors.riding_company_id && (
-                                        <p className="text-sm text-red-500">{errors.riding_company_id}</p>
-                                    )}
+                                    <Label>Reseller</Label>
+                                    <p className="mt-1 text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                        {companies?.find((c) => String(c.id) === data.company_id)?.name ?? '-'}
+                                    </p>
+                                    <p className="text-xs text-neutral-500 dark:text-neutral-400">Reseller is the lead’s company (main company).</p>
                                 </div>
                             )}
 
@@ -1189,7 +1201,12 @@ export default function DriversCreate({
                                             if (value === 'none') {
                                                 setData('assigned_to', null);
                                             } else {
-                                                setData('assigned_to', value ? Number(value) : null);
+                                                const id = value ? Number(value) : null;
+                                                setData('assigned_to', id);
+                                                // When super admin selects themselves (All Companies), set Reseller Company to Procapita
+                                                if (id && currentUser?.id === id && systemCompanyId && companies && !selectedCompany) {
+                                                    setData('company_id', String(systemCompanyId));
+                                                }
                                             }
                                         }}
                                         disabled={loadingUsers}
@@ -1329,7 +1346,7 @@ export default function DriversCreate({
                             </div>
                         )}
                         <div className="flex gap-4">
-                            <Link href="/drivers/drivers">
+                            <Link href="/leads/leads">
                                 <Button type="button" variant="outline">
                                     Cancel
                                 </Button>
@@ -1342,65 +1359,109 @@ export default function DriversCreate({
                 </form>
             </div>
 
-            {/* Duplicate Leads Dialog */}
+            {/* Duplicate Leads Dialog - same company: all users see with link; other company: admin/super only */}
             <Dialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle>Duplicate Phone/WhatsApp Number Found</DialogTitle>
+                        <DialogTitle>رقم التليفون أو واتساب مكرر</DialogTitle>
                         <DialogDescription>
-                            The phone number or WhatsApp number you entered already exists with {duplicateDrivers?.length || 0} lead{(duplicateDrivers?.length || 0) > 1 ? 's' : ''} in the system.
+                            الرقم المدخل موجود مسبقاً مع عميل/عملاء في النظام.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
-                        <div className="space-y-2">
-                            {duplicateDrivers && duplicateDrivers.length > 0 ? duplicateDrivers.map((dup) => (
-                                <div key={dup.id} className="flex items-center justify-between p-3 border rounded-lg">
-                                    <div className="flex-1">
-                                        <a
-                                            href={`/drivers/drivers/${dup.id}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 hover:underline font-medium"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                handleViewDriver(dup.id);
-                                            }}
-                                        >
-                                            {dup.full_name}
-                                        </a>
-                                        <div className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-                                            Phone: {dup.phone || '-'} | WhatsApp: {dup.whatsapp_phone || '-'}
-                                        </div>
+                        {(() => {
+                            const currentId = duplicateCurrentCompanyId ?? (selectedCompany ? selectedCompany.id : (data.company_id ? Number(data.company_id) : null));
+                            const sameCompany = (duplicateDrivers || []).filter((d) => (d.company_id != null && currentId != null && Number(d.company_id) === Number(currentId)));
+                            const otherCompany = (duplicateDrivers || []).filter((d) => (d.company_id == null || currentId == null || Number(d.company_id) !== Number(currentId)));
+                            const showSame = sameCompany.length > 0;
+                            const showOther = isAdmin && otherCompany.length > 0;
+                            return (
+                                <>
+                                    <div className="space-y-2">
+                                        {showSame && (
+                                            <>
+                                                <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">نفس شركة الريسيلر (يمكنك فتح العميل):</p>
+                                                {sameCompany.map((dup) => (
+                                                    <div key={dup.id} className="flex items-center justify-between p-3 border rounded-lg">
+                                                        <div className="flex-1">
+                                                            <a
+                                                                href={`/leads/leads/${dup.id}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-blue-600 hover:underline font-medium"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    handleViewDriver(dup.id);
+                                                                }}
+                                                            >
+                                                                العميل #{dup.id} — {dup.full_name}
+                                                            </a>
+                                                            <div className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+                                                                التليفون: {dup.phone || '-'} | واتساب: {dup.whatsapp_phone || '-'}
+                                                            </div>
+                                                            <p className="text-xs text-neutral-500 mt-1">هذا العميل مكرر مع العميل رقم {dup.id} (نفس الشركة)</p>
+                                                        </div>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleViewDriver(dup.id)}
+                                                        >
+                                                            فتح العميل
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </>
+                                        )}
+                                        {showOther && (
+                                            <>
+                                                <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mt-3">شركة ريسيلر أخرى (للإدمن فقط):</p>
+                                                {otherCompany.map((dup) => (
+                                                    <div key={dup.id} className="flex items-center justify-between p-3 border rounded-lg bg-neutral-50 dark:bg-neutral-800/50">
+                                                        <div className="flex-1">
+                                                            <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                                                                العميل #{dup.id} — {dup.full_name}
+                                                            </span>
+                                                            <div className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+                                                                التليفون: {dup.phone || '-'} | واتساب: {dup.whatsapp_phone || '-'}
+                                                            </div>
+                                                            <p className="text-xs text-neutral-500 mt-1">
+                                                                مكرر في شركة أخرى: {dup.company_name || `شركة #${dup.company_id}`}
+                                                            </p>
+                                                        </div>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleViewDriver(dup.id)}
+                                                        >
+                                                            فتح العميل
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </>
+                                        )}
                                     </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleViewDriver(dup.id)}
-                                    >
-                                        View Details
-                                    </Button>
-                                </div>
-                            )) : null}
-                        </div>
-                        <div className="flex justify-end gap-2 pt-4">
-                            <Button
-                                variant="outline"
-                                onClick={() => setDuplicateDialogOpen(false)}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                variant="outline"
-                                onClick={handleAddAsNew}
-                            >
-                                Add as New
-                            </Button>
-                            <Button
-                                onClick={handleMerge}
-                            >
-                                Merge
-                            </Button>
-                        </div>
+                                    <div className="flex justify-end gap-2 pt-4">
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setDuplicateDialogOpen(false)}
+                                        >
+                                            إلغاء
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleAddAsNew}
+                                        >
+                                            إضافة كعميل جديد
+                                        </Button>
+                                        <Button
+                                            onClick={handleMerge}
+                                        >
+                                            دمج
+                                        </Button>
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                 </DialogContent>
             </Dialog>
@@ -1414,7 +1475,7 @@ export default function DriversCreate({
                         </DialogHeader>
                         <div className="mt-4">
                             <iframe
-                                src={`/drivers/drivers/${viewingDriverId}`}
+                                src={`/leads/leads/${viewingDriverId}`}
                                 className="w-full h-[600px] border rounded"
                                 title="Lead Details"
                             />
@@ -1450,7 +1511,7 @@ export default function DriversCreate({
                                                             className="w-4 h-4"
                                                         />
                                                         {driver.id ? (
-                                                            <Link href={`/drivers/drivers/${driver.id}`} className="text-blue-600 hover:underline" target="_blank">
+                                                            <Link href={`/leads/leads/${driver.id}`} className="text-blue-600 hover:underline" target="_blank">
                                                                 Record #{driver.id}
                                                             </Link>
                                                         ) : (
@@ -1832,7 +1893,7 @@ export default function DriversCreate({
                                                 ),
                                             };
                                             
-                                            router.post('/drivers/drivers', newDriverData, {
+                                            router.post('/leads/leads', newDriverData, {
                                                 preserveScroll: true,
                                                 preserveState: true,
                                                 onSuccess: (page) => {
@@ -1841,7 +1902,7 @@ export default function DriversCreate({
                                                     const existingDriverIds = mergeDrivers.filter(d => d.id).map(d => d.id);
                                                     
                                                     if (newDriverId && existingDriverIds.length > 0) {
-                                                        router.post('/drivers/drivers/merge', {
+                                                        router.post('/leads/leads/merge', {
                                                             primary_driver_id: newDriverId,
                                                             driver_ids: existingDriverIds,
                                                             field_mappings: {},
@@ -1849,7 +1910,7 @@ export default function DriversCreate({
                                                         }, {
                                                             onSuccess: () => {
                                                                 setMergeDialogOpen(false);
-                                                                router.visit('/drivers/drivers');
+                                                                router.visit('/leads/leads');
                                                             },
                                                             onError: (errors) => {
                                                                 console.error('Merge error:', errors);
@@ -1858,7 +1919,7 @@ export default function DriversCreate({
                                                         });
                                                     } else {
                                                         setMergeDialogOpen(false);
-                                                        router.visit('/drivers/drivers');
+                                                        router.visit('/leads/leads');
                                                     }
                                                 },
                                                 onError: (errors) => {
@@ -1871,7 +1932,7 @@ export default function DriversCreate({
                                             const existingDriverIds = mergeDrivers.filter(d => d.id && d.id !== primaryRecordId).map(d => d.id);
                                             
                                             if (existingDriverIds.length > 0) {
-                                                router.post('/drivers/drivers/merge', {
+                                                router.post('/leads/leads/merge', {
                                                     primary_driver_id: primaryRecordId,
                                                     driver_ids: existingDriverIds,
                                                     field_mappings: fieldMappings,
@@ -1879,7 +1940,7 @@ export default function DriversCreate({
                                                 }, {
                                                     onSuccess: () => {
                                                         setMergeDialogOpen(false);
-                                                        router.visit('/drivers/drivers');
+                                                        router.visit('/leads/leads');
                                                     },
                                                     onError: (errors) => {
                                                         console.error('Merge error:', errors);

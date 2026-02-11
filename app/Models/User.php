@@ -138,7 +138,11 @@ class User extends Authenticatable
         }
 
         if ($this->isCompanyAdmin()) {
-            return $this->company?->hasModule($moduleName) ?? false;
+            if ($this->company?->hasModule($moduleName)) {
+                return true;
+            }
+            // Company admin with "all permissions" via role may not have company_modules set;
+            // fall through to permission checks so they still see Leads, Marketing, etc.
         }
 
         // Check if user has any permission for this module

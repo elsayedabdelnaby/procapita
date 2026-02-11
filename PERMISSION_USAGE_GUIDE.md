@@ -133,7 +133,7 @@ Use permission checks in these places:
 ```typescript
 // In breadcrumbs or other navigation
 {hasEntityPermission('drivers', 'drivers') && (
-    <Link href="/drivers/drivers">Drivers</Link>
+    <Link href="/leads/leads">Drivers</Link>
 )}
 ```
 
@@ -220,7 +220,7 @@ export default function DriversTable({ drivers }) {
                             <div className="flex gap-2">
                                 {/* Show edit only if user has update permission */}
                                 {can('drivers', 'drivers', 'update') && (
-                                    <Link href={`/drivers/drivers/${driver.id}/edit`}>
+                                    <Link href={`/leads/leads/${driver.id}/edit`}>
                                         <Button variant="ghost" size="sm">Edit</Button>
                                     </Link>
                                 )}
@@ -238,7 +238,7 @@ export default function DriversTable({ drivers }) {
                                 
                                 {/* Show view stages only if user has view-stages permission */}
                                 {can('drivers', 'drivers', 'view-stages') && (
-                                    <Link href={`/drivers/drivers/${driver.id}/stages`}>
+                                    <Link href={`/leads/leads/${driver.id}/stages`}>
                                         <Button variant="ghost" size="sm">View Stages</Button>
                                     </Link>
                                 )}
@@ -307,7 +307,7 @@ export default function DriversIndex({ drivers }) {
                 <div className="flex gap-2">
                     {/* Show create button */}
                     {can('drivers', 'drivers', 'create') && (
-                        <Link href="/drivers/drivers/create">
+                        <Link href="/leads/leads/create">
                             <Button>Create Driver</Button>
                         </Link>
                     )}

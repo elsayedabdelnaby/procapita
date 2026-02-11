@@ -258,7 +258,7 @@ export default function DocumentRequirementsCreate({ ridingCompany, ridingCompan
                         <Link
                             href={ridingCompany 
                                 ? `/ridingcarcompanies/riding-companies/${ridingCompany.id}/document-requirements`
-                                : '/drivers/driver-documents'
+                                : '/leads/lead-documents'
                             }
                         >
                             <Button type="button" variant="outline">

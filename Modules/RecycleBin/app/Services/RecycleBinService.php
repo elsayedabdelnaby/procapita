@@ -25,19 +25,13 @@ class RecycleBinService
             'lead_sources' => [
                 'model' => \Modules\Drivers\app\Models\LeadSource::class,
                 'name' => 'Lead Sources',
-                'module' => 'drivers',
+                'module' => 'leads',
                 'display_field' => 'name',
             ],
             'lead_statuses' => [
                 'model' => \Modules\Drivers\app\Models\LeadStatus::class,
                 'name' => 'Lead Statuses',
-                'module' => 'drivers',
-                'display_field' => 'name',
-            ],
-            'riding_companies' => [
-                'model' => \Modules\RidingCarCompanies\app\Models\RidingCompany::class,
-                'name' => 'Riding Companies',
-                'module' => 'riding_companies',
+                'module' => 'leads',
                 'display_field' => 'name',
             ],
             'campaigns' => [
@@ -66,20 +60,20 @@ class RecycleBinService
             ],
             'drivers' => [
                 'model' => \Modules\Drivers\app\Models\Driver::class,
-                'name' => 'Drivers',
-                'module' => 'drivers',
+                'name' => 'Leads',
+                'module' => 'leads',
                 'display_field' => 'full_name',
             ],
             'lead_stages' => [
                 'model' => \Modules\Drivers\app\Models\LeadStage::class,
                 'name' => 'Lead Stages',
-                'module' => 'drivers',
+                'module' => 'leads',
                 'display_field' => 'name',
             ],
             'driver_documents' => [
                 'model' => \Modules\Drivers\app\Models\DriverDocument::class,
-                'name' => 'Driver Documents',
-                'module' => 'drivers',
+                'name' => 'Lead Documents',
+                'module' => 'leads',
                 'display_field' => 'original_filename', // Using original_filename as display field
             ],
             'company_users' => [

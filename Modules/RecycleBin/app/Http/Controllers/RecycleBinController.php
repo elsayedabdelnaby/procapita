@@ -30,9 +30,14 @@ class RecycleBinController extends Controller
         if ($modelType) {
             // For drivers, redirect to the dedicated Drivers RecycleBin page
             if ($modelType === 'drivers') {
-                return redirect()->route('drivers.drivers.recycle-bin');
+                return redirect()->route('leads.leads.recycle-bin');
             }
-            
+
+            // Riding Companies recycle bin is hidden for all users (including admin)
+            if ($modelType === 'riding_companies') {
+                return redirect()->route('recyclebin.index');
+            }
+
             // Show records for a specific model type
             $records = $this->recycleBinService->getDeletedRecords($modelType, $companyId);
             $models = $this->recycleBinService->getAvailableModels();

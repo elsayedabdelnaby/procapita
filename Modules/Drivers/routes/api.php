@@ -88,6 +88,20 @@ Route::middleware(['web', 'auth'])->prefix('drivers')->name('drivers.api.')->gro
             ->get(['id', 'name']);
     })->name('campaigns-by-company');
 
+    // Get all users (for super admin when "All Companies" is selected); always include current user so they can assign to themselves
+    Route::get('users/all', function () {
+        $user = Auth::user();
+        if (! $user->isSuperAdmin()) {
+            abort(403, 'Unauthorized');
+        }
+        $users = User::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        if (! $users->contains('id', $user->id)) {
+            $users->push($user);
+            $users = $users->sortBy('name')->values();
+        }
+        return $users->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]);
+    })->name('users-all');
+
     // Get users by company
     Route::get('companies/{company}/users', function ($companyId) {
         // Verify user has access to this company

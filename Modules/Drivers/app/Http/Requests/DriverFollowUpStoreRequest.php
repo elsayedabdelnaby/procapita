@@ -13,10 +13,12 @@ class DriverFollowUpStoreRequest extends FormRequest
 
     public function rules(): array
     {
+        $user = $this->user();
+
         return [
             'driver_id' => ['required', 'exists:drivers,id'],
             'assigned_to' => ['nullable', 'exists:users,id'],
-            'user_name' => ['required', 'string', 'max:255'],
+            'user_name' => [$user && $user->isSuperAdmin() ? 'nullable' : 'required', 'string', 'max:255'],
             'created_time' => ['required', 'date'],
             'riding_company' => ['nullable', 'string', 'max:255'],
             'lead_stage' => ['nullable', 'string', 'max:255'],

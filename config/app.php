@@ -17,6 +17,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | System Company Name (Procapita)
+    |--------------------------------------------------------------------------
+    | Essential company like super admin when cleaning the database.
+    */
+    'system_company_name' => env('SYSTEM_COMPANY_NAME', 'Procapita'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
     |

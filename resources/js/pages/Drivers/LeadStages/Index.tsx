@@ -39,16 +39,16 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
 
     const confirmDelete = () => {
         if (deleteDialog.stage) {
-            router.delete(`/drivers/lead-stages/${deleteDialog.stage.id}`);
+            router.delete(`/leads/lead-stages/${deleteDialog.stage.id}`);
         }
     };
 
     const handleToggleStatus = (id: number) => {
-        router.post(`/drivers/lead-stages/${id}/toggle-active`);
+        router.post(`/leads/lead-stages/${id}/toggle-active`);
     };
 
     const handleMoveUp = (id: number) => {
-        router.post(`/drivers/lead-stages/${id}/move-up`, {}, {
+        router.post(`/leads/lead-stages/${id}/move-up`, {}, {
             preserveScroll: true,
             onSuccess: () => {
                 router.reload({ only: ['leadStages'] });
@@ -57,7 +57,7 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
     };
 
     const handleMoveDown = (id: number) => {
-        router.post(`/drivers/lead-stages/${id}/move-down`, {}, {
+        router.post(`/leads/lead-stages/${id}/move-down`, {}, {
             preserveScroll: true,
             onSuccess: () => {
                 router.reload({ only: ['leadStages'] });
@@ -83,21 +83,21 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
                                 type="button"
                                 variant="outline"
                                 onClick={() => {
-                                    window.location.href = '/drivers/lead-stages/export';
+                                    window.location.href = '/leads/lead-stages/export';
                                 }}
                             >
                                 Export
                             </Button>
                         )}
                         {can('drivers', 'leadstages', 'import') && (
-                            <Link href="/drivers/lead-stages/import">
+                            <Link href="/leads/lead-stages/import">
                                 <Button type="button" variant="outline">
                                     Import
                                 </Button>
                             </Link>
                         )}
                         {can('drivers', 'leadstages', 'create') && (
-                            <Link href="/drivers/lead-stages/create">
+                            <Link href="/leads/lead-stages/create">
                                 <Button>Create Lead Stage</Button>
                             </Link>
                         )}
@@ -150,7 +150,7 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
                                     header: 'Name',
                                     accessor: (row) => (
                                         <Link
-                                            href={`/drivers/lead-stages/${row.id}`}
+                                            href={`/leads/lead-stages/${row.id}`}
                                             className="font-medium hover:underline"
                                         >
                                             {row.name}
@@ -193,7 +193,7 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
                                     accessor: (row) => (
                                         <div className="flex items-center gap-2">
                                             {can('drivers', 'leadstages', 'read') && (
-                                                <Link href={`/drivers/lead-stages/${row.id}`}>
+                                                <Link href={`/leads/lead-stages/${row.id}`}>
                                                     <Button type="button" variant="outline" size="sm">
                                                         View
                                                     </Button>
@@ -201,7 +201,7 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
                                             )}
                                             {can('drivers', 'leadstages', 'update') && (
                                                 <>
-                                                    <Link href={`/drivers/lead-stages/${row.id}/edit`}>
+                                                    <Link href={`/leads/lead-stages/${row.id}/edit`}>
                                                         <Button type="button" variant="outline" size="sm">
                                                             Edit
                                                         </Button>
@@ -235,7 +235,7 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
                         <div className="py-12 text-center">
                             <p className="text-neutral-500">No lead stages found.</p>
                             {can('drivers', 'leadstages', 'create') && (
-                                <Link href="/drivers/lead-stages/create" className="mt-4 inline-block">
+                                <Link href="/leads/lead-stages/create" className="mt-4 inline-block">
                                     <Button>Create First Lead Stage</Button>
                                 </Link>
                             )}

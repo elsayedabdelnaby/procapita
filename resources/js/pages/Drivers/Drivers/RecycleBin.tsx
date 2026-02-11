@@ -1362,7 +1362,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
     const handleMassEdit = () => {
         if (selectedDrivers.size > 0) {
             const ids = Array.from(selectedDrivers);
-            router.visit(`/drivers/drivers/mass-edit?ids=${ids.join(',')}`);
+            router.visit(`/leads/leads/mass-edit?ids=${ids.join(',')}`);
         }
     };
 
@@ -1477,7 +1477,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
         }
 
         router.put(
-            `/drivers/drivers/${driverId}`,
+            `/leads/leads/${driverId}`,
             submitData,
             {
                 preserveScroll: true,
@@ -1542,7 +1542,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
         setLoadingDetails(true);
         
         try {
-            const response = await fetch(`/drivers/drivers/${driver.id}/details`, {
+            const response = await fetch(`/leads/leads/${driver.id}/details`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -1660,7 +1660,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
         formData.append('file', file);
 
         axios
-            .post(`/drivers/driver-documents/${docId}/upload`, formData, {
+            .post(`/leads/lead-documents/${docId}/upload`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
@@ -1668,7 +1668,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
             .then(() => {
                 // Reload driver details
                 if (viewingDriver) {
-                    fetch(`/drivers/drivers/${viewingDriver.id}/details`, {
+                    fetch(`/leads/leads/${viewingDriver.id}/details`, {
                         method: 'GET',
                         headers: {
                             'Accept': 'application/json',
@@ -1696,10 +1696,10 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
 
     const handleUpdateStatus = async (docId: number, status: string) => {
         try {
-            await axios.post(`/drivers/driver-documents/${docId}/update-status`, { status });
+            await axios.post(`/leads/lead-documents/${docId}/update-status`, { status });
             // Reload driver details to get updated documents
             if (viewingDriver) {
-                const response = await fetch(`/drivers/drivers/${viewingDriver.id}/details`, {
+                const response = await fetch(`/leads/leads/${viewingDriver.id}/details`, {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json',
@@ -1719,7 +1719,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
     };
 
     const handleViewFile = (docId: number) => {
-        const url = `/drivers/driver-documents/${docId}/view`;
+        const url = `/leads/lead-documents/${docId}/view`;
         const doc = driverDetails?.documents?.find((d: any) => d.id === docId);
         const extension = getFileExtension(doc?.original_filename, doc?.uploaded_path)?.toLowerCase();
         setViewingDocument({ id: docId, url, extension: extension || undefined });
@@ -1752,7 +1752,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Link href="/drivers/drivers">
+                        <Link href="/leads/leads">
                             <Button variant="outline">Back to Leads</Button>
                         </Link>
                     </div>
@@ -2561,7 +2561,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                             } catch (e) {
                                                                 console.error('Error saving filtered IDs:', e);
                                                             }
-                                                            router.visit(`/drivers/drivers/${driver.id}`);
+                                                            router.visit(`/leads/leads/${driver.id}`);
                                                         }, 300);
                                                         
                                                         lastClickTimeRef.current = now;
@@ -2974,7 +2974,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                     description={`Are you sure you want to delete ${selectedDrivers.size} lead(s)? This action cannot be undone.`}
                 />
 
-                {/* Merge Drivers Dialog */}
+                {/* Merge Leads Dialog */}
                 <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
                     <DialogContent className="!max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
                         <DialogHeader>
@@ -3001,7 +3001,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                 defaultChecked={index === 0}
                                                                 className="w-4 h-4"
                                                             />
-                                                            <Link href={`/drivers/drivers/${driver.id}`} className="text-blue-600 hover:underline" target="_blank">
+                                                            <Link href={`/leads/leads/${driver.id}`} className="text-blue-600 hover:underline" target="_blank">
                                                                 Record #{driver.id}
                                                             </Link>
                                                         </div>
@@ -3345,7 +3345,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                             const driverIds = mergeDrivers.map(d => d.id);
                                             
                                             try {
-                                                await router.post('/drivers/drivers/merge', {
+                                                await router.post('/leads/leads/merge', {
                                                     primary_driver_id: primaryRecordId,
                                                     driver_ids: driverIds,
                                                     field_mappings: fieldMappings,
@@ -3377,7 +3377,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                 <ImportModal
                     open={importModalOpen}
                     onOpenChange={setImportModalOpen}
-                    importStoreUrl="/drivers/drivers/import"
+                    importStoreUrl="/leads/leads/import"
                     availableFields={availableFields}
                     entityName="Leads"
                 />
@@ -3598,7 +3598,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                         <Card className="p-6">
                                             <div className="mb-4 flex items-center justify-between">
                                                 <h2 className="text-lg font-semibold">Documents</h2>
-                                                <Link href={`/drivers/driver-documents?driver_id=${driverDetails.id}`}>
+                                                <Link href={`/leads/lead-documents?driver_id=${driverDetails.id}`}>
                                                     <Button variant="outline" size="sm">
                                                         View All Documents
                                                     </Button>
@@ -3906,7 +3906,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                     `} 
                                                                     onClick={() => {
                                                                     setViewDialogOpen(false);
-                                                                    router.visit(`/drivers/drivers/${dup.id}`);
+                                                                    router.visit(`/leads/leads/${dup.id}`);
                                                                 }}>
                                                                     <td className="px-4 py-3 text-sm">{dup.full_name || '-'}</td>
                                                                     <td className="px-4 py-3 text-sm">{dup.phone || '-'}</td>
@@ -3929,7 +3929,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                         <button
                                                                             onClick={() => {
                                                                                 setViewDialogOpen(false);
-                                                                                router.visit(`/drivers/drivers/${dup.id}`);
+                                                                                router.visit(`/leads/leads/${dup.id}`);
                                                                             }}
                                                                             className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                                                                             title="View Details"
@@ -3943,7 +3943,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                     </table>
                                                 </div>
                                             ) : (
-                                                <p className="text-neutral-500 dark:text-neutral-400">No duplicate drivers found.</p>
+                                                <p className="text-neutral-500 dark:text-neutral-400">No duplicate leads found.</p>
                                             )}
                                         </Card>
                                     )}
@@ -4149,7 +4149,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/drivers/drivers/${driver.id}`, {
+        put(`/leads/leads/${driver.id}`, {
             preserveScroll: true,
             onSuccess: () => {
                 onOpenChange(false);

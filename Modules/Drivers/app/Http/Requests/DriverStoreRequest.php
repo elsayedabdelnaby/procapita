@@ -147,10 +147,12 @@ class DriverStoreRequest extends FormRequest
                     }
                 },
             ],
+            'riding_company_id' => ['nullable', 'exists:riding_companies,id'],
         ];
 
         if ($user->isSuperAdmin()) {
-            $rules['company_id'] = ['required', 'exists:companies,id'];
+            // Nullable so super admin can create lead with "All Companies" and assign to self (Reseller Company empty)
+            $rules['company_id'] = ['nullable', 'exists:companies,id'];
         }
 
         return $rules;

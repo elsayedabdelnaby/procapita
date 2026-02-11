@@ -152,6 +152,7 @@ class DriverUpdateRequest extends FormRequest
                     }
                 },
             ],
+            'riding_company_id' => ['nullable', 'exists:riding_companies,id'],
         ];
 
         if ($user->isSuperAdmin()) {

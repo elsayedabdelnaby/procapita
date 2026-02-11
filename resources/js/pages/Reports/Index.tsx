@@ -34,6 +34,7 @@ import {
     ChevronDown,
     ChevronLeft,
     ChevronRight,
+    Copy,
     Eye,
     Folder,
     MoreVertical,
@@ -59,23 +60,35 @@ const MAX_RELATED_MODULES = 2;
 const MODULE_FIELDS: Record<string, { value: string; label: string }[]> = {
     leads: [
         { value: 'full_name', label: 'Full Name' },
+        { value: 'phone', label: 'Phone' },
+        { value: 'whatsapp_phone', label: 'WhatsApp Phone' },
+        { value: 'email', label: 'Email' },
+        { value: 'city', label: 'City' },
+        { value: 'governorate', label: 'Governorate' },
+        { value: 'company', label: 'Reseller' },
         { value: 'campaign', label: 'Campaign' },
         { value: 'lead_source', label: 'Lead Source' },
+        { value: 'lead_status', label: 'Lead Status' },
+        { value: 'lead_stage', label: 'Lead Stage' },
         { value: 'assigned_to', label: 'Assigned To (Sales Person)' },
         { value: 'team_leader', label: 'Team Leader' },
         { value: 'account_manager', label: 'Account Manager' },
-        { value: 'lead_status', label: 'Lead Status' },
-        { value: 'lead_stage', label: 'Lead Stage' },
-        { value: 'riding_company', label: 'Reseller' },
-        { value: 'city', label: 'City' },
-        { value: 'governorate', label: 'Governorate' },
+        { value: 'last_assigned_by', label: 'Last Assigned By' },
+        { value: 'notes', label: 'Notes' },
+        { value: 'lead_status_comment', label: 'Feedback Comment' },
+        { value: 'cancel_reason', label: 'Cancel Reason' },
+        { value: 'driver_num', label: 'Lead Num' },
+        { value: 'duplicate', label: 'Duplicate Count' },
+        { value: 'resigned_leads', label: 'Resigned Leads' },
+        { value: 'next_follow_up', label: 'Next Follow-up Date' },
+        { value: 'last_follow_up', label: 'Last Follow-up Date' },
+        { value: 'created_at', label: 'Created Date' },
     ],
     follow_ups: [
         { value: 'assigned_to', label: 'Assigned To (Sales Person)' },
         { value: 'user_name', label: 'User Name' },
         { value: 'team_leader', label: 'Team Leader' },
         { value: 'account_manager', label: 'Account Manager' },
-        { value: 'riding_company', label: 'Reseller' },
         { value: 'lead_stage', label: 'Lead Stage' },
         { value: 'lead_status', label: 'Lead Status' },
         { value: 'created_time', label: 'Created Time' },
@@ -94,6 +107,9 @@ interface ReportItem {
     report_name: string;
     primary_module: string;
     folder_name: string;
+    owner?: string;
+    user_id?: number;
+    is_owner?: boolean;
 }
 
 interface ReportsIndexProps {
@@ -579,6 +595,9 @@ export default function ReportsIndex({
                                     <th className="border-b border-sidebar-border p-3 text-left font-medium text-muted-foreground">
                                         Folder Name
                                     </th>
+                                    <th className="border-b border-sidebar-border p-3 text-left font-medium text-muted-foreground">
+                                        Owner <span className="text-muted-foreground/80 font-normal">(صاحب التقرير)</span>
+                                    </th>
                                 </tr>
                                 <tr className="bg-muted/30">
                                     <th className="w-10 p-1" />
@@ -626,6 +645,7 @@ export default function ReportsIndex({
                                             className="h-8 text-sm"
                                         />
                                     </th>
+                                    <th className="p-2" />
                                 </tr>
                             </thead>
                             <tbody>
@@ -669,14 +689,25 @@ export default function ReportsIndex({
                                                 >
                                                     {initialSort === 'updated_at' && initialSortDir === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
                                                 </Button>
+                                                {report.is_owner && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7"
+                                                        title="Edit"
+                                                        onClick={() => handleEditReport(report)}
+                                                    >
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Button>
+                                                )}
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-7 w-7"
-                                                    title="Edit"
-                                                    onClick={() => handleEditReport(report)}
+                                                    title="Duplicate"
+                                                    onClick={() => handleDuplicateReport(report)}
                                                 >
-                                                    <Pencil className="h-4 w-4" />
+                                                    <Copy className="h-4 w-4" />
                                                 </Button>
                                                 <Button
                                                     variant="ghost"
@@ -725,19 +756,24 @@ export default function ReportsIndex({
                                                                 </>
                                                             )}
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => handleEditReport(report)}>
-                                                            <Pencil className="mr-2 h-4 w-4" />
-                                                            Edit
-                                                        </DropdownMenuItem>
+                                                        {report.is_owner && (
+                                                            <DropdownMenuItem onClick={() => handleEditReport(report)}>
+                                                                <Pencil className="mr-2 h-4 w-4" />
+                                                                Edit
+                                                            </DropdownMenuItem>
+                                                        )}
                                                         <DropdownMenuItem onClick={() => handleDuplicateReport(report)}>
+                                                            <Copy className="mr-2 h-4 w-4" />
                                                             Duplicate
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            className="text-destructive focus:text-destructive"
-                                                            onClick={() => handleDeleteReport(report)}
-                                                        >
-                                                            Delete
-                                                        </DropdownMenuItem>
+                                                        {report.is_owner && (
+                                                            <DropdownMenuItem
+                                                                className="text-destructive focus:text-destructive"
+                                                                onClick={() => handleDeleteReport(report)}
+                                                            >
+                                                                Delete
+                                                            </DropdownMenuItem>
+                                                        )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </div>
@@ -758,6 +794,9 @@ export default function ReportsIndex({
                                         </td>
                                         <td className="p-3 text-muted-foreground">
                                             {report.folder_name}
+                                        </td>
+                                        <td className="p-3 text-muted-foreground">
+                                            {report.owner ?? '—'}
                                         </td>
                                     </tr>
                                 ))}

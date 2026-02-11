@@ -37,7 +37,7 @@ export default function LeadSourcesCreate({ companies }: LeadSourcesCreateProps)
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post('/drivers/lead-sources');
+        post('/leads/lead-sources');
     };
 
     return (
@@ -177,7 +177,7 @@ export default function LeadSourcesCreate({ companies }: LeadSourcesCreateProps)
                     </Card>
 
                     <div className="flex justify-end gap-4">
-                        <Link href="/drivers/lead-sources">
+                        <Link href="/leads/lead-sources">
                             <Button type="button" variant="outline">
                                 Cancel
                             </Button>

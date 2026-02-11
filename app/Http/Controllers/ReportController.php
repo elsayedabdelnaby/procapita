@@ -22,36 +22,43 @@ class ReportController extends Controller
         $user = Auth::user();
         $companyId = $this->getCompanyId();
 
-        $folders = $this->getFoldersForUser($companyId);
+        $folders = $this->getFoldersForUser($companyId, $user);
 
         $folderId = $request->query('folder_id', 'all');
         $perPage = (int) $request->query('per_page', 50);
         $perPage = in_array($perPage, [10, 25, 50, 100], true) ? $perPage : 50;
         $page = max(1, (int) $request->query('page', 1));
 
-        $reportsQuery = Report::query()
-            ->with('reportFolder')
-            ->where(function ($q) use ($companyId) {
-                if ($companyId !== null) {
-                    $q->where('company_id', $companyId);
-                } else {
-                    $q->whereNull('company_id');
-                }
-            })
-            ->where(function ($q) use ($user) {
+        $reportsQuery = Report::query()->with(['reportFolder', 'user']);
+
+        // Visible: own reports (scoped by company for non-SA) OR shared reports (with 'all' or with any user) visible to everyone regardless of company
+        $jsonAll = '"all"';
+        $sharedCondition = function ($q) use ($jsonAll) {
+            $q->whereRaw("JSON_CONTAINS(COALESCE(share_report, '[]'), ?, '$')", [$jsonAll])
+                ->orWhereRaw("JSON_LENGTH(COALESCE(share_report, '[]')) > 0");
+        };
+        $reportsQuery->where(function ($q) use ($user, $companyId, $sharedCondition) {
+            if ($user->isSuperAdmin()) {
                 $q->where('user_id', $user->id)
-                    ->orWhereJsonContains('share_report', 'all')
-                    ->orWhereJsonContains('share_report', (string) $user->id)
-                    ->orWhereJsonContains('share_report', $user->id);
-            });
+                    ->orWhere($sharedCondition);
+            } else {
+                $q->where(function ($q2) use ($user, $companyId) {
+                    $q2->where('user_id', $user->id);
+                    if ($companyId !== null) {
+                        $q2->where(function ($q3) use ($companyId) {
+                            $q3->where('company_id', $companyId)->orWhereNull('company_id');
+                        });
+                    } else {
+                        $q2->whereNull('company_id');
+                    }
+                })
+                    ->orWhere($sharedCondition);
+            }
+        });
 
         if ($folderId !== 'all') {
             if ($folderId === 'shared') {
-                $reportsQuery->where(function ($q) use ($user) {
-                    $q->whereJsonContains('share_report', 'all')
-                        ->orWhereJsonContains('share_report', (string) $user->id)
-                        ->orWhereJsonContains('share_report', $user->id);
-                })->where('user_id', '!=', $user->id);
+                $reportsQuery->where('user_id', '!=', $user->id);
             } else {
                 $reportsQuery->where('report_folder_id', (int) $folderId);
             }
@@ -89,7 +96,7 @@ class ReportController extends Controller
         $total = $reportsQuery->count();
         $reports = $reportsQuery->skip(($page - 1) * $perPage)->take($perPage)->get();
 
-        $reportsData = $reports->map(function (Report $r) {
+        $reportsData = $reports->map(function (Report $r) use ($user) {
             return [
                 'id' => $r->id,
                 'report_type' => $r->report_type,
@@ -97,6 +104,9 @@ class ReportController extends Controller
                 'primary_module' => ucfirst(str_replace('_', ' ', $r->primary_module)),
                 'folder_name' => $r->reportFolder?->name ?? '',
                 'folder_id' => $r->report_folder_id,
+                'user_id' => $r->user_id,
+                'is_owner' => $r->user_id === $user->id,
+                'owner' => $r->user?->name ?? '—',
             ];
         });
 
@@ -139,10 +149,13 @@ class ReportController extends Controller
     /**
      * @return \Illuminate\Support\Collection<int, array{id: string|int, name: string}>
      */
-    private function getFoldersForUser(?int $companyId): \Illuminate\Support\Collection
+    private function getFoldersForUser(?int $companyId, ?\App\Models\User $user = null): \Illuminate\Support\Collection
     {
+        $user = $user ?? Auth::user();
         $query = ReportFolder::query()->orderBy('sort_order')->orderBy('name');
-        if ($companyId !== null) {
+        if ($user->isSuperAdmin() && $companyId === null) {
+            // Super admin with All Companies: show all folders
+        } elseif ($companyId !== null) {
             $query->where(function ($q) use ($companyId) {
                 $q->where('company_id', $companyId)->orWhereNull('company_id');
             });
@@ -218,11 +231,13 @@ class ReportController extends Controller
     public function show(Request $request, Report $report): Response
     {
         $user = Auth::user();
-        $canAccess = $report->user_id === $user->id
+        $canAccess = $user->isSuperAdmin()
+            || $report->user_id === $user->id
             || ($report->company_id && $report->company_id === $user->company_id)
             || in_array('all', $report->share_report ?? [], true)
             || in_array((string) $user->id, $report->share_report ?? [], true)
-            || in_array($user->id, $report->share_report ?? [], true);
+            || in_array($user->id, $report->share_report ?? [], true)
+            || (is_array($report->share_report) && count($report->share_report) > 0);
         if (! $canAccess) {
             abort(403);
         }
@@ -256,11 +271,13 @@ class ReportController extends Controller
     public function updatePreference(Request $request, Report $report): RedirectResponse
     {
         $user = Auth::user();
-        $canAccess = $report->user_id === $user->id
+        $canAccess = $user->isSuperAdmin()
+            || $report->user_id === $user->id
             || ($report->company_id && $report->company_id === $user->company_id)
             || in_array('all', $report->share_report ?? [], true)
             || in_array((string) $user->id, $report->share_report ?? [], true)
-            || in_array($user->id, $report->share_report ?? [], true);
+            || in_array($user->id, $report->share_report ?? [], true)
+            || (is_array($report->share_report) && count($report->share_report) > 0);
         if (! $canAccess) {
             abort(403);
         }
@@ -527,8 +544,17 @@ class ReportController extends Controller
             $drivers = 'drivers';
             $map = [
                 'full_name' => ['select' => "COALESCE({$drivers}.full_name, '')", 'join' => []],
+                'phone' => ['select' => "COALESCE({$drivers}.phone, '')", 'join' => []],
+                'whatsapp_phone' => ['select' => "COALESCE({$drivers}.whatsapp_phone, '')", 'join' => []],
+                'email' => ['select' => "COALESCE({$drivers}.email, '')", 'join' => []],
                 'city' => ['select' => "COALESCE({$drivers}.city, '')", 'join' => []],
                 'governorate' => ['select' => "COALESCE({$drivers}.governorate, '')", 'join' => []],
+                'notes' => ['select' => "COALESCE(LEFT({$drivers}.notes, 255), '')", 'join' => []],
+                'lead_status_comment' => ['select' => "COALESCE(LEFT({$drivers}.lead_status_comment, 255), '')", 'join' => []],
+                'cancel_reason' => ['select' => "COALESCE({$drivers}.cancel_reason, '')", 'join' => []],
+                'driver_num' => ['select' => "COALESCE({$drivers}.driver_num, '')", 'join' => []],
+                'duplicate' => ['select' => "COALESCE(CAST({$drivers}.duplicate AS CHAR), '0')", 'join' => []],
+                'resigned_leads' => ['select' => "COALESCE({$drivers}.resigned_leads, '')", 'join' => []],
                 'campaign' => ['select' => 'COALESCE(campaigns.name, \'(none)\')', 'join' => ['campaigns' => "{$drivers}.campaign_id = campaigns.id"]],
                 'lead_source' => ['select' => 'COALESCE(lead_sources.name, \'(none)\')', 'join' => ['lead_sources' => "{$drivers}.lead_source_id = lead_sources.id"]],
                 'assigned_to' => ['select' => 'COALESCE(assigned_user.name, \'(none)\')', 'join' => ['users as assigned_user' => "{$drivers}.assigned_to = assigned_user.id"]],
@@ -536,7 +562,12 @@ class ReportController extends Controller
                 'account_manager' => ['select' => 'COALESCE(account_manager_user.name, \'(none)\')', 'join' => ['users as account_manager_user' => "{$drivers}.account_manager_id = account_manager_user.id"]],
                 'lead_status' => ['select' => 'COALESCE(lead_statuses.name, \'(none)\')', 'join' => ['lead_statuses' => "{$drivers}.lead_status_id = lead_statuses.id"]],
                 'lead_stage' => ['select' => 'COALESCE(lead_stages.name, \'(none)\')', 'join' => ['lead_stages' => "{$drivers}.lead_stage_id = lead_stages.id"]],
-                'riding_company' => ['select' => 'COALESCE(riding_companies.name, \'(none)\')', 'join' => ['riding_companies' => "{$drivers}.riding_company_id = riding_companies.id"]],
+                'company' => ['select' => 'COALESCE(companies.name, \'(none)\')', 'join' => ['companies' => "{$drivers}.company_id = companies.id"]],
+                'next_follow_up' => ['select' => "DATE_FORMAT({$drivers}.next_follow_up, '%Y-%m-%d')", 'join' => []],
+                'last_follow_up' => ['select' => "DATE_FORMAT({$drivers}.last_follow_up, '%Y-%m-%d')", 'join' => []],
+                'created_at' => ['select' => "DATE_FORMAT({$drivers}.created_at, '%Y-%m-%d')", 'join' => []],
+                'last_assigned_by' => ['select' => 'COALESCE(last_assigned_by_user.name, \'(none)\')', 'join' => ['users as last_assigned_by_user' => "{$drivers}.last_assigned_by = last_assigned_by_user.id"]],
+                'riding_company' => ['select' => 'COALESCE(companies.name, \'(none)\')', 'join' => ['companies' => "{$drivers}.company_id = companies.id"]],
             ];
             $def = $map[$field] ?? null;
             if ($def) {
@@ -623,9 +654,12 @@ class ReportController extends Controller
     public function duplicate(Report $report): RedirectResponse
     {
         $user = Auth::user();
-        $canAccess = $report->user_id === $user->id
+        $canAccess = $user->isSuperAdmin()
+            || $report->user_id === $user->id
             || in_array('all', $report->share_report ?? [], true)
-            || in_array((string) $user->id, $report->share_report ?? [], true);
+            || in_array((string) $user->id, $report->share_report ?? [], true)
+            || in_array($user->id, $report->share_report ?? [], true)
+            || (is_array($report->share_report) && count($report->share_report) > 0);
         if (! $canAccess) {
             abort(403);
         }
@@ -633,7 +667,7 @@ class ReportController extends Controller
         $newReport = $report->replicate();
         $newReport->report_name = $report->report_name . ' (Copy)';
         $newReport->user_id = $user->id;
-        $newReport->company_id = $this->getCompanyId();
+        $newReport->company_id = $user->company_id ?? $this->getCompanyId();
         $newReport->save();
 
         return redirect()->route('reports.index')->with('success', 'Report duplicated.');

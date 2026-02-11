@@ -30,7 +30,7 @@ export default function DriverDocumentsCreate({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post('/drivers/driver-documents');
+        post('/leads/lead-documents');
     };
 
     return (
@@ -222,7 +222,7 @@ export default function DriverDocumentsCreate({
                     </Card>
 
                     <div className="flex justify-end gap-4">
-                        <Link href="/drivers/driver-documents">
+                        <Link href="/leads/lead-documents">
                             <Button type="button" variant="outline">
                                 Cancel
                             </Button>

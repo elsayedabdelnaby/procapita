@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 
 interface Driver {
     id: number;
@@ -25,6 +25,8 @@ export default function DriverFollowUpsCreate({
     drivers,
     users,
 }: DriverFollowUpsCreateProps) {
+    const page = usePage();
+    const isSuperAdmin = (page.props as any).auth?.user?.is_super_admin ?? false;
     const { data, setData, post, processing, errors } = useForm({
         driver_id: '',
         assigned_to: '',
@@ -36,7 +38,7 @@ export default function DriverFollowUpsCreate({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post('/drivers/driver-follow-ups');
+        post('/leads/lead-follow-ups');
     };
 
     return (
@@ -98,13 +100,13 @@ export default function DriverFollowUpsCreate({
                             </div>
 
                             <FormField
-                                label="User Name *"
+                                label={isSuperAdmin ? 'User Name (Signed 2)' : 'User Name *'}
                                 name="user_name"
                                 value={data.user_name}
                                 onChange={(e) => setData('user_name', e.target.value)}
                                 error={errors.user_name}
                                 placeholder="Enter the name of the user who made the change"
-                                required
+                                required={!isSuperAdmin}
                             />
 
                             <div className="space-y-2">
@@ -150,7 +152,7 @@ export default function DriverFollowUpsCreate({
                         </div>
 
                         <div className="flex justify-end gap-4">
-                            <Link href="/drivers/driver-follow-ups">
+                            <Link href="/leads/lead-follow-ups">
                                 <Button type="button" variant="outline">
                                     Cancel
                                 </Button>

@@ -35,7 +35,7 @@ export default function LeadSourcesEdit({ leadSource, companies }: LeadSourcesEd
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/drivers/lead-sources/${leadSource.id}`);
+        put(`/leads/lead-sources/${leadSource.id}`);
     };
 
     return (
@@ -169,7 +169,7 @@ export default function LeadSourcesEdit({ leadSource, companies }: LeadSourcesEd
                     </Card>
 
                     <div className="flex justify-end gap-4">
-                        <Link href="/drivers/lead-sources">
+                        <Link href="/leads/lead-sources">
                             <Button type="button" variant="outline">
                                 Cancel
                             </Button>

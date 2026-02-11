@@ -34,41 +34,9 @@ class DriverListService
             ->orderBy('name')
             ->get();
 
-        // Log the lists found before filtering
-        \Log::info('Lists found before filtering', [
-            'user_id' => $user->id,
-            'user_name' => $user->name,
-            'total_lists' => $lists->count(),
-            'list_ids' => $lists->pluck('id')->toArray(),
-            'list_details' => $lists->map(function ($list) {
-                return [
-                    'id' => $list->id,
-                    'name' => $list->name,
-                    'company_id' => $list->company_id,
-                    'is_shared' => $list->is_shared,
-                    'shared_with_users' => $list->shared_with_users,
-                    'created_by' => $list->created_by,
-                ];
-            })->toArray(),
-        ]);
-
         // Filter by access
         $accessibleLists = $lists->filter(function ($list) use ($user) {
-            $isAccessible = $list->isAccessibleBy($user);
-            
-            // Log for debugging
-            \Log::info('Checking list access', [
-                'list_id' => $list->id,
-                'list_name' => $list->name,
-                'user_id' => $user->id,
-                'user_name' => $user->name,
-                'is_shared' => $list->is_shared,
-                'shared_with_users' => $list->shared_with_users,
-                'created_by' => $list->created_by,
-                'is_accessible' => $isAccessible,
-            ]);
-            
-            return $isAccessible;
+            return $list->isAccessibleBy($user);
         })->values()->map(function ($list) {
             return [
                 'id' => $list->id,
@@ -81,15 +49,6 @@ class DriverListService
                 'any_conditions' => $list->any_conditions ?? [],
             ];
         })->toArray();
-
-        // Log final result
-        \Log::info('Accessible lists for user', [
-            'user_id' => $user->id,
-            'user_name' => $user->name,
-            'total_lists' => $lists->count(),
-            'accessible_lists' => count($accessibleLists),
-            'list_ids' => array_column($accessibleLists, 'id'),
-        ]);
 
         return $accessibleLists;
     }
@@ -221,7 +180,6 @@ class DriverListService
             ['value' => 'assigned_time', 'label' => 'Assigned Time', 'type' => 'datetime'],
             ['value' => 'team_leader_id', 'label' => 'Team Leader', 'type' => 'picklist'],
             ['value' => 'account_manager_id', 'label' => 'Account Manager', 'type' => 'picklist'],
-            ['value' => 'reseller', 'label' => 'Reseller', 'type' => 'text'],
             ['value' => 'resigned_leads', 'label' => 'Resigned Leads', 'type' => 'text'],
             ['value' => 'last_assigned_time', 'label' => 'Last Assigned Time', 'type' => 'datetime'],
             ['value' => 'last_assigned_date', 'label' => 'Last Assigned Date', 'type' => 'date'],

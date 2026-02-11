@@ -209,7 +209,7 @@ export default function LeadStatusesRecycleBin({ leadStatuses = [], driversCount
                             Deleted records that can be restored
                         </p>
                     </div>
-                    <Link href="/drivers/lead-statuses">
+                    <Link href="/leads/lead-statuses">
                         <Button variant="outline">Back to Lead Statuses</Button>
                     </Link>
                 </div>

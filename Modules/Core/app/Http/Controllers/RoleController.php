@@ -25,12 +25,13 @@ class RoleController extends Controller
     public function index(int $company): Response
     {
         $companyModel = $this->companyService->getCompanyById($company);
-        
+
         if (! $companyModel) {
             abort(404, 'Company not found.');
         }
 
-        $roles = $this->roleService->getAllRoles($company);
+        $user = \Illuminate\Support\Facades\Auth::user();
+        $roles = $this->roleService->getVisibleRolesForUser($user, $company);
 
         return Inertia::render('Core/Roles/Index', [
             'company' => $companyModel,
@@ -48,11 +49,12 @@ class RoleController extends Controller
 
         // Auto-create driver field permissions if they don't exist
         $this->ensureDriverFieldPermissionsExist();
-        
+
         // Auto-create quick-edit and edit permissions if they don't exist
         $this->ensureDriverPermissionsExist();
 
-        $roles = $this->roleService->getAllRoles($company);
+        $user = \Illuminate\Support\Facades\Auth::user();
+        $roles = $this->roleService->getVisibleRolesForUser($user, $company);
         $permissions = $this->permissionService->getGroupedPermissions();
 
         return Inertia::render('Core/Roles/Create', [
@@ -90,6 +92,12 @@ class RoleController extends Controller
             abort(404, 'Role not found.');
         }
 
+        $user = \Illuminate\Support\Facades\Auth::user();
+        $visibleRoles = $this->roleService->getVisibleRolesForUser($user, $company);
+        if (! $user?->isSuperAdmin() && $visibleRoles->pluck('id')->doesntContain($role)) {
+            abort(404, 'Role not found.');
+        }
+
         return Inertia::render('Core/Roles/Show', [
             'company' => $roleModel->company,
             'role' => $roleModel,
@@ -104,14 +112,20 @@ class RoleController extends Controller
             abort(404, 'Role not found.');
         }
 
+        $user = \Illuminate\Support\Facades\Auth::user();
+        $visibleRoles = $this->roleService->getVisibleRolesForUser($user, $company);
+        if (! $user?->isSuperAdmin() && $visibleRoles->pluck('id')->doesntContain($role)) {
+            abort(404, 'Role not found.');
+        }
+
         // Auto-create driver field permissions if they don't exist
         $this->ensureDriverFieldPermissionsExist();
-        
+
         // Auto-create quick-edit and edit permissions if they don't exist
         $this->ensureDriverPermissionsExist();
 
         $companyModel = $this->companyService->getCompanyById($company);
-        $availableRoles = $this->roleService->getAllRoles($company);
+        $availableRoles = $visibleRoles;
         $permissions = $this->permissionService->getGroupedPermissions();
 
         return Inertia::render('Core/Roles/Edit', [
@@ -224,8 +238,14 @@ class RoleController extends Controller
     {
         try {
             $roleModel = $this->roleService->getRoleById($role);
-            
+
             if (! $roleModel || $roleModel->team_id !== $company) {
+                abort(404, 'Role not found.');
+            }
+
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $visibleRoles = $this->roleService->getVisibleRolesForUser($user, $company);
+            if (! $user?->isSuperAdmin() && $visibleRoles->pluck('id')->doesntContain($role)) {
                 abort(404, 'Role not found.');
             }
 
@@ -244,12 +264,13 @@ class RoleController extends Controller
     public function hierarchy(int $company): Response
     {
         $companyModel = $this->companyService->getCompanyById($company);
-        
+
         if (! $companyModel) {
             abort(404, 'Company not found.');
         }
 
-        $hierarchy = $this->roleService->getRoleHierarchy($company);
+        $user = \Illuminate\Support\Facades\Auth::user();
+        $hierarchy = $this->roleService->getVisibleRoleHierarchyForUser($user, $company);
 
         return Inertia::render('Core/Roles/Hierarchy', [
             'company' => $companyModel,
@@ -261,8 +282,14 @@ class RoleController extends Controller
     {
         try {
             $roleModel = $this->roleService->getRoleById($role);
-            
+
             if (! $roleModel || $roleModel->team_id !== $company) {
+                return response()->json(['error' => 'Role not found.'], 404);
+            }
+
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $visibleRoles = $this->roleService->getVisibleRolesForUser($user, $company);
+            if (! $user?->isSuperAdmin() && $visibleRoles->pluck('id')->doesntContain($role)) {
                 return response()->json(['error' => 'Role not found.'], 404);
             }
 
@@ -272,11 +299,14 @@ class RoleController extends Controller
 
             $newParentId = $request->input('parent_id');
 
-            // Validate that parent belongs to same company if provided
+            // Validate that parent belongs to same company and is visible to user if provided
             if ($newParentId) {
                 $parentRole = $this->roleService->getRoleById($newParentId);
                 if (! $parentRole || $parentRole->team_id !== $company) {
                     return response()->json(['error' => 'Parent role must belong to the same company.'], 400);
+                }
+                if (! $user?->isSuperAdmin() && $visibleRoles->pluck('id')->doesntContain($newParentId)) {
+                    return response()->json(['error' => 'Parent role is not available.'], 400);
                 }
             }
 

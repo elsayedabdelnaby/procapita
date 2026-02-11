@@ -13,6 +13,7 @@ class CoreDatabaseSeeder extends Seeder
     {
         $this->call([
             CorePermissionsSeeder::class,
+            SystemCompanySeeder::class,
             SuperAdminSeeder::class,
             DemoCompaniesSeeder::class,
         ]);

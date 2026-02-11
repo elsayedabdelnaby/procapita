@@ -907,7 +907,7 @@ export function WhatsAppWindow({
                                 </div>
                                 {selectedDriver && (
                                     <a
-                                        href={`/drivers/drivers/${selectedDriver.id}`}
+                                        href={`/leads/leads/${selectedDriver.id}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center gap-1 px-2 py-1 text-xs bg-white/20 hover:bg-white/30 rounded text-white transition-colors"

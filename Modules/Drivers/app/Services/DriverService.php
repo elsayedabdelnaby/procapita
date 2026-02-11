@@ -10,6 +10,9 @@ use Modules\Drivers\app\Models\LeadStage;
 
 class DriverService
 {
+    /** Maximum leads loaded on index for performance; use filters to narrow down */
+    public const INDEX_LEADS_LIMIT = 2000;
+
     public function getAllDrivers(?int $companyId = null, ?\App\Models\User $user = null): Collection
     {
         $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'teamLeader', 'accountManager', 'assignedUsers', 'leadStatus', 'leadStage', 'lastAssignedByUser']);
@@ -36,7 +39,8 @@ class DriverService
             });
         }
 
-        return $query->orderBy('updated_at', 'desc')->get();
+        // Limit to most recent N for performance; use filters to narrow down
+        return $query->orderBy('updated_at', 'desc')->limit(self::INDEX_LEADS_LIMIT)->get();
     }
 
     public function getDriverById(int $id): ?Driver

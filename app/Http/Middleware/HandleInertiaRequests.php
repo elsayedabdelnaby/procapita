@@ -136,7 +136,7 @@ class HandleInertiaRequests extends Middleware
 
         if ($user && $user->isSuperAdmin()) {
             $companies = \Modules\Core\app\Models\Company::active()->orderBy('name')->get(['id', 'name', 'logo']);
-            
+
             $selectedCompanyId = $request->session()->get('selected_company_id');
             if ($selectedCompanyId) {
                 $selectedCompany = \Modules\Core\app\Models\Company::find($selectedCompanyId);
@@ -146,15 +146,7 @@ class HandleInertiaRequests extends Middleware
                     $request->session()->forget('selected_company_id');
                 }
             }
-            
-            // If no company is selected, try to select one
-            if (! $selectedCompany) {
-                if ($companies->isNotEmpty()) {
-                    // Select the first active company
-                    $selectedCompany = $companies->first();
-                    $request->session()->put('selected_company_id', $selectedCompany->id);
-                }
-            }
+            // When no company is selected, super admin sees "All Companies" (selectedCompany stays null)
         }
 
         // Load user permissions if user exists (both direct and through roles)
@@ -172,17 +164,8 @@ class HandleInertiaRequests extends Middleware
             $allPermissions = $user->getAllPermissions();
         }
 
-        // Selected riding company (reseller) from session - for WhatsApp/scoping on Leads
+        // Riding companies (small reseller entities) hidden; Reseller = main Company only
         $selectedRidingCompany = null;
-        if ($user) {
-            $selectedRidingCompanyId = $request->session()->get('selected_riding_company_id');
-            if ($selectedRidingCompanyId && class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
-                $rc = \Modules\RidingCarCompanies\app\Models\RidingCompany::find($selectedRidingCompanyId);
-                if ($rc) {
-                    $selectedRidingCompany = ['id' => $rc->id, 'name' => $rc->name];
-                }
-            }
-        }
 
         return [
             ...parent::share($request),
@@ -197,7 +180,7 @@ class HandleInertiaRequests extends Middleware
                     'is_super_admin' => $user->is_super_admin ?? false,
                     'is_company_admin' => $user->is_company_admin ?? false,
                     'company_id' => $user->company_id,
-                    'riding_company_id' => $user->riding_company_id ?? null,
+                    'riding_company_id' => null,
                     'company' => $user->company ? [
                         'id' => $user->company->id,
                         'name' => $user->company->name,
@@ -293,14 +276,14 @@ class HandleInertiaRequests extends Middleware
         if ($user->isSuperAdmin()) {
             $coreItems[] = [
                 'title' => 'Lead Sources',
-                'href' => '/drivers/lead-sources',
+                'href' => '/leads/lead-sources',
                 'icon' => 'Target',
                 'permission_module' => 'drivers',
                 'permission_entity' => 'leadsources',
             ];
             $coreItems[] = [
                 'title' => 'Lead Statuses',
-                'href' => '/drivers/lead-statuses',
+                'href' => '/leads/lead-statuses',
                 'icon' => 'Flag',
                 'permission_module' => 'drivers',
                 'permission_entity' => 'leadstatuses',
@@ -388,7 +371,7 @@ class HandleInertiaRequests extends Middleware
             // Leads
             $driversItems[] = [
                 'title' => 'Leads',
-                'href' => '/drivers/drivers',
+                'href' => '/leads/leads',
                 'icon' => 'User',
                 'permission_module' => 'drivers',
                 'permission_entity' => 'drivers',
@@ -398,7 +381,7 @@ class HandleInertiaRequests extends Middleware
             if (! $user->isSuperAdmin()) {
                 $driversItems[] = [
                     'title' => 'Lead Sources',
-                    'href' => '/drivers/lead-sources',
+                    'href' => '/leads/lead-sources',
                     'icon' => 'Target',
                     'permission_module' => 'drivers',
                     'permission_entity' => 'leadsources',
@@ -409,7 +392,7 @@ class HandleInertiaRequests extends Middleware
             if (! $user->isSuperAdmin()) {
                 $driversItems[] = [
                     'title' => 'Lead Statuses',
-                    'href' => '/drivers/lead-statuses',
+                    'href' => '/leads/lead-statuses',
                     'icon' => 'Flag',
                     'permission_module' => 'drivers',
                     'permission_entity' => 'leadstatuses',
@@ -419,7 +402,7 @@ class HandleInertiaRequests extends Middleware
             // Lead Stages
             $driversItems[] = [
                 'title' => 'Lead Stages',
-                'href' => '/drivers/lead-stages',
+                'href' => '/leads/lead-stages',
                 'icon' => 'ArrowRightCircle',
                 'permission_module' => 'drivers',
                 'permission_entity' => 'leadstages',
@@ -428,7 +411,7 @@ class HandleInertiaRequests extends Middleware
             // Lead Documents
             $driversItems[] = [
                 'title' => 'Lead Documents',
-                'href' => '/drivers/driver-documents',
+                'href' => '/leads/lead-documents',
                 'icon' => 'FileText',
                 'permission_module' => 'drivers',
                 'permission_entity' => 'driverdocuments',
@@ -437,7 +420,7 @@ class HandleInertiaRequests extends Middleware
             // Lead Follow-ups
             $driversItems[] = [
                 'title' => 'Lead Follow-ups',
-                'href' => '/drivers/driver-follow-ups',
+                'href' => '/leads/lead-follow-ups',
                 'icon' => 'History',
                 'permission_module' => 'drivers',
                 'permission_entity' => 'driverfollowups',

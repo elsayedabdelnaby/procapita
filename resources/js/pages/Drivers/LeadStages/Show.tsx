@@ -52,7 +52,7 @@ export default function LeadStagesShow({ leadStage, activities = [] }: LeadStage
     };
 
     const confirmDelete = () => {
-        router.delete(`/drivers/lead-stages/${leadStage.id}`);
+        router.delete(`/leads/lead-stages/${leadStage.id}`);
     };
 
     if (!leadStage) {
@@ -62,7 +62,7 @@ export default function LeadStagesShow({ leadStage, activities = [] }: LeadStage
                 <div className="p-6">
                     <div className="text-center py-12">
                         <p className="text-neutral-500">Lead stage not found.</p>
-                        <Link href="/drivers/lead-stages" className="mt-4 inline-block">
+                        <Link href="/leads/lead-stages" className="mt-4 inline-block">
                             <Button variant="outline">Back to List</Button>
                         </Link>
                     </div>
@@ -78,7 +78,7 @@ export default function LeadStagesShow({ leadStage, activities = [] }: LeadStage
             <div className="p-6">
                 <div className="mb-6 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <Link href="/drivers/lead-stages">
+                        <Link href="/leads/lead-stages">
                             <Button variant="outline" size="sm">
                                 <ArrowLeft className="h-4 w-4 mr-2" />
                                 Back to List
@@ -93,7 +93,7 @@ export default function LeadStagesShow({ leadStage, activities = [] }: LeadStage
                     </div>
                     <div className="flex items-center gap-2">
                         {can('drivers', 'leadstages', 'update') && (
-                            <Link href={`/drivers/lead-stages/${leadStage.id}/edit`}>
+                            <Link href={`/leads/lead-stages/${leadStage.id}/edit`}>
                                 <Button variant="outline" size="sm">
                                     <Edit className="h-4 w-4 mr-2" />
                                     Edit
