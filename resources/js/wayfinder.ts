@@ -29,3 +29,26 @@ export function queryParams(options?: RouteQueryOptions): string {
     return queryString ? `?${queryString}` : '';
 }
 
+export function applyUrlDefaults<T extends Record<string, any> | undefined>(args: T): T {
+    // Apply default values to URL arguments if needed
+    // For now, just return args as-is since defaults are handled by route definitions
+    return args ?? ({} as T);
+}
+
+export function validateParameters(
+    args: Record<string, any> | undefined,
+    requiredParams: string[]
+): void {
+    if (!args) {
+        return;
+    }
+    
+    // Validate that required parameters are present
+    // Note: Optional parameters (marked with ?) are not validated
+    for (const param of requiredParams) {
+        if (!(param in args) || args[param] === undefined || args[param] === null) {
+            throw new Error(`Missing required parameter: ${param}`);
+        }
+    }
+}
+
