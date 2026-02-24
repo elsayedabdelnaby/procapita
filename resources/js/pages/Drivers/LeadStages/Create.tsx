@@ -23,13 +23,13 @@ export default function LeadStagesCreate() {
 
     return (
         <AppLayout>
-            <Head title="Create Lead Stage" />
+            <Head title="Create Stage" />
 
             <div className="p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold">Create Lead Stage</h1>
+                    <h1 className="text-2xl font-bold">Create Stage</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Add a new lead stage for tracking lead progress
+                        Add a new stage for tracking lead progress
                     </p>
                 </div>
 
@@ -71,14 +71,14 @@ export default function LeadStagesCreate() {
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="md:col-span-2">
                                 <FormField
-                                    label="Lead Stage Name"
+                                    label="Stage Name"
                                     name="name"
                                     type="text"
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
                                     error={errors.name}
                                     required
-                                    placeholder="Enter lead stage name"
+                                    placeholder="Enter stage name"
                                 />
                             </div>
 
@@ -102,7 +102,7 @@ export default function LeadStagesCreate() {
                                     onChange={(e) => setData('description', e.target.value)}
                                     className="w-full rounded-md border px-3 py-2"
                                     rows={3}
-                                    placeholder="Lead stage description..."
+                                    placeholder="Stage description..."
                                 />
                                 {errors.description && (
                                     <p className="text-sm text-red-500">{errors.description}</p>
@@ -174,7 +174,7 @@ export default function LeadStagesCreate() {
                             </Button>
                         </Link>
                         <Button type="submit" disabled={processing}>
-                            {processing ? 'Creating...' : 'Create Lead Stage'}
+                            {processing ? 'Creating...' : 'Create Stage'}
                         </Button>
                     </div>
                 </form>

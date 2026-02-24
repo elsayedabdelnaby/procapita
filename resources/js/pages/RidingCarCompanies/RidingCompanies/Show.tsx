@@ -1056,7 +1056,7 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                                     )}
                                 </div>
                                 <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-                                    Configure how leads are distributed among team members in this riding company. Don't forget to save your changes.
+                                    Configure how leads are distributed among team members in this reseller company. Don't forget to save your changes.
                                 </p>
                                 
                                 <div className="space-y-6">
@@ -1573,7 +1573,7 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                             </div>
                         ) : (
                             <div className="py-8 text-center text-neutral-500">
-                                <p>No users found for this riding company.</p>
+                                <p>No users found for this reseller company.</p>
                             </div>
                         )}
                     </Card>
@@ -1586,7 +1586,7 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                             <div>
                                 <h2 className="text-lg font-semibold mb-2">Rotation Settings</h2>
                                 <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-                                    Configure lead rotation rules and schedules for this riding company.
+                                    Configure lead rotation rules and schedules for this reseller company.
                                 </p>
                                 <div className="text-center py-12 text-neutral-500">
                                     <RefreshCw className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -1603,8 +1603,8 @@ export default function RidingCompaniesShow({ ridingCompany, users = [], availab
                             <div>
                                 <h2 className="text-lg font-semibold mb-2">WhatsApp Integration</h2>
                                 <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-                                    Connect WhatsApp to this riding company. Each riding company has its own WhatsApp session.
-                                    Users in this riding company will see chats only for phone numbers they have access to.
+                                    Connect WhatsApp to this reseller company. Each reseller company has its own WhatsApp session.
+                                    Users in this reseller company will see chats only for phone numbers they have access to.
                                 </p>
                                 <WhatsAppLinkDeviceRidingCompanyTab 
                                     ridingCompanyId={ridingCompany.id}

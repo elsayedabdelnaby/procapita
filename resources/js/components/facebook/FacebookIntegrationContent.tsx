@@ -542,7 +542,6 @@ export function FacebookIntegrationContent({ ridingCompany, integration, partial
         { value: 'email', label: 'Email', required: false },
         { value: 'city', label: 'City', required: false },
         { value: 'worked_with_us_before', label: 'Worked With Us Before', required: false },
-        { value: 'vehicle_type_and_year', label: 'Vehicle Type and Year', required: false },
         { value: 'notes', label: 'Notes', required: false },
     ];
 
@@ -554,7 +553,7 @@ export function FacebookIntegrationContent({ ridingCompany, integration, partial
                         Facebook Integration
                     </h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-                        Connect your Facebook account to this riding company. Any user can login with their Facebook account and access their own pages and leads.
+                        Connect your Facebook account to this reseller company. Any user can login with their Facebook account and access their own pages and leads.
                     </p>
                 </div>
 

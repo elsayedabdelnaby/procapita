@@ -70,7 +70,7 @@ export default function DocumentRequirementsIndex({
                     <div>
                         <h1 className="text-2xl font-bold">Document Requirements</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Manage document requirements for riding companies
+                            Manage document requirements for reseller companies
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -109,7 +109,7 @@ export default function DocumentRequirementsIndex({
                                     ),
                                 },
                                 {
-                                    header: 'Riding Companies',
+                                    header: 'Reseller Companies',
                                     accessor: (row) => {
                                         if (row.riding_companies && row.riding_companies.length > 0) {
                                             return (

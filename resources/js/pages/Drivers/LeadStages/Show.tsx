@@ -58,10 +58,10 @@ export default function LeadStagesShow({ leadStage, activities = [] }: LeadStage
     if (!leadStage) {
         return (
             <AppLayout>
-                <Head title="Lead Stage Not Found" />
+                <Head title="Stage Not Found" />
                 <div className="p-6">
                     <div className="text-center py-12">
-                        <p className="text-neutral-500">Lead stage not found.</p>
+                        <p className="text-neutral-500">Stage not found.</p>
                         <Link href="/leads/lead-stages" className="mt-4 inline-block">
                             <Button variant="outline">Back to List</Button>
                         </Link>
@@ -87,7 +87,7 @@ export default function LeadStagesShow({ leadStage, activities = [] }: LeadStage
                         <div>
                             <h1 className="text-2xl font-bold">{leadStage.name}</h1>
                             <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                                Lead Stage Details
+                                Stage Details
                             </p>
                         </div>
                     </div>
@@ -217,7 +217,7 @@ export default function LeadStagesShow({ leadStage, activities = [] }: LeadStage
                     open={deleteDialog.open}
                     onOpenChange={(open) => setDeleteDialog({ open })}
                     onConfirm={confirmDelete}
-                    title="Delete Lead Stage"
+                    title="Delete Stage"
                     description={`Are you sure you want to delete "${leadStage.name}"? This action cannot be undone.`}
                 />
             </div>

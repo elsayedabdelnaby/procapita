@@ -38,7 +38,7 @@ class DistributeDriversCommand extends Command
         $ridingCompanies = $query->get();
 
         if ($ridingCompanies->isEmpty()) {
-            $this->info('No riding companies found to process.');
+            $this->info('No reseller companies found to process.');
 
             return Command::SUCCESS;
         }
@@ -73,18 +73,18 @@ class DistributeDriversCommand extends Command
                     $processedCount++;
 
                     if ($distributed > 0) {
-                        $this->info("Riding Company #{$ridingCompany->id} ({$ridingCompany->name}): Distributed {$distributed} driver(s)");
+                        $this->info("Reseller Company #{$ridingCompany->id} ({$ridingCompany->name}): Distributed {$distributed} driver(s)");
                     }
                 } else {
-                    $this->warn("Riding Company #{$ridingCompany->id} ({$ridingCompany->name}): {$result['message']}");
+                    $this->warn("Reseller Company #{$ridingCompany->id} ({$ridingCompany->name}): {$result['message']}");
                 }
             } catch (\Exception $e) {
-                $this->error("Error processing Riding Company #{$ridingCompany->id}: {$e->getMessage()}");
+                $this->error("Error processing Reseller Company #{$ridingCompany->id}: {$e->getMessage()}");
             }
         }
 
         if ($processedCount > 0) {
-            $this->info("Processed {$processedCount} riding company(ies), total distributed: {$totalDistributed} driver(s)");
+            $this->info("Processed {$processedCount} reseller company(ies), total distributed: {$totalDistributed} driver(s)");
         } else {
             $this->info('No active distribution scenarios found to process.');
         }

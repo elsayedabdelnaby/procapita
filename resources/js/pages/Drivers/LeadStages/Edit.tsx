@@ -42,9 +42,9 @@ export default function LeadStagesEdit({ leadStage }: LeadStagesEditProps) {
 
             <div className="p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold">Edit Lead Stage</h1>
+                    <h1 className="text-2xl font-bold">Edit Stage</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Update lead stage information
+                        Update stage information
                     </p>
                 </div>
 
@@ -86,14 +86,14 @@ export default function LeadStagesEdit({ leadStage }: LeadStagesEditProps) {
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="md:col-span-2">
                                 <FormField
-                                    label="Lead Stage Name"
+                                    label="Stage Name"
                                     name="name"
                                     type="text"
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
                                     error={errors.name}
                                     required
-                                    placeholder="Enter lead stage name"
+                                    placeholder="Enter stage name"
                                 />
                             </div>
 
@@ -188,7 +188,7 @@ export default function LeadStagesEdit({ leadStage }: LeadStagesEditProps) {
                             </Button>
                         </Link>
                         <Button type="submit" disabled={processing}>
-                            {processing ? 'Updating...' : 'Update Lead Stage'}
+                            {processing ? 'Updating...' : 'Update Stage'}
                         </Button>
                     </div>
                 </form>

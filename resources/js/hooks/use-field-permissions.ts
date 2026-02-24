@@ -25,17 +25,21 @@ interface PageProps {
     };
 }
 
+/** Driver fields always hidden from UI (Riding Company + vehicle type / car or scooter) */
+const FIELDS_ALWAYS_HIDDEN = ['riding_company', 'riding_company_id', 'vehicle_type', 'car_or_scooter', 'vehicle_type_and_year'];
+
 export function useFieldPermissions() {
     const { props } = usePage<PageProps>();
     const user = props.auth?.user;
 
-    // Super admin can see and edit all fields
+    // Super admin can see and edit all fields except always-hidden ones
     if (user?.is_super_admin) {
         return {
             canViewField: () => true,
-            canViewDriverField: () => true,
-            canEditDriverField: () => true,
-            getDriverFieldPermission: () => 'write' as const,
+            canViewDriverField: (fieldName: string) => !FIELDS_ALWAYS_HIDDEN.includes(fieldName),
+            canEditDriverField: (fieldName: string) => !FIELDS_ALWAYS_HIDDEN.includes(fieldName),
+            getDriverFieldPermission: (fieldName: string) =>
+                FIELDS_ALWAYS_HIDDEN.includes(fieldName) ? null : ('write' as const),
         };
     }
 
@@ -138,6 +142,9 @@ export function useFieldPermissions() {
     }, [userPermissions]);
 
     const canViewDriverField = useCallback((fieldName: string): boolean => {
+        if (FIELDS_ALWAYS_HIDDEN.includes(fieldName)) {
+            return false;
+        }
         // Normalize field name for matching (handle underscores, hyphens, case)
         const normalizedFieldName = fieldName.toLowerCase().replace(/_/g, '-');
         const fieldNameLower = fieldName.toLowerCase();
@@ -225,6 +232,9 @@ export function useFieldPermissions() {
     }, [userPermissions, hasNewDriverFieldPermissions, canViewField]);
 
     const canEditDriverField = useCallback((fieldName: string): boolean => {
+        if (FIELDS_ALWAYS_HIDDEN.includes(fieldName)) {
+            return false;
+        }
         // Normalize field name for matching
         const normalizedFieldName = fieldName.toLowerCase().replace(/_/g, '-');
         const fieldNameLower = fieldName.toLowerCase();
@@ -337,6 +347,9 @@ export function useFieldPermissions() {
     }, [userPermissions, hasNewDriverFieldPermissions]);
 
     const getDriverFieldPermission = useCallback((fieldName: string): 'invisible' | 'read' | 'write' | null => {
+        if (FIELDS_ALWAYS_HIDDEN.includes(fieldName)) {
+            return null;
+        }
         const invisiblePerm = `drivers.driverfields.invisible-${fieldName}`;
         const readPerm = `drivers.driverfields.read-${fieldName}`;
         const writePerm = `drivers.driverfields.write-${fieldName}`;

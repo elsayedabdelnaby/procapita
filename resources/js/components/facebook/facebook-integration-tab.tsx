@@ -104,7 +104,7 @@ export function FacebookIntegrationTab({ ridingCompanyId }: FacebookIntegrationT
                 <div>
                     <h3 className="text-lg font-semibold">Facebook Integration</h3>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Connect your Facebook page to this riding company for social media management
+                        Connect your Facebook page to this reseller company for social media management
                     </p>
                 </div>
                 <div className="flex gap-2">

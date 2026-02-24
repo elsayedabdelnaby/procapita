@@ -143,7 +143,7 @@ export default function DocumentRequirementsEdit({
                             {ridingCompanies.length > 0 && (
                                 <div className="md:col-span-2">
                                     <Label htmlFor="riding_company_ids">
-                                        Riding Companies <span className="text-red-500">*</span>
+                                        Reseller Companies <span className="text-red-500">*</span>
                                     </Label>
                                     <MultiSelect
                                         options={ridingCompanies.map((company) => ({
@@ -152,7 +152,7 @@ export default function DocumentRequirementsEdit({
                                         }))}
                                         value={data.riding_company_ids}
                                         onChange={(value) => setData('riding_company_ids', value)}
-                                        placeholder="Select riding companies..."
+                                        placeholder="Select reseller companies..."
                                         className="w-full"
                                         searchable={true}
                                     />
@@ -160,7 +160,7 @@ export default function DocumentRequirementsEdit({
                                         <p className="text-sm text-red-500 mt-1">{errors.riding_company_ids}</p>
                                     )}
                                     <p className="mt-1 text-xs text-neutral-500">
-                                        Select one or more riding companies for this requirement.
+                                        Select one or more reseller companies for this requirement.
                                     </p>
                                 </div>
                             )}

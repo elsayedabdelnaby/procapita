@@ -347,7 +347,7 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                                     )}
                                     {!loadingRidingCompanies && data.company_id && ridingCompanies.length === 0 && (
                                         <p className="text-xs text-neutral-500">
-                                            No riding companies available for this company
+                                            No reseller companies available for this company
                                         </p>
                                     )}
                                 </div>
@@ -519,7 +519,7 @@ export default function UserCreate({ companies, roles, company, ridingCompanies:
                         <DialogTitle>Company Administrator Confirmation</DialogTitle>
                         <DialogDescription className="pt-4">
                             By setting <strong>{data.name || 'this user'}</strong> as a Company Administrator for <strong>{getCompanyName()}</strong>, 
-                            they will have access to view and manage <strong>all Riding Companies</strong> belonging to {getCompanyName()}.
+                            they will have access to view and manage <strong>all Reseller Companies</strong> belonging to {getCompanyName()}.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="gap-2">

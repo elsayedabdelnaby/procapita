@@ -11,11 +11,28 @@ use Modules\Drivers\app\Models\LeadStage;
 class DriverService
 {
     /** Maximum leads loaded on index for performance; use filters to narrow down */
-    public const INDEX_LEADS_LIMIT = 2000;
+    public const INDEX_LEADS_LIMIT = 500;
+
+    /**
+     * Eager load definitions for index: only id/name (and color where needed) to reduce memory and query size.
+     */
+    protected const INDEX_WITH = [
+        'company:id,name',
+        'ridingCompany:id,name',
+        'campaign:id,name',
+        'leadSource:id,name',
+        'assignedTo:id,name',
+        'teamLeader:id,name',
+        'accountManager:id,name',
+        'assignedUsers:id,name',
+        'leadStatus:id,name,color',
+        'leadStage:id,name,color',
+        'lastAssignedByUser:id,name',
+    ];
 
     public function getAllDrivers(?int $companyId = null, ?\App\Models\User $user = null): Collection
     {
-        $query = Driver::with(['company', 'ridingCompany', 'campaign', 'leadSource', 'assignedTo', 'teamLeader', 'accountManager', 'assignedUsers', 'leadStatus', 'leadStage', 'lastAssignedByUser']);
+        $query = Driver::with(self::INDEX_WITH);
 
         if ($companyId) {
             $query->where('company_id', $companyId);
@@ -57,7 +74,7 @@ class DriverService
             'leadStatus',
             'leadStage',
             'lastAssignedByUser',
-            'documents',
+            'documents.documentName',
         ])->find($id);
     }
 

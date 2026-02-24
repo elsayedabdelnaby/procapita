@@ -32,7 +32,8 @@ class CompanyController extends Controller
         // Add riding companies count for each company
         $companiesWithCounts = $companies->map(function ($company) {
             $ridingCompaniesCount = 0;
-            if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+            if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)
+                && \Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
                 $ridingCompaniesCount = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company->id)->count();
             }
 
@@ -208,9 +209,10 @@ class CompanyController extends Controller
                 ];
             });
 
-        // Load riding companies for this company
+        // Load riding companies for this company (skip if table does not exist)
         $ridingCompanies = [];
-        if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+        if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)
+            && \Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
             $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $id)
                 ->orderBy('name')
                 ->get()
@@ -222,43 +224,42 @@ class CompanyController extends Controller
                 });
         }
 
-        // Load document names (document requirements) for this company
+        // Load document requirements for this reseller (company): from document_names and company_document_requirements
         $documentRequirements = [];
-        if (\Illuminate\Support\Facades\Schema::hasTable('document_names')) {
-            $documentNamesQuery = \Modules\Drivers\app\Models\DocumentName::query();
-            $hasRidingCompanyIdsColumn = \Illuminate\Support\Facades\Schema::hasColumn('document_names', 'riding_company_ids');
+        if (\Illuminate\Support\Facades\Schema::hasTable('document_names') && \Illuminate\Support\Facades\Schema::hasColumn('document_names', 'company_ids')) {
+            $documentNames = \Modules\Drivers\app\Models\DocumentName::query()
+                ->where(function ($q) use ($id) {
+                    $q->whereJsonContains('company_ids', $id)
+                        ->orWhereJsonContains('company_ids', (string) $id);
+                })
+                ->orderBy('name')
+                ->get();
 
-            if ($hasRidingCompanyIdsColumn && ! empty($ridingCompanies->all())) {
-                $ridingCompanyIds = $ridingCompanies->pluck('id')->toArray();
-                $documentNamesQuery->where(function ($q) use ($ridingCompanyIds) {
-                    foreach ($ridingCompanyIds as $ridingCompanyId) {
-                        $q->orWhereJsonContains('riding_company_ids', $ridingCompanyId)
-                          ->orWhereJsonContains('riding_company_ids', (string) $ridingCompanyId);
-                    }
-                });
-            }
-
-            $documentNames = $documentNamesQuery->orderBy('name')->get();
-
-            $documentRequirements = $documentNames->map(function ($docName) use ($hasRidingCompanyIdsColumn) {
-                $ridingCompanyIds = ($hasRidingCompanyIdsColumn ? ($docName->riding_company_ids ?? []) : []);
-                $ridingCompanies = ! empty($ridingCompanyIds)
-                    ? \Modules\RidingCarCompanies\app\Models\RidingCompany::whereIn('id', $ridingCompanyIds)
-                        ->get(['id', 'name'])
-                        ->map(fn ($rc) => ['id' => $rc->id, 'name' => $rc->name])
-                        ->toArray()
-                    : [];
-
-                return [
-                    'id' => $docName->id,
-                    'name' => $docName->name,
-                    'type' => $docName->type,
-                    'required' => $docName->required,
-                    'active' => $docName->active,
-                    'status' => $docName->status,
-                    'riding_companies' => $ridingCompanies,
+            $documentRequirements = $documentNames->map(fn ($docName) => [
+                'id' => $docName->id,
+                'name' => $docName->name,
+                'type' => $docName->type,
+                'required' => $docName->required,
+                'active' => $docName->active,
+                'status' => $docName->status,
+                'source' => 'document_names',
+            ])->toArray();
+        }
+        if (\Illuminate\Support\Facades\Schema::hasTable('company_document_requirements')) {
+            $companyReqs = \Modules\Core\app\Models\CompanyDocumentRequirement::where('company_id', $id)
+                ->orderBy('name')
+                ->get();
+            foreach ($companyReqs as $req) {
+                $documentRequirements[] = [
+                    'id' => $req->id,
+                    'name' => $req->name,
+                    'type' => $req->type,
+                    'required' => $req->required,
+                    'active' => $req->active,
+                    'status' => $req->default_status ?? 'pending',
+                    'source' => 'company_document_requirements',
                 ];
-            })->toArray();
+            }
         }
 
         // Get all available companies for transfer (exclude current company)
@@ -273,7 +274,8 @@ class CompanyController extends Controller
             $selectedRidingCompanyId = $ridingCompaniesCollection->first()['id'];
         }
         $selectedRidingCompanyData = null;
-        if ($selectedRidingCompanyId && class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+        if ($selectedRidingCompanyId && class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)
+            && \Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
             $ridingCompany = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $id)
                 ->where('id', $selectedRidingCompanyId)
                 ->with('defaultDriverUser')
@@ -452,7 +454,8 @@ class CompanyController extends Controller
 
             // Check if company has riding companies
             $ridingCompaniesCount = 0;
-            if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+            if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)
+                && \Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
                 $ridingCompaniesCount = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $id)->count();
             }
 
@@ -462,7 +465,7 @@ class CompanyController extends Controller
             if ($ridingCompaniesCount > 0 && $transferCompanyId === null) {
                 return redirect()
                     ->back()
-                    ->with('error', 'Cannot delete company with riding companies. Please select a company to transfer them to.');
+                    ->with('error', 'Cannot delete company with reseller companies. Please select a company to transfer them to.');
             }
 
             // Validate transfer company if provided

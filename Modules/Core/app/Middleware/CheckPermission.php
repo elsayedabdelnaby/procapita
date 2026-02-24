@@ -20,12 +20,17 @@ class CheckPermission
             return redirect()->route('login');
         }
 
+        // Set team context so role/permission checks use the user's company (required for Spatie team scope)
+        if ($user->company_id) {
+            setPermissionsTeamId($user->company_id);
+        }
+
         // Super admins bypass all permission checks
         if ($user->isSuperAdmin()) {
             return $next($request);
         }
 
-        // Check if user has the required permission
+        // Check if user has the required permission (via role or direct)
         try {
             if (! $user->hasPermissionTo($permission)) {
                 abort(403, 'You do not have the required permission.');

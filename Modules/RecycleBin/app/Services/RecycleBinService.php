@@ -66,13 +66,13 @@ class RecycleBinService
             ],
             'lead_stages' => [
                 'model' => \Modules\Drivers\app\Models\LeadStage::class,
-                'name' => 'Lead Stages',
+                'name' => 'Stages',
                 'module' => 'leads',
                 'display_field' => 'name',
             ],
             'driver_documents' => [
                 'model' => \Modules\Drivers\app\Models\DriverDocument::class,
-                'name' => 'Lead Documents',
+                'name' => 'Documents Required',
                 'module' => 'leads',
                 'display_field' => 'original_filename', // Using original_filename as display field
             ],

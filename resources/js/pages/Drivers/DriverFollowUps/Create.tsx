@@ -126,12 +126,12 @@ export default function DriverFollowUpsCreate({
                             </div>
 
                             <FormField
-                                label="Lead Stage"
+                                label="Stage"
                                 name="lead_stage"
                                 value={data.lead_stage}
                                 onChange={(e) => setData('lead_stage', e.target.value)}
                                 error={errors.lead_stage}
-                                placeholder="Enter lead stage name"
+                                placeholder="Enter stage name"
                             />
 
                             <div className="space-y-2">

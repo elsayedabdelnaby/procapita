@@ -94,7 +94,7 @@ export default function DriverFollowUpsShow({ followUp }: DriverFollowUpsShowPro
                             </div>
 
                             <div>
-                                <p className="text-sm text-neutral-500">Lead Stage</p>
+                                <p className="text-sm text-neutral-500">Stage</p>
                                 <p className="font-medium">{followUp.lead_stage || 'N/A'}</p>
                             </div>
 

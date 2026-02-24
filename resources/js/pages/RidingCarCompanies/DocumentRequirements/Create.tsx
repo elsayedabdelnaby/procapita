@@ -75,7 +75,7 @@ export default function DocumentRequirementsCreate({ ridingCompany, ridingCompan
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
                         {ridingCompany 
                             ? `Add a new document requirement for ${ridingCompany.name}`
-                            : 'Add a new document requirement for one or more riding companies'
+                            : 'Add a new document requirement for one or more reseller companies'
                         }
                     </p>
                 </div>
@@ -131,7 +131,7 @@ export default function DocumentRequirementsCreate({ ridingCompany, ridingCompan
                             {ridingCompanies.length > 0 && (
                                 <div className="md:col-span-2">
                                     <Label htmlFor="riding_company_ids">
-                                        Riding Companies <span className="text-red-500">*</span>
+                                        Reseller Companies <span className="text-red-500">*</span>
                                     </Label>
                                     <MultiSelect
                                         options={ridingCompanies.map((company) => ({
@@ -140,7 +140,7 @@ export default function DocumentRequirementsCreate({ ridingCompany, ridingCompan
                                         }))}
                                         value={data.riding_company_ids}
                                         onChange={(value) => setData('riding_company_ids', value)}
-                                        placeholder="Select riding companies..."
+                                        placeholder="Select reseller companies..."
                                         className="w-full"
                                         searchable={true}
                                     />
@@ -150,7 +150,7 @@ export default function DocumentRequirementsCreate({ ridingCompany, ridingCompan
                                     <p className="mt-1 text-xs text-neutral-500">
                                         {ridingCompany 
                                             ? `This requirement will be created for ${ridingCompany.name} and any additional companies you select.`
-                                            : 'Select one or more riding companies. This requirement will be applied to drivers in the selected companies.'
+                                            : 'Select one or more reseller companies. This requirement will be applied to drivers in the selected companies.'
                                         }
                                     </p>
                                 </div>
@@ -214,7 +214,7 @@ export default function DocumentRequirementsCreate({ ridingCompany, ridingCompan
                                     <p className="text-sm text-red-500">{errors.instructions}</p>
                                 )}
                                 <p className="mt-1 text-xs text-neutral-500">
-                                    Additional notes or instructions that will be copied to lead documents.
+                                    Additional notes or instructions that will be copied to required documents.
                                 </p>
                             </div>
 
@@ -278,7 +278,7 @@ export default function DocumentRequirementsCreate({ ridingCompany, ridingCompan
                             <DialogDescription>
                                 {ridingCompany 
                                     ? `Do you want to add this document requirement to all existing drivers for ${ridingCompany.name}?`
-                                    : 'Do you want to add this document requirement to all existing drivers for the selected riding companies?'
+                                    : 'Do you want to add this document requirement to all existing drivers for the selected reseller companies?'
                                 }
                             </DialogDescription>
                         </DialogHeader>

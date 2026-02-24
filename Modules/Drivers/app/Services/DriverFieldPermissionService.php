@@ -128,11 +128,10 @@ class DriverFieldPermissionService
             'campaign', 'lead_source', 'lead_status', 'lead_status_comment',
             'next_follow_up', 'last_follow_up', 'assigned_to',
             'cancel_reason', 'current_stage', 'last_assigned_by',
-            'notes', 'vehicle_type', 'car_or_scooter',
-            'vehicle_type_and_year', 'has_worked_before',
+            'notes', 'has_worked_before',
             'worked_with_us_before', 'city', 'feedback_count',
             'driver_num', 'duplicate', 'confirm_duplicate',
-            'riding_company', 'lead_stage', 'team_leader',
+            'lead_stage', 'team_leader',
             'account_manager', 'resigned_leads', 'last_assigned_time',
         ];
 

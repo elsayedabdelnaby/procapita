@@ -107,7 +107,7 @@ const getFieldLabel = (fieldName: string): string => {
         'lead_status_comment': 'Lead Status Comment',
         'next_follow_up': 'Next Follow-up',
         'last_follow_up': 'Last Follow-up',
-        'lead_stage_id': 'Lead Stage',
+        'lead_stage_id': 'Stage',
         'notes': 'Notes',
     };
     return fieldLabels[fieldName] || fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -1138,7 +1138,7 @@ export default function DriversShow({
                                         <tr>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Stage</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Feedback Comment</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Notes</th>
@@ -1243,7 +1243,7 @@ export default function DriversShow({
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Campaign</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Source</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Stage</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Assigned To</th>
                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
                                         </tr>
@@ -1493,9 +1493,9 @@ export default function DriversShow({
                                                 ))}
                                             </tr>
                                             
-                                            {/* Lead Stage */}
+                                            {/* Stage */}
                                             <tr className="border-b hover:bg-muted/50">
-                                                <td className="px-4 py-3 text-sm font-medium">Lead Stage</td>
+                                                <td className="px-4 py-3 text-sm font-medium">Stage</td>
                                                 {mergeDrivers.map((driver) => (
                                                     <td key={driver.id} className="px-4 py-3 text-sm">
                                                         <div className="flex items-center gap-2">

@@ -1148,7 +1148,7 @@ export default function DriversCreate({
                             </div>
 
                             <div>
-                                <Label htmlFor="lead_stage_id">Lead Stage</Label>
+                                <Label htmlFor="lead_stage_id">Stage</Label>
                                 <select
                                     id="lead_stage_id"
                                     name="lead_stage_id"
@@ -1161,8 +1161,8 @@ export default function DriversCreate({
                                         {loadingLeadStages
                                             ? 'Loading...'
                                             : filteredLeadStages.length === 0
-                                              ? 'No lead stages available'
-                                              : 'Select a lead stage'}
+                                              ? 'No stages available'
+                                              : 'Select a stage'}
                                     </option>
                                     {filteredLeadStages.map((stage) => (
                                         <option key={stage.id} value={stage.id}>
@@ -1668,9 +1668,9 @@ export default function DriversCreate({
                                             ))}
                                         </tr>
                                         
-                                        {/* Lead Stage */}
+                                        {/* Stage */}
                                         <tr className="border-b hover:bg-muted/50">
-                                            <td className="px-4 py-3 text-sm font-medium">Lead Stage</td>
+                                            <td className="px-4 py-3 text-sm font-medium">Stage</td>
                                             {mergeDrivers.map((driver, idx) => (
                                                 <td key={driver.id || `new-${idx}`} className="px-4 py-3 text-sm">
                                                     <div className="flex items-center gap-2">

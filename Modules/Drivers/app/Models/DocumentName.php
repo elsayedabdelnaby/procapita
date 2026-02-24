@@ -12,6 +12,7 @@ class DocumentName extends Model
 
     protected $fillable = [
         'name',
+        'company_ids',
         'type',
         'required',
         'notes',
@@ -19,10 +20,15 @@ class DocumentName extends Model
         'active',
     ];
 
-    protected $casts = [
-        'required' => 'boolean',
-        'active' => 'boolean',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'required' => 'boolean',
+            'active' => 'boolean',
+            'company_ids' => 'array',
+        ];
+    }
+
 
     // Relationships
     public function driverDocuments(): HasMany

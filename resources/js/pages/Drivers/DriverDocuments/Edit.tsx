@@ -6,7 +6,7 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
 
-interface RidingCompany {
+interface Reseller {
     id: number;
     name: string;
 }
@@ -14,7 +14,7 @@ interface RidingCompany {
 interface DocumentName {
     id: number;
     name: string;
-    riding_company_ids: number[];
+    company_ids: number[];
     type?: string;
     required?: boolean;
     notes?: string;
@@ -24,16 +24,16 @@ interface DocumentName {
 
 interface DriverDocumentsEditProps {
     documentName: DocumentName;
-    ridingCompanies: RidingCompany[];
+    resellers: Reseller[];
 }
 
 export default function DriverDocumentsEdit({
     documentName,
-    ridingCompanies,
+    resellers,
 }: DriverDocumentsEditProps) {
     const { data, setData, put, processing, errors, transform } = useForm({
         name: documentName.name || '',
-        riding_company_ids: (documentName.riding_company_ids || []).map(id => id.toString()),
+        company_ids: (documentName.company_ids || []).map((id) => id.toString()),
         type: documentName.type || 'file',
         required: documentName.required || false,
         status: documentName.status || 'pending',
@@ -41,10 +41,9 @@ export default function DriverDocumentsEdit({
         active: documentName.active !== undefined ? documentName.active : true,
     });
 
-    // Transform data before submitting - convert string IDs to integers
-    transform((data) => ({
-        ...data,
-        riding_company_ids: data.riding_company_ids.map((id: string | number) => parseInt(id.toString())),
+    transform((formData) => ({
+        ...formData,
+        company_ids: (formData.company_ids as string[]).map((id) => parseInt(String(id), 10)),
     }));
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -54,13 +53,13 @@ export default function DriverDocumentsEdit({
 
     return (
         <AppLayout>
-            <Head title="Edit Lead Document" />
+            <Head title="Edit Document" />
 
             <div className="p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold">Edit Lead Document</h1>
+                    <h1 className="text-2xl font-bold">Edit Document</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Update lead document information
+                        Update document information
                     </p>
                 </div>
 
@@ -123,25 +122,25 @@ export default function DriverDocumentsEdit({
                             </div>
 
                             <div className="md:col-span-2">
-                                <Label htmlFor="riding_company_ids">
-                                    Riding Companies <span className="text-red-500">*</span>
+                                <Label htmlFor="company_ids">
+                                    Resellers <span className="text-red-500">*</span>
                                 </Label>
                                 <MultiSelect
-                                    options={ridingCompanies.map((company) => ({
-                                        value: company.id.toString(),
-                                        label: company.name,
+                                    options={resellers.map((r) => ({
+                                        value: r.id.toString(),
+                                        label: r.name,
                                     }))}
-                                    value={data.riding_company_ids}
-                                    onChange={(value) => setData('riding_company_ids', value)}
-                                    placeholder="Select riding companies..."
+                                    value={data.company_ids}
+                                    onChange={(value) => setData('company_ids', value)}
+                                    placeholder="Select resellers..."
                                     className="w-full"
                                     searchable={true}
                                 />
-                                {errors.riding_company_ids && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.riding_company_ids}</p>
+                                {errors.company_ids && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.company_ids}</p>
                                 )}
                                 <p className="mt-1 text-xs text-neutral-500">
-                                    Select one or more riding companies. This document will be available for all drivers in the selected companies.
+                                    Select one or more resellers. This document will be available for all leads in the selected resellers.
                                 </p>
                             </div>
 

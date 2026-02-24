@@ -18,7 +18,7 @@ class RidingCompanyDocumentRequirementController extends Controller
         protected RidingCompanyDocumentRequirementService $documentRequirementService
     ) {}
 
-    public function index(int $ridingCompanyId): Response
+    public function index(int $ridingCompanyId): Response|RedirectResponse
     {
         $user = Auth::user();
         $companyId = $user->isSuperAdmin() ? null : $user->company_id;
@@ -32,6 +32,11 @@ class RidingCompanyDocumentRequirementController extends Controller
             $ridingCompany = RidingCompany::where('id', $ridingCompanyId)
                 ->where('company_id', $user->company_id)
                 ->firstOrFail();
+        }
+
+        // Documents Required are now managed per Reseller (company) - redirect to Core
+        if (\Illuminate\Support\Facades\Schema::hasTable('company_document_requirements')) {
+            return redirect()->route('core.companies.document-requirements.index', $ridingCompany->company_id);
         }
 
         // Get ALL document requirements for all riding companies (not just the one in URL)

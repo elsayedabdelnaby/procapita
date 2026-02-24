@@ -123,6 +123,8 @@ interface DriverList {
 }
 
 const DEMO_RESELLER_HIDDEN_COLUMNS = ['campaign', 'riding_company'];
+/** Columns hidden from all roles (Riding Company + vehicle fields) */
+const UI_HIDDEN_COLUMNS = ['riding_company', 'vehicle_type', 'car_or_scooter', 'vehicle_type_and_year'];
 
 interface DriversIndexProps {
     drivers: Driver[];
@@ -144,12 +146,13 @@ interface DriversIndexProps {
         users: FilterOption[];
     };
     allDocumentNames?: string[];
-    documentsByRidingCompany?: Record<number, string[]>;
+    /** Document names per reseller (company_id) */
+    documentsByReseller?: Record<number, string[]>;
     allDocumentRequirements?: Array<{
         id: number;
         name: string;
-        riding_company_id: number;
-        active: boolean;
+        company_id: number;
+        active?: boolean;
     }>;
     leadsLimitReached?: boolean;
     leadsLimit?: number;
@@ -175,7 +178,7 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'team_leader', label: 'Team Leader', defaultVisible: true, defaultOrder: 8.8 },
     { id: 'account_manager', label: 'Account Manager', defaultVisible: true, defaultOrder: 8.85 },
     { id: 'resigned_leads', label: 'Resigned Leads', defaultVisible: true, defaultOrder: 8.9 },
-    { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 9 },
+    { id: 'lead_stage', label: 'Stage', defaultVisible: true, defaultOrder: 9 },
     { id: 'last_assigned_date', label: 'Last Assigned Date', defaultVisible: false, defaultOrder: 10.55 },
     { id: 'last_assigned_by', label: 'Last Assigned By', defaultVisible: false, defaultOrder: 10.6 },
     { id: 'notes', label: 'Notes', defaultVisible: false, defaultOrder: 10.7 },
@@ -314,15 +317,16 @@ function FilterDropdown({
     );
 }
 
-export default function DriversIndex({ drivers = [], lists = [], importAvailableFields, filterOptions = {}, allDocumentNames = [], documentsByRidingCompany = {}, allDocumentRequirements = [], demo_reseller = false, cancelReasonOptions: cancelReasonOptionsProp = [], leadsLimitReached = false, leadsLimit = 2000 }: DriversIndexProps) {
+export default function DriversIndex({ drivers = [], lists = [], importAvailableFields, filterOptions = {}, allDocumentNames = [], documentsByReseller = {}, allDocumentRequirements = [], demo_reseller = false, cancelReasonOptions: cancelReasonOptionsProp = [], leadsLimitReached = false, leadsLimit = 2000 }: DriversIndexProps) {
     // Field permissions hook
     const { canViewDriverField } = useFieldPermissions();
     const page = usePage<SharedData>();
     const baseColumns = useMemo(() => {
-        if (!demo_reseller) return ALL_DRIVER_COLUMNS;
-        const filtered = ALL_DRIVER_COLUMNS.filter((col) => !DEMO_RESELLER_HIDDEN_COLUMNS.includes(col.id));
-        // Add reseller column (company name from assigned user) for demo
-        return filtered.sort((a, b) => (a.defaultOrder ?? 0) - (b.defaultOrder ?? 0));
+        let cols = ALL_DRIVER_COLUMNS.filter((col) => !UI_HIDDEN_COLUMNS.includes(col.id));
+        if (demo_reseller) {
+            cols = cols.filter((col) => !DEMO_RESELLER_HIDDEN_COLUMNS.includes(col.id));
+        }
+        return cols.sort((a, b) => (a.defaultOrder ?? 0) - (b.defaultOrder ?? 0));
     }, [demo_reseller]);
     
     // Removed debug logs to prevent console spam
@@ -370,7 +374,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
             if (reloadInProgressRef.current) return;
             reloadInProgressRef.current = true;
             router.reload({
-                only: ['drivers', 'filterOptions', 'allDocumentNames', 'documentsByRidingCompany', 'allDocumentRequirements'],
+                only: ['drivers', 'filterOptions', 'allDocumentNames', 'documentsByReseller', 'allDocumentRequirements'],
                 preserveState: true,
                 preserveScroll: true,
                 onFinish: () => {
@@ -454,26 +458,21 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
     const isCompanyAdmin = currentUser?.is_company_admin || false;
     const isSuperAdmin = currentUser?.is_super_admin || false;
     
-    // Get selected riding company from sidebar (for admins)
+    // Selected reseller (company) from sidebar for document columns
+    const selectedResellerId = (page.props as any).selectedCompany?.id || null;
+    // Riding company selection (for WhatsApp when used)
     const sidebarSelectedRidingCompany = (page.props as any).selectedRidingCompany;
     const sidebarSelectedRidingCompanyId = sidebarSelectedRidingCompany?.id || null;
     
-    // Get document columns to display based on selected riding company
-    // IMPORTANT: Only show columns for Driver Documents that exist in document_names table
-    // Do NOT include document requirements - only actual Driver Documents
+    // Document columns to display: by selected reseller or all
     const documentColumnsToShow = useMemo(() => {
-        // Use ONLY document names from document_names table (allDocumentNames)
-        // Do NOT merge with requirements - columns should only show actual Driver Documents
         const allNames = [...(allDocumentNames || [])].sort();
-        
-        if (sidebarSelectedRidingCompanyId && documentsByRidingCompany[sidebarSelectedRidingCompanyId]) {
-            // Show only documents for selected riding company
-            const selectedCompanyDocs = documentsByRidingCompany[sidebarSelectedRidingCompanyId];
-            return [...new Set(selectedCompanyDocs)].sort();
+        if (selectedResellerId && documentsByReseller && documentsByReseller[selectedResellerId]) {
+            const selectedResellerDocs = documentsByReseller[selectedResellerId];
+            return [...new Set(selectedResellerDocs)].sort();
         }
-        // Show all documents if no riding company is selected
         return allNames;
-    }, [sidebarSelectedRidingCompanyId, documentsByRidingCompany, allDocumentNames]);
+    }, [selectedResellerId, documentsByReseller, allDocumentNames]);
     
     // Create dynamic document columns
     const dynamicDocumentColumns = useMemo(() => {
@@ -4465,21 +4464,22 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                                     const docName = docColumnDef?.documentName;
                                                                     if (docName) {
                                                                         const driverDoc = driver.documents?.[docName];
-                                                                        const driverRidingCompanyId = driver.riding_company?.id;
-                                                                        
-                                                                        // Check if document is required for this driver's riding company
-                                                                        // First check documentsByRidingCompany (from lead documents)
-                                                                        let isRequired = driverRidingCompanyId && documentsByRidingCompany && documentsByRidingCompany[driverRidingCompanyId]?.includes(docName);
-                                                                        
-                                                                        // Also check allDocumentRequirements (active requirements)
-                                                                        if (!isRequired && driverRidingCompanyId && allDocumentRequirements) {
-                                                                            isRequired = allDocumentRequirements.some(req => 
-                                                                                req.name === docName && 
-                                                                                req.riding_company_id === driverRidingCompanyId &&
-                                                                                req.active === true
+                                                                        const driverCompanyId = driver.company_id;
+                                                                        const companyKey = driverCompanyId != null ? String(driverCompanyId) : null;
+
+                                                                        // Required = this reseller (company) has this document in their list
+                                                                        let isRequired = false;
+                                                                        if (companyKey && documentsByReseller) {
+                                                                            isRequired = documentsByReseller[companyKey]?.includes(docName) === true;
+                                                                        }
+                                                                        if (!isRequired && driverCompanyId && allDocumentRequirements?.length) {
+                                                                            isRequired = allDocumentRequirements.some(req =>
+                                                                                req.name === docName &&
+                                                                                req.company_id === driverCompanyId &&
+                                                                                (req.active === true || req.active === undefined)
                                                                             );
                                                                         }
-                                                                        
+
                                                                         if (!isRequired) {
                                                                             cellContent = <span className="text-sm text-neutral-500 italic">Not Required</span>;
                                                                         } else if (driverDoc) {
@@ -4802,9 +4802,9 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                 ))}
                                             </tr>
                                             
-                                            {/* Lead Stage */}
+                                            {/* Stage */}
                                             <tr className="border-b hover:bg-muted/50">
-                                                <td className="px-4 py-3 text-sm font-medium">Lead Stage</td>
+                                                <td className="px-4 py-3 text-sm font-medium">Stage</td>
                                                 {mergeDrivers.map((driver) => (
                                                     <td key={driver.id} className="px-4 py-3 text-sm">
                                                         <div className="flex items-center gap-2">
@@ -5309,7 +5309,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                     )}
                                                     {canViewDriverField('lead_stage') && (
                                                         <div>
-                                                            <p className="text-sm text-neutral-500">Lead Stage</p>
+                                                            <p className="text-sm text-neutral-500">Stage</p>
                                                             {driverDetails.lead_stage ? (
                                                                 <Badge 
                                                                     variant="outline"
@@ -5545,7 +5545,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                         <tr>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Stage</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Feedback Comment</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Notes</th>
@@ -5623,7 +5623,7 @@ export default function DriversIndex({ drivers = [], lists = [], importAvailable
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Campaign</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Source</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
-                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                                            <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Stage</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Assigned To</th>
                                                             <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
                                                         </tr>
@@ -6472,7 +6472,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                         )}
                         {canViewDriverField('lead_stage') && (
                             <div>
-                                <label className="block text-sm font-medium mb-1">Lead Stage</label>
+                                <label className="block text-sm font-medium mb-1">Stage</label>
                                 <Select
                                     value={data.lead_stage_id}
                                     onValueChange={(value) => setData('lead_stage_id', value)}
@@ -6480,7 +6480,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder={
-                                            leadStages.length === 0 ? 'No lead stages' : 'Select Lead Stage'
+                                            leadStages.length === 0 ? 'No stages' : 'Select Stage'
                                         } />
                                     </SelectTrigger>
                                     <SelectContent>

@@ -217,15 +217,18 @@ function ReportChart({ chartType, series, emptyMessage, reportSort }: { chartTyp
         const barColor = POWER_BI_PALETTE[colorIndex % POWER_BI_PALETTE.length];
         if (isHoriz) {
             return (
-                <div className="flex items-center gap-2 w-full">
-                    <span className="w-24 shrink-0 truncate text-xs font-medium" style={{ color: REPORT_LABEL }} title={label}>{label}</span>
-                    <div className="flex-1 h-6 rounded overflow-hidden min-w-[60px]" style={{ background: REPORT_BG, border: `0.5px solid ${REPORT_BORDER}` }}>
+                <div
+                    className="grid w-full items-center gap-2"
+                    style={{ gridTemplateColumns: '6rem minmax(80px, 1fr) 2rem' }}
+                >
+                    <span className="min-w-0 truncate text-xs font-medium" style={{ color: REPORT_LABEL }} title={label}>{label}</span>
+                    <div className="h-6 min-w-0 rounded overflow-hidden" style={{ background: REPORT_BG, border: `0.5px solid ${REPORT_BORDER}` }}>
                         <div
                             className="h-full rounded"
                             style={{ width: `${pct}%`, minWidth: value > 0 ? '4px' : 0, background: barColor, boxShadow: '0 0 0 0.5px rgba(255,255,255,0.6)' }}
                         />
                     </div>
-                    <span className="w-8 text-right text-xs font-semibold tabular-nums shrink-0" style={{ color: REPORT_TEXT }}>{value}</span>
+                    <span className="text-right text-xs font-semibold tabular-nums" style={{ color: REPORT_TEXT }}>{value}</span>
                 </div>
             );
         }
@@ -294,9 +297,12 @@ function ReportChart({ chartType, series, emptyMessage, reportSort }: { chartTyp
 
             if (isHoriz) {
                 return (
-                    <div className="flex items-center gap-2 w-full">
-                        <span className="w-24 shrink-0 truncate text-xs font-medium" style={{ color: REPORT_LABEL }} title={xLabel}>{xLabel}</span>
-                        <div className="flex-1 h-6 rounded overflow-hidden min-w-[60px] flex" style={{ background: REPORT_BG, border: `0.5px solid ${REPORT_BORDER}` }}>
+                    <div
+                        className="grid w-full items-center gap-2"
+                        style={{ gridTemplateColumns: '6rem minmax(80px, 1fr) 2rem' }}
+                    >
+                        <span className="min-w-0 truncate text-xs font-medium" style={{ color: REPORT_LABEL }} title={xLabel}>{xLabel}</span>
+                        <div className="h-6 min-w-0 rounded overflow-hidden flex" style={{ background: REPORT_BG, border: `0.5px solid ${REPORT_BORDER}` }}>
                             {sortedSegments.map((seg, i) => {
                                 const pct = total > 0 ? (seg.value / total) * 100 : 0;
                                 const barColor = POWER_BI_PALETTE[seg.colorIndex % POWER_BI_PALETTE.length];
@@ -357,7 +363,7 @@ function ReportChart({ chartType, series, emptyMessage, reportSort }: { chartTyp
         }
 
         return (
-            <div className="p-4 flex flex-col gap-4" style={{ background: REPORT_BG }}>
+            <div className={`p-4 flex flex-col gap-4 ${isHorizontal ? 'w-full min-w-0' : ''}`} style={{ background: REPORT_BG }}>
                 {legendLabels.length > 0 && (
                     <div className="flex flex-wrap gap-3 shrink-0" style={{ color: REPORT_TEXT }}>
                         {legendLabels.map((name, idx) => (
@@ -368,7 +374,7 @@ function ReportChart({ chartType, series, emptyMessage, reportSort }: { chartTyp
                         ))}
                     </div>
                 )}
-                <div className={isHorizontal ? 'flex flex-col gap-2' : 'flex items-end gap-2'}>
+                <div className={isHorizontal ? 'flex flex-col gap-2 w-full min-w-0' : 'flex items-end gap-2'}>
                     {xLabels.map((xLabel) => (
                         <StackedBarBlock
                             key={xLabel}
@@ -383,8 +389,8 @@ function ReportChart({ chartType, series, emptyMessage, reportSort }: { chartTyp
         );
     }
     return (
-        <div className="p-4" style={{ background: REPORT_BG }}>
-            <div className={isHorizontal ? 'flex flex-col gap-2' : 'flex items-end gap-2'}>
+        <div className={`p-4 ${isHorizontal ? 'w-full min-w-0' : ''}`} style={{ background: REPORT_BG }}>
+            <div className={isHorizontal ? 'flex flex-col gap-2 w-full min-w-0' : 'flex items-end gap-2'}>
                 {sortedSeries.map((s, i) => (
                     <BarBlock key={i} label={s.label} value={s.value} maxVal={maxValue} isHoriz={isHorizontal} colorIndex={i} />
                 ))}

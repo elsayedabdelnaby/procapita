@@ -279,16 +279,19 @@ function ReportChart({
         const barColor = POWER_BI_PALETTE[colorIndex % POWER_BI_PALETTE.length];
         if (isHoriz) {
             return (
-                <div className="flex items-center gap-3 w-full">
+                <div
+                    className="grid w-full items-center gap-3"
+                    style={{ gridTemplateColumns: '9rem minmax(120px, 1fr) 2.5rem' }}
+                >
                     <span
-                        className="w-36 shrink-0 truncate text-sm font-medium"
+                        className="min-w-0 truncate text-sm font-medium"
                         style={{ color: REPORT_LABEL }}
                         title={label}
                     >
                         {label}
                     </span>
                     <div
-                        className="flex-1 h-8 rounded overflow-hidden min-w-[80px]"
+                        className="h-8 min-w-0 rounded overflow-hidden"
                         style={{ background: REPORT_BG, border: `0.5px solid ${REPORT_BORDER}` }}
                     >
                         <div
@@ -301,7 +304,7 @@ function ReportChart({
                             }}
                         />
                     </div>
-                    <span className="w-10 text-right text-sm font-semibold tabular-nums shrink-0" style={{ color: REPORT_TEXT }}>
+                    <span className="text-right text-sm font-semibold tabular-nums" style={{ color: REPORT_TEXT }}>
                         {value}
                     </span>
                 </div>
@@ -378,16 +381,19 @@ function ReportChart({
             if (isHoriz) {
                 const pctTotal = (total / maxVal) * 100;
                 return (
-                    <div className="flex items-center gap-3 w-full">
+                    <div
+                        className="grid w-full items-center gap-3"
+                        style={{ gridTemplateColumns: '9rem minmax(120px, 1fr) 2.5rem' }}
+                    >
                         <span
-                            className="w-36 shrink-0 truncate text-sm font-medium"
+                            className="min-w-0 truncate text-sm font-medium"
                             style={{ color: REPORT_LABEL }}
                             title={xLabel}
                         >
                             {xLabel}
                         </span>
                         <div
-                            className="flex-1 h-8 rounded overflow-hidden min-w-[80px] flex"
+                            className="h-8 min-w-0 rounded overflow-hidden flex"
                             style={{ background: REPORT_BG, border: `0.5px solid ${REPORT_BORDER}` }}
                         >
                             {sortedSegments.map((seg, i) => {
@@ -463,7 +469,7 @@ function ReportChart({
         }
 
         return (
-            <div className="p-6 flex flex-col gap-6" style={{ background: REPORT_BG }}>
+            <div className={`p-6 flex flex-col gap-6 ${isHorizontal ? 'w-full min-w-0' : ''}`} style={{ background: REPORT_BG }}>
                 {legendLabels.length > 0 && (
                     <div className="flex flex-wrap gap-4 shrink-0" style={{ color: REPORT_TEXT }}>
                         {legendLabels.map((name, idx) => (
@@ -477,7 +483,7 @@ function ReportChart({
                 <div
                     className={
                         isHorizontal
-                            ? 'flex flex-col gap-3'
+                            ? 'flex flex-col gap-3 w-full min-w-0'
                             : 'flex items-end gap-4'
                     }
                 >
@@ -496,11 +502,11 @@ function ReportChart({
     }
 
     return (
-        <div className="p-6" style={{ background: REPORT_BG }}>
+        <div className={`p-6 ${isHorizontal ? 'w-full min-w-0' : ''}`} style={{ background: REPORT_BG }}>
             <div
                 className={
                     isHorizontal
-                        ? 'flex flex-col gap-3'
+                        ? 'flex flex-col gap-3 w-full min-w-0'
                         : 'flex items-end gap-4'
                 }
             >

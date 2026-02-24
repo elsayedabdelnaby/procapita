@@ -399,27 +399,27 @@ class HandleInertiaRequests extends Middleware
                 ];
             }
 
-            // Lead Stages
+            // Stages
             $driversItems[] = [
-                'title' => 'Lead Stages',
+                'title' => 'Stages',
                 'href' => '/leads/lead-stages',
                 'icon' => 'ArrowRightCircle',
                 'permission_module' => 'drivers',
                 'permission_entity' => 'leadstages',
             ];
 
-            // Lead Documents
+            // Documents Required
             $driversItems[] = [
-                'title' => 'Lead Documents',
+                'title' => 'Documents Required',
                 'href' => '/leads/lead-documents',
                 'icon' => 'FileText',
                 'permission_module' => 'drivers',
                 'permission_entity' => 'driverdocuments',
             ];
 
-            // Lead Follow-ups
+            // Follow-ups
             $driversItems[] = [
-                'title' => 'Lead Follow-ups',
+                'title' => 'Follow-ups',
                 'href' => '/leads/lead-follow-ups',
                 'icon' => 'History',
                 'permission_module' => 'drivers',

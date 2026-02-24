@@ -13,9 +13,9 @@ use Inertia\Response;
 use Modules\Drivers\app\Http\Requests\DriverDocumentStoreRequest;
 use Modules\Drivers\app\Http\Requests\DriverDocumentUpdateRequest;
 use Modules\Drivers\app\Models\DocumentName;
+use Modules\Core\app\Models\Company;
 use Modules\Drivers\app\Models\Driver;
 use Modules\Drivers\app\Services\DriverDocumentService;
-use Modules\RidingCarCompanies\app\Models\RidingCompany;
 
 class DriverDocumentController extends Controller
 {
@@ -33,55 +33,39 @@ class DriverDocumentController extends Controller
             return $this->indexLegacy($request);
         }
 
-        // Get all document names (unique)
+        // Get all document names; filter by reseller (company) in PHP to avoid JSON query issues
         $documentNames = DocumentName::orderBy('name')->get();
-        $hasRidingCompanyIdsColumn = \Illuminate\Support\Facades\Schema::hasColumn('document_names', 'riding_company_ids');
+        $hasCompanyIdsColumn = \Illuminate\Support\Facades\Schema::hasColumn('document_names', 'company_ids');
 
-        // Filter by company if not super admin (only when riding_company_ids column exists)
-        if ($companyId && $hasRidingCompanyIdsColumn) {
-            // Get riding company IDs for this company
-            $ridingCompanyIds = RidingCompany::where('company_id', $companyId)->pluck('id')->toArray();
-
-            // Filter document names that have at least one riding company in this company
-            $documentNames = $documentNames->filter(function ($documentName) use ($ridingCompanyIds) {
-                $docRidingCompanyIds = $documentName->riding_company_ids ?? [];
-                if (empty($docRidingCompanyIds)) {
+        if ($companyId && $hasCompanyIdsColumn) {
+            $documentNames = $documentNames->filter(function ($documentName) use ($companyId) {
+                $ids = $documentName->company_ids;
+                if ($ids === null || $ids === []) {
                     return false;
                 }
-
-                // Convert to integers for comparison
-                $docRidingCompanyIds = array_map('intval', $docRidingCompanyIds);
-
-                // Check if any of the document's riding companies belong to this company
-                return ! empty(array_intersect($docRidingCompanyIds, $ridingCompanyIds));
+                $ids = array_map('intval', (array) $ids);
+                return in_array((int) $companyId, $ids, true);
             });
         }
 
-        // Map document names with their riding companies
-        $allDocuments = $documentNames->map(function ($documentName) use ($hasRidingCompanyIdsColumn) {
-            // Convert riding_company_ids to integers if they are strings (only when column exists)
-            $ridingCompanyIds = ($hasRidingCompanyIdsColumn ? ($documentName->riding_company_ids ?? []) : []);
-            if (! empty($ridingCompanyIds)) {
-                $ridingCompanyIds = array_map('intval', $ridingCompanyIds);
+        // Map document names with their resellers (companies) - always resolve company_ids to names
+        $allDocuments = $documentNames->map(function ($documentName) use ($hasCompanyIdsColumn) {
+            $companyIds = [];
+            if ($hasCompanyIdsColumn && $documentName->company_ids !== null) {
+                $companyIds = array_map('intval', (array) $documentName->company_ids);
             }
-
-            $ridingCompanies = RidingCompany::whereIn('id', $ridingCompanyIds)->get();
+            $companies = $companyIds ? Company::whereIn('id', $companyIds)->get(['id', 'name']) : collect();
 
             return [
                 'id' => $documentName->id,
                 'name' => $documentName->name,
-                'riding_companies' => $ridingCompanies->map(function ($company) {
-                    return [
-                        'id' => $company->id,
-                        'name' => $company->name,
-                    ];
-                })->toArray(),
+                'resellers' => $companies->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values()->toArray(),
                 'type' => $documentName->type,
                 'required' => $documentName->required,
                 'active' => $documentName->active,
                 'created_at' => $documentName->created_at?->toDateTimeString(),
             ];
-        })->values(); // Reset keys after filtering
+        })->values();
 
         return Inertia::render('Drivers/DriverDocuments/Index', [
             'driverDocuments' => $allDocuments,
@@ -91,25 +75,17 @@ class DriverDocumentController extends Controller
     public function recycleBin(): Response
     {
         $companyId = $this->getCompanyId();
-        
-        $query = \Modules\Drivers\app\Models\DriverDocument::onlyTrashed();
 
-        // Filter by company if applicable
+        $query = \Modules\Drivers\app\Models\DriverDocument::onlyTrashed()->with(['driver', 'driver.company']);
+
         if ($companyId) {
-            // Get riding company IDs for this company
-            $ridingCompanyIds = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $companyId)->pluck('id')->toArray();
-            
-            if (!empty($ridingCompanyIds)) {
-                $query->whereIn('riding_company_id', $ridingCompanyIds);
-            } else {
-                $query->whereRaw('1 = 0');
-            }
+            $query->whereHas('driver', fn ($q) => $q->where('company_id', $companyId));
         }
 
-        $driverDocuments = $query->with(['driver', 'ridingCompany'])->orderBy('deleted_at', 'desc')->get();
+        $driverDocuments = $query->orderBy('deleted_at', 'desc')->get();
 
         return Inertia::render('Drivers/DriverDocuments/RecycleBin', [
-            'driverDocuments' => $driverDocuments->map(fn($doc) => [
+            'driverDocuments' => $driverDocuments->map(fn ($doc) => [
                 'id' => $doc->id,
                 'driver_id' => $doc->driver_id,
                 'driver' => $doc->driver ? [
@@ -117,10 +93,9 @@ class DriverDocumentController extends Controller
                     'full_name' => $doc->driver->full_name,
                 ] : null,
                 'name' => $doc->name ?? ($doc->documentName?->name ?? null),
-                'riding_company_id' => $doc->riding_company_id,
-                'riding_company' => $doc->ridingCompany ? [
-                    'id' => $doc->ridingCompany->id,
-                    'name' => $doc->ridingCompany->name,
+                'reseller' => $doc->driver?->company ? [
+                    'id' => $doc->driver->company->id,
+                    'name' => $doc->driver->company->name,
                 ] : null,
                 'status' => $doc->status,
                 'uploaded_path' => $doc->uploaded_path,
@@ -138,60 +113,54 @@ class DriverDocumentController extends Controller
     private function indexLegacy(Request $request): Response
     {
         $companyId = $this->getCompanyId();
-
-        // Check if name column exists, otherwise use document_name relationship
         $hasNameColumn = Schema::hasColumn('driver_documents', 'name');
+        $driverDocTable = \Modules\Drivers\app\Models\DriverDocument::query()
+            ->whereHas('driver', function ($q) use ($companyId) {
+                $q->whereNull('deleted_at');
+                if ($companyId) {
+                    $q->where('company_id', $companyId);
+                }
+            });
 
         if ($hasNameColumn) {
-            // Get unique documents grouped by name and riding_company_id
-            $uniqueDocuments = \Modules\Drivers\app\Models\DriverDocument::with(['ridingCompany'])
-                ->whereHas('driver', function ($q) use ($companyId) {
-                    $q->whereNull('deleted_at');
-                    if ($companyId) {
-                        $q->where('company_id', $companyId);
-                    }
-                })
-                ->whereNotNull('name')
-                ->select('name', 'riding_company_id')
-                ->selectRaw('MIN(id) as id')
-                ->selectRaw('MIN(created_at) as created_at')
-                ->groupBy('name', 'riding_company_id')
-                ->orderBy('riding_company_id')
-                ->orderBy('name')
-                ->get();
-        } else {
-            // Use document_name relationship if name column doesn't exist
-            $uniqueDocuments = \Modules\Drivers\app\Models\DriverDocument::with(['ridingCompany', 'documentName'])
-                ->whereHas('driver', function ($q) use ($companyId) {
-                    $q->whereNull('deleted_at');
-                    if ($companyId) {
-                        $q->where('company_id', $companyId);
-                    }
-                })
-                ->whereNotNull('document_name_id')
-                ->join('document_names', 'driver_documents.document_name_id', '=', 'document_names.id')
-                ->select('document_names.name as name', 'driver_documents.riding_company_id')
+            $rows = $driverDocTable->clone()
+                ->join('drivers', 'driver_documents.driver_id', '=', 'drivers.id')
+                ->whereNotNull('driver_documents.name')
+                ->select('driver_documents.name as name', 'drivers.company_id')
                 ->selectRaw('MIN(driver_documents.id) as id')
                 ->selectRaw('MIN(driver_documents.created_at) as created_at')
-                ->groupBy('document_names.name', 'driver_documents.riding_company_id')
-                ->orderBy('driver_documents.riding_company_id')
+                ->groupBy('driver_documents.name', 'drivers.company_id')
+                ->orderBy('drivers.company_id')
+                ->orderBy('driver_documents.name')
+                ->get();
+        } else {
+            $rows = $driverDocTable->clone()
+                ->join('drivers', 'driver_documents.driver_id', '=', 'drivers.id')
+                ->join('document_names', 'driver_documents.document_name_id', '=', 'document_names.id')
+                ->whereNotNull('driver_documents.document_name_id')
+                ->select('document_names.name as name', 'drivers.company_id')
+                ->selectRaw('MIN(driver_documents.id) as id')
+                ->selectRaw('MIN(driver_documents.created_at) as created_at')
+                ->groupBy('document_names.name', 'drivers.company_id')
+                ->orderBy('drivers.company_id')
                 ->orderBy('document_names.name')
                 ->get();
         }
 
-        // Map unique documents
-        $allDocuments = $uniqueDocuments->map(function ($doc) use ($hasNameColumn) {
-            // Handle both cases: direct name column or from join
-            $name = $hasNameColumn ? $doc->name : ($doc->name ?? $doc->documentName?->name ?? null);
-            
+        $companyIds = $rows->pluck('company_id')->unique()->filter()->values();
+        $companies = $companyIds->isNotEmpty() ? Company::whereIn('id', $companyIds)->get()->keyBy('id') : collect();
+
+        $allDocuments = $rows->map(function ($row) use ($companies) {
+            $resellers = [];
+            if ($row->company_id && $companies->has($row->company_id)) {
+                $c = $companies->get($row->company_id);
+                $resellers = [['id' => $c->id, 'name' => $c->name]];
+            }
             return [
-                'id' => $doc->id,
-                'name' => $name,
-                'riding_companies' => $doc->ridingCompany ? [[
-                    'id' => $doc->ridingCompany->id,
-                    'name' => $doc->ridingCompany->name,
-                ]] : [],
-                'created_at' => $doc->created_at,
+                'id' => $row->id,
+                'name' => $row->name,
+                'resellers' => $resellers,
+                'created_at' => $row->created_at,
             ];
         });
 
@@ -204,11 +173,12 @@ class DriverDocumentController extends Controller
     {
         $user = Auth::user();
         $companyId = $this->getCompanyId();
-
-        $ridingCompanies = RidingCompany::orderBy('name')->get();
+        $companies = $user->isSuperAdmin()
+            ? Company::orderBy('name')->get(['id', 'name'])
+            : Company::when($companyId, fn ($q) => $q->where('id', $companyId))->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Drivers/DriverDocuments/Create', [
-            'ridingCompanies' => $ridingCompanies,
+            'resellers' => $companies->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->toArray(),
         ]);
     }
 
@@ -216,16 +186,15 @@ class DriverDocumentController extends Controller
     {
         try {
             $data = $request->validated();
-            $ridingCompanyIds = $data['riding_company_ids'] ?? [];
+            $companyIds = array_map('intval', (array) ($data['company_ids'] ?? $data['riding_company_ids'] ?? []));
             $documentName = $data['name'];
-            unset($data['riding_company_ids'], $data['name']);
+            unset($data['company_ids'], $data['riding_company_ids'], $data['name']);
 
             $data['status'] = $data['status'] ?? 'pending';
             $data['type'] = $data['type'] ?? 'file';
             $data['required'] = $data['required'] ?? false;
             $data['active'] = $data['active'] ?? true;
 
-            // Check if document_names table exists
             if (! Schema::hasTable('document_names')) {
                 return redirect()
                     ->back()
@@ -233,7 +202,6 @@ class DriverDocumentController extends Controller
                     ->with('error', 'Please run migrations first: php artisan migrate');
             }
 
-            // Create document name record (unique) - only set riding_company_ids when column exists
             $createPayload = [
                 'name' => $documentName,
                 'type' => $data['type'],
@@ -242,49 +210,43 @@ class DriverDocumentController extends Controller
                 'status' => $data['status'],
                 'active' => $data['active'],
             ];
-            if (\Illuminate\Support\Facades\Schema::hasColumn('document_names', 'riding_company_ids')) {
-                $createPayload['riding_company_ids'] = $ridingCompanyIds;
+            if (Schema::hasColumn('document_names', 'company_ids')) {
+                $createPayload['company_ids'] = $companyIds;
             }
             $documentNameRecord = DocumentName::create($createPayload);
 
             $totalDocumentsCreated = 0;
-
-            // Process each riding company
-            foreach ($ridingCompanyIds as $ridingCompanyId) {
-                // Get all drivers for the riding company
-                $drivers = \Modules\Drivers\app\Models\Driver::where('riding_company_id', $ridingCompanyId)
-                    ->whereNull('deleted_at')
-                    ->get();
-
-                if (! $drivers->isEmpty()) {
-                    // Create documents for all drivers in the riding company
-                    $documents = [];
-                    foreach ($drivers as $driver) {
-                        $documents[] = [
-                            'document_name_id' => $documentNameRecord->id,
-                            'name' => $documentName, // Keep for backward compatibility
-                            'driver_id' => $driver->id,
-                            'riding_company_id' => $ridingCompanyId,
-                            'status' => $data['status'],
-                            'notes' => $data['notes'] ?? null,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ];
+            foreach ($companyIds as $cid) {
+                $drivers = Driver::where('company_id', $cid)->whereNull('deleted_at')->get();
+                $existing = \Modules\Drivers\app\Models\DriverDocument::where('document_name_id', $documentNameRecord->id)
+                    ->whereIn('driver_id', $drivers->pluck('id'))
+                    ->pluck('driver_id')
+                    ->toArray();
+                $documents = [];
+                foreach ($drivers as $driver) {
+                    if (in_array($driver->id, $existing, true)) {
+                        continue;
                     }
-
-                    if (! empty($documents)) {
-                        \Modules\Drivers\app\Models\DriverDocument::insert($documents);
-                        $totalDocumentsCreated += count($documents);
-                    }
+                    $documents[] = [
+                        'document_name_id' => $documentNameRecord->id,
+                        'driver_id' => $driver->id,
+                        'status' => $data['status'],
+                        'notes' => $data['notes'] ?? null,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+                if ($documents !== []) {
+                    \Modules\Drivers\app\Models\DriverDocument::insert($documents);
+                    $totalDocumentsCreated += count($documents);
                 }
             }
 
-            // Build success message
             $message = "Document '{$documentName}' created successfully";
             if ($totalDocumentsCreated > 0) {
                 $message .= " with {$totalDocumentsCreated} driver document(s)";
             } else {
-                $message .= '. No drivers found in selected riding companies yet.';
+                $message .= '. No drivers found for selected resellers yet.';
             }
             $message .= '.';
 
@@ -335,7 +297,6 @@ class DriverDocumentController extends Controller
 
     public function edit(int $documentName): Response
     {
-        // Check if document_names table exists
         if (! Schema::hasTable('document_names')) {
             return redirect()
                 ->route('drivers.driverdocuments.index')
@@ -343,23 +304,25 @@ class DriverDocumentController extends Controller
         }
 
         $documentNameRecord = DocumentName::findOrFail($documentName);
-
-        $ridingCompanies = RidingCompany::orderBy('name')->get();
-
-        $hasRidingCompanyIdsColumn = Schema::hasColumn('document_names', 'riding_company_ids');
+        $user = Auth::user();
+        $companyId = $this->getCompanyId();
+        $companies = $user->isSuperAdmin()
+            ? Company::orderBy('name')->get(['id', 'name'])
+            : Company::when($companyId, fn ($q) => $q->where('id', $companyId))->orderBy('name')->get(['id', 'name']);
+        $hasCompanyIdsColumn = Schema::hasColumn('document_names', 'company_ids');
 
         return Inertia::render('Drivers/DriverDocuments/Edit', [
             'documentName' => [
                 'id' => $documentNameRecord->id,
                 'name' => $documentNameRecord->name,
-                'riding_company_ids' => $hasRidingCompanyIdsColumn ? ($documentNameRecord->riding_company_ids ?? []) : [],
+                'company_ids' => $hasCompanyIdsColumn ? ($documentNameRecord->company_ids ?? []) : [],
                 'type' => $documentNameRecord->type,
                 'required' => $documentNameRecord->required,
                 'notes' => $documentNameRecord->notes,
                 'status' => $documentNameRecord->status,
                 'active' => $documentNameRecord->active,
             ],
-            'ridingCompanies' => $ridingCompanies,
+            'resellers' => $companies->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->toArray(),
         ]);
     }
 
@@ -375,16 +338,11 @@ class DriverDocumentController extends Controller
             }
 
             $data = $request->validated();
-            $ridingCompanyIds = $data['riding_company_ids'] ?? [];
-            $hasRidingCompanyIdsColumn = Schema::hasColumn('document_names', 'riding_company_ids');
-
-            // Get the document name record
+            $companyIds = array_map('intval', (array) ($data['company_ids'] ?? $data['riding_company_ids'] ?? []));
+            $hasCompanyIdsColumn = Schema::hasColumn('document_names', 'company_ids');
             $documentNameRecord = DocumentName::findOrFail($documentName);
+            $oldCompanyIds = $hasCompanyIdsColumn ? array_map('intval', (array) ($documentNameRecord->company_ids ?? [])) : [];
 
-            // Get old riding company IDs (only when column exists)
-            $oldRidingCompanyIds = $hasRidingCompanyIdsColumn ? ($documentNameRecord->riding_company_ids ?? []) : [];
-
-            // Update document name (only set riding_company_ids when column exists)
             $updatePayload = [
                 'name' => $data['name'],
                 'type' => $data['type'] ?? $documentNameRecord->type,
@@ -393,53 +351,36 @@ class DriverDocumentController extends Controller
                 'status' => $data['status'] ?? $documentNameRecord->status,
                 'active' => $data['active'] ?? $documentNameRecord->active,
             ];
-            if ($hasRidingCompanyIdsColumn) {
-                $updatePayload['riding_company_ids'] = $ridingCompanyIds;
+            if ($hasCompanyIdsColumn) {
+                $updatePayload['company_ids'] = $companyIds;
             }
             $documentNameRecord->update($updatePayload);
 
-            // Update all related driver documents with new name
-            $documentNameRecord->driverDocuments()->update([
-                'name' => $data['name'],
-            ]);
-
-            // Create driver documents for newly added riding companies
-            $newRidingCompanyIds = array_diff($ridingCompanyIds, $oldRidingCompanyIds);
+            $newCompanyIds = array_values(array_diff($companyIds, $oldCompanyIds));
             $totalCreated = 0;
-
-            foreach ($newRidingCompanyIds as $ridingCompanyId) {
-                // Get all drivers for this riding company
-                $drivers = \Modules\Drivers\app\Models\Driver::where('riding_company_id', $ridingCompanyId)
-                    ->whereNull('deleted_at')
-                    ->get();
-
-                if (! $drivers->isEmpty()) {
-                    $documents = [];
-                    foreach ($drivers as $driver) {
-                        // Check if document already exists
-                        $exists = \Modules\Drivers\app\Models\DriverDocument::where('document_name_id', $documentNameRecord->id)
-                            ->where('driver_id', $driver->id)
-                            ->where('riding_company_id', $ridingCompanyId)
-                            ->exists();
-
-                        if (! $exists) {
-                            $documents[] = [
-                                'document_name_id' => $documentNameRecord->id,
-                                'name' => $data['name'],
-                                'driver_id' => $driver->id,
-                                'riding_company_id' => $ridingCompanyId,
-                                'status' => $data['status'] ?? 'pending',
-                                'notes' => $data['notes'] ?? null,
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ];
-                        }
+            foreach ($newCompanyIds as $cid) {
+                $drivers = Driver::where('company_id', $cid)->whereNull('deleted_at')->get();
+                $existing = \Modules\Drivers\app\Models\DriverDocument::where('document_name_id', $documentNameRecord->id)
+                    ->whereIn('driver_id', $drivers->pluck('id'))
+                    ->pluck('driver_id')
+                    ->toArray();
+                $documents = [];
+                foreach ($drivers as $driver) {
+                    if (in_array($driver->id, $existing, true)) {
+                        continue;
                     }
-
-                    if (! empty($documents)) {
-                        \Modules\Drivers\app\Models\DriverDocument::insert($documents);
-                        $totalCreated += count($documents);
-                    }
+                    $documents[] = [
+                        'document_name_id' => $documentNameRecord->id,
+                        'driver_id' => $driver->id,
+                        'status' => $data['status'] ?? 'pending',
+                        'notes' => $data['notes'] ?? null,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+                if ($documents !== []) {
+                    \Modules\Drivers\app\Models\DriverDocument::insert($documents);
+                    $totalCreated += count($documents);
                 }
             }
 
@@ -502,27 +443,14 @@ class DriverDocumentController extends Controller
 
             $companyId = $this->getCompanyId();
 
-            // Get all document names (filtered by company if needed)
             $query = DocumentName::query();
-            $hasRidingCompanyIdsColumn = Schema::hasColumn('document_names', 'riding_company_ids');
+            $hasCompanyIdsColumn = Schema::hasColumn('document_names', 'company_ids');
 
-            if ($companyId && $hasRidingCompanyIdsColumn) {
-                // Get riding company IDs for this company
-                $ridingCompanyIds = RidingCompany::where('company_id', $companyId)->pluck('id')->toArray();
-
-                if (! empty($ridingCompanyIds)) {
-                    // Filter document names that have at least one riding company in this company
-                    $query->where(function ($q) use ($ridingCompanyIds) {
-                        foreach ($ridingCompanyIds as $ridingCompanyId) {
-                            $q->orWhereJsonContains('riding_company_ids', $ridingCompanyId);
-                        }
-                    });
-                } else {
-                    // No riding companies for this company
-                    return redirect()
-                        ->route('drivers.driverdocuments.index')
-                        ->with('success', 'No documents to delete.');
-                }
+            if ($companyId && $hasCompanyIdsColumn) {
+                $query->where(function ($q) use ($companyId) {
+                    $q->whereJsonContains('company_ids', $companyId)
+                        ->orWhereJsonContains('company_ids', (string) $companyId);
+                });
             }
 
             $documentNames = $query->get();
@@ -551,31 +479,19 @@ class DriverDocumentController extends Controller
     {
         $request->validate([
             'name' => ['required', 'string'],
-            'riding_company_id' => ['required', 'exists:riding_companies,id'],
+            'company_id' => ['required', 'integer', 'exists:companies,id'],
         ]);
 
         try {
             $companyId = $this->getCompanyId();
 
-            // Check if name column exists, otherwise use document_name relationship
-            $hasNameColumn = Schema::hasColumn('driver_documents', 'name');
-
-            // Get all documents with the same name and riding_company_id
-            if ($hasNameColumn) {
-                $query = \Modules\Drivers\app\Models\DriverDocument::where('name', $request->name)
-                    ->where('riding_company_id', $request->riding_company_id);
-            } else {
-                $query = \Modules\Drivers\app\Models\DriverDocument::whereHas('documentName', function ($q) use ($request) {
-                    $q->where('name', $request->name);
-                })
-                    ->where('riding_company_id', $request->riding_company_id);
-            }
-
-            if ($companyId) {
-                $query->whereHas('driver', function ($q) use ($companyId) {
-                    $q->where('company_id', $companyId);
+            $query = \Modules\Drivers\app\Models\DriverDocument::whereHas('documentName', fn ($q) => $q->where('name', $request->name))
+                ->whereHas('driver', function ($q) use ($request, $companyId) {
+                    $q->where('company_id', $request->company_id);
+                    if ($companyId) {
+                        $q->where('company_id', $companyId);
+                    }
                 });
-            }
 
             $driverDocuments = $query->get();
             $count = $driverDocuments->count();

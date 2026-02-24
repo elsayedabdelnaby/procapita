@@ -244,7 +244,7 @@ export function WhatsAppLinkDeviceRidingCompanyTab({
                 <div>
                     <h3 className="text-lg font-semibold text-neutral-800 dark:text-neutral-200">Link WhatsApp Device</h3>
                     <p className="text-sm text-neutral-700 dark:text-neutral-300">
-                        Connect a WhatsApp number to this riding company for messaging drivers
+                        Connect a WhatsApp number to this reseller company for messaging drivers
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -347,7 +347,7 @@ export function WhatsAppLinkDeviceRidingCompanyTab({
                                 </p>
                             )}
                             <p className="text-sm text-neutral-700 dark:text-neutral-300 mt-2">
-                                Your WhatsApp device is successfully linked to this riding company
+                                Your WhatsApp device is successfully linked to this reseller company
                             </p>
                         </div>
                     </div>
@@ -371,7 +371,7 @@ export function WhatsAppLinkDeviceRidingCompanyTab({
                 <div className="space-y-4">
                     <div>
                         <Label className="text-sm font-medium mb-2 block text-neutral-800 dark:text-neutral-200">
-                            WhatsApp numbers that will contact us and are not in our riding company will be assigned to this user
+                            WhatsApp numbers that will contact us and are not in our reseller company will be assigned to this user
                         </Label>
                         <Select
                             value={currentUserId?.toString() || ''}

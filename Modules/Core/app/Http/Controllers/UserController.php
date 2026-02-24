@@ -75,10 +75,13 @@ class UserController extends Controller
         // Get permissions that the current user has
         $permissions = $this->permissionService->getGroupedPermissionsForUser($currentUser);
 
-        $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
-            ->active()
-            ->orderBy('name')
-            ->get();
+        $ridingCompanies = collect();
+        if (\Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
+            $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
+                ->active()
+                ->orderBy('name')
+                ->get();
+        }
 
         // Get riding_company_id from query parameter if present
         $ridingCompanyId = $request->query('riding_company_id');
@@ -174,10 +177,13 @@ class UserController extends Controller
         // Get permissions that the current user has
         $permissions = $this->permissionService->getGroupedPermissionsForUser($currentUser);
 
-        $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
-            ->active()
-            ->orderBy('name')
-            ->get();
+        $ridingCompanies = collect();
+        if (\Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
+            $ridingCompanies = \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $company)
+                ->active()
+                ->orderBy('name')
+                ->get();
+        }
 
         // Reload the user's roles and permissions in the correct team context
         $userModel->load('roles', 'permissions');

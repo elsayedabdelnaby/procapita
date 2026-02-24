@@ -63,7 +63,7 @@ export function ActivityLog({ activities }: ActivityLogProps) {
             'lead_status_comment': 'Lead Status Comment',
             'next_follow_up': 'Next Follow-up',
             'last_follow_up': 'Last Follow-up',
-            'lead_stage_id': 'Lead Stage',
+            'lead_stage_id': 'Stage',
             'notes': 'Notes',
         };
         return fieldLabels[field] || field

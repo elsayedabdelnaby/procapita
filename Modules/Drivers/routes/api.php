@@ -3,6 +3,7 @@
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Modules\Drivers\app\Models\LeadSource;
 use Modules\Drivers\app\Models\LeadStatus;
 use Modules\Drivers\app\Models\LeadStage;
@@ -22,7 +23,9 @@ Route::middleware(['web', 'auth'])->prefix('drivers')->name('drivers.api.')->gro
         if (! $user->isSuperAdmin()) {
             abort(403, 'Unauthorized');
         }
-
+        if (! Schema::hasTable('riding_companies')) {
+            return [];
+        }
         return RidingCompany::with('company:id,name')
             ->active()
             ->orderBy('name')
@@ -30,19 +33,20 @@ Route::middleware(['web', 'auth'])->prefix('drivers')->name('drivers.api.')->gro
             ->map(function ($ridingCompany) {
                 return [
                     'id' => $ridingCompany->id,
-                    'name' => $ridingCompany->name . ($ridingCompany->company ? ' (' . $ridingCompany->company->name . ')' : ''),
+                    'name' => $ridingCompany->name.($ridingCompany->company ? ' ('.$ridingCompany->company->name.')' : ''),
                 ];
             });
     })->name('all-riding-companies');
 
     // Get riding companies by company
     Route::get('companies/{company}/riding-companies', function ($companyId) {
-        // Verify user has access to this company
         $user = Auth::user();
         if (! $user->isSuperAdmin() && $user->company_id != $companyId) {
             abort(403, 'Unauthorized');
         }
-
+        if (! Schema::hasTable('riding_companies')) {
+            return [];
+        }
         return RidingCompany::where('company_id', $companyId)
             ->active()
             ->orderBy('name')

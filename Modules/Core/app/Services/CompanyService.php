@@ -121,8 +121,9 @@ class CompanyService
             // (needed for transferring drivers assigned to these users)
             $companyUserIds = \App\Models\User::where('company_id', $id)->pluck('id')->toArray();
 
-            // Step 1: Transfer all riding companies
-            if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)) {
+            // Step 1: Transfer all riding companies (if table exists)
+            if (class_exists(\Modules\RidingCarCompanies\app\Models\RidingCompany::class)
+                && \Illuminate\Support\Facades\Schema::hasTable('riding_companies')) {
                 \Modules\RidingCarCompanies\app\Models\RidingCompany::where('company_id', $id)
                     ->update(['company_id' => $transferCompanyId]);
             }

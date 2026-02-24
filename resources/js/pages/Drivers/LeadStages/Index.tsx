@@ -67,14 +67,14 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
 
     return (
         <AppLayout>
-            <Head title="Lead Stages" />
+            <Head title="Stages" />
 
             <div className="p-6">
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold">Lead Stages</h1>
+                        <h1 className="text-2xl font-bold">Stages</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Manage lead stages for tracking lead progress
+                            Manage stages for tracking lead progress
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -98,7 +98,7 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
                         )}
                         {can('drivers', 'leadstages', 'create') && (
                             <Link href="/leads/lead-stages/create">
-                                <Button>Create Lead Stage</Button>
+                                <Button>Create Stage</Button>
                             </Link>
                         )}
                     </div>
@@ -233,10 +233,10 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
                         />
                     ) : (
                         <div className="py-12 text-center">
-                            <p className="text-neutral-500">No lead stages found.</p>
+                            <p className="text-neutral-500">No stages found.</p>
                             {can('drivers', 'leadstages', 'create') && (
                                 <Link href="/leads/lead-stages/create" className="mt-4 inline-block">
-                                    <Button>Create First Lead Stage</Button>
+                                    <Button>Create First Stage</Button>
                                 </Link>
                             )}
                         </div>
@@ -247,7 +247,7 @@ export default function LeadStagesIndex({ leadStages }: LeadStagesIndexProps) {
                     open={deleteDialog.open}
                     onOpenChange={(open) => setDeleteDialog({ open, stage: null })}
                     onConfirm={confirmDelete}
-                    title="Delete Lead Stage"
+                    title="Delete Stage"
                     description={`Are you sure you want to delete "${deleteDialog.stage?.name}"? This action cannot be undone.`}
                 />
             </div>

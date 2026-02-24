@@ -307,7 +307,7 @@ export default function RidingCompaniesEdit({ ridingCompany, companies }: Riding
                                             <div className="flex items-center gap-4">
                                                 <img
                                                     src={logoPreview}
-                                                    alt="Riding Company Logo"
+                                                    alt="Reseller Company Logo"
                                                     className="h-10 w-40 object-contain border rounded p-2"
                                                 />
                                                 <Button

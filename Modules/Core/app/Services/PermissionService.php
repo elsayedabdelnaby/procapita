@@ -97,6 +97,10 @@ class PermissionService
             }
 
             $module = $permission->module_name ?? 'system';
+            if ($module === 'ridingcarcompanies') {
+                continue;
+            }
+
             $entity = $permission->entity_name ?? 'general';
 
             if (! isset($grouped[$module])) {
@@ -183,6 +187,10 @@ class PermissionService
             }
 
             $module = $permission->module_name ?? 'system';
+            if ($module === 'ridingcarcompanies') {
+                continue;
+            }
+
             $entity = $permission->entity_name ?? 'general';
 
             if (! isset($grouped[$module])) {

@@ -231,7 +231,7 @@ class LeadStageController extends Controller
             // TODO: Implement CSV import logic
             return redirect()
                 ->route('drivers.leadstages.index')
-                ->with('success', 'Lead stages imported successfully.');
+                ->with('success', 'Stages imported successfully.');
         } catch (\Exception $e) {
             return redirect()
                 ->back()
@@ -281,7 +281,7 @@ class LeadStageController extends Controller
 
             return redirect()
                 ->back()
-                ->with('success', 'Lead stages reordered successfully.');
+                ->with('success', 'Stages reordered successfully.');
         } catch (\Exception $e) {
             return redirect()
                 ->back()

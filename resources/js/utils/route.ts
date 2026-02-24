@@ -16,6 +16,7 @@ export function route(name: string, params?: Record<string, any> | any): string 
         'password.request': '/forgot-password',
         'password.email': '/forgot-password',
         'password.confirm': '/user/confirm-password',
+        'password.reset': '/reset-password',
         'verification.send': '/email/verification-notification',
         'two-factor.qr-code': '/user/two-factor-authentication/qr-code',
         'two-factor.recovery-codes': '/user/two-factor-recovery-codes',

@@ -35,7 +35,7 @@ export function CompanyDeleteDialog({
     ridingCompaniesCount = 0,
     demoReseller = false,
 }: CompanyDeleteDialogProps) {
-    const ridingLabel = demoReseller ? 'Reseller Companies' : 'Riding Companies';
+    const ridingLabel = 'Reseller Companies';
     const [transferCompanyId, setTransferCompanyId] = useState<string>('');
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -52,7 +52,7 @@ export function CompanyDeleteDialog({
             return;
         }
 
-        // If there are riding companies, require transfer company selection
+        // If there are reseller companies, require transfer company selection
         if (ridingCompaniesCount > 0 && !transferCompanyId) {
             return;
         }

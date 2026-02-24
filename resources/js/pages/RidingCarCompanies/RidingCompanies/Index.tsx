@@ -179,7 +179,7 @@ export default function RidingCompaniesIndex({ ridingCompanies, availableRidingC
                         </div>
                     ) : (
                         <div className="py-8 text-center text-neutral-500">
-                            <p>No riding companies found.</p>
+                            <p>No reseller companies found.</p>
                             <Link href="/ridingcarcompanies/riding-companies/create">
                                 <Button className="mt-4">Create First ReSeller</Button>
                             </Link>

@@ -200,6 +200,8 @@ export default function RoleCreate({
 
     // Field mapping for Drivers fields
     const demoResellerHiddenDriverFields = ['campaign', 'riding_company', 'vehicle_type', 'car_or_scooter', 'vehicle_type_and_year'];
+    /** Driver fields hidden from all roles (Riding Company + vehicle fields) */
+    const alwaysHiddenDriverFields = ['riding_company', 'vehicle_type', 'car_or_scooter', 'vehicle_type_and_year'];
 
     const driverFieldMapping: Record<string, string> = {
         'assigned_to': 'Assigned To',
@@ -212,7 +214,7 @@ export default function RoleCreate({
         'lead_status_comment': 'Feedback Comment',
         'has_worked_before': 'Has the lead worked before?',
         'lead_source': 'Lead Source',
-        'lead_stage': 'Lead Stage',
+        'lead_stage': 'Stage',
         'lead_status': 'Lead Status',
         'full_name': 'Name',
         'next_follow_up': 'Next Follow-up',
@@ -224,8 +226,9 @@ export default function RoleCreate({
     };
     const visibleDriverFieldKeys = useMemo(() => {
         const keys = Object.keys(driverFieldMapping);
-        if (!demo_reseller) return keys;
-        return keys.filter((k) => !demoResellerHiddenDriverFields.includes(k));
+        return keys.filter(
+            (k) => !alwaysHiddenDriverFields.includes(k) && (!demo_reseller || !demoResellerHiddenDriverFields.includes(k))
+        );
     }, [demo_reseller]);
 
     // Group driverfields permissions by field name
@@ -530,6 +533,7 @@ export default function RoleCreate({
 
                                 <div className="max-h-[600px] space-y-2 overflow-y-auto rounded-md border p-4">
                                     {Object.entries(permissions)
+                                        .filter(([moduleName]) => moduleName !== 'ridingcarcompanies')
                                         .map(([moduleName, entities]) => {
                                         // For drivers module, exclude driverfields from module-level selection
                                         const modulePermissions = Object.entries(entities)
@@ -683,7 +687,7 @@ export default function RoleCreate({
                                                                                     );
                                                                                 }}
                                                                             >
-                                                                                {moduleName === 'drivers' && entityName === 'drivers' ? 'Leads' : (moduleName === 'drivers' && entityName === 'driverfields' ? 'Lead Fields' : (moduleName === 'drivers' && entityName === 'driverdocuments' ? 'Lead Documents' : (moduleName === 'drivers' && entityName === 'driverfollowups' ? 'Lead Follow Ups' : (moduleName === 'drivers' && entityName === 'driverstages' ? 'Lead Stages' : (entityName || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())))))}
+                                                                                {moduleName === 'drivers' && entityName === 'drivers' ? 'Leads' : (moduleName === 'drivers' && entityName === 'driverfields' ? 'Lead Fields' : (moduleName === 'drivers' && entityName === 'driverdocuments' ? 'Documents Required' : (moduleName === 'drivers' && entityName === 'driverfollowups' ? 'Follow-ups' : (moduleName === 'drivers' && entityName === 'driverstages' ? 'Stages' : (entityName || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())))))}
                                                                             </Label>
                                                                             <span className="text-xs text-neutral-500">
                                                                                 ({entityPermissionIds.length}{' '}

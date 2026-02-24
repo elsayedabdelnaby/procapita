@@ -237,7 +237,7 @@ export default function RidingCompaniesRecycleBin({ ridingCompanies = [], usersC
                             {selectedRidingCompanies.size > 0 && (
                                 <div className="mb-4 p-3 bg-muted rounded-md flex items-center justify-between">
                                     <span className="text-sm font-medium">
-                                        {selectedRidingCompanies.size} riding company(ies) selected
+                                        {selectedRidingCompanies.size} reseller company(ies) selected
                                     </span>
                                     <div className="flex gap-2">
                                         <Button
@@ -266,7 +266,7 @@ export default function RidingCompaniesRecycleBin({ ridingCompanies = [], usersC
                             <div className="mb-4">
                                 <input
                                     type="text"
-                                    placeholder="Search riding companies..."
+                                    placeholder="Search reseller companies..."
                                     value={searchTerm}
                                     onChange={(e) => {
                                         setSearchTerm(e.target.value);
@@ -325,7 +325,7 @@ export default function RidingCompaniesRecycleBin({ ridingCompanies = [], usersC
                                         {paginatedRidingCompanies.length === 0 ? (
                                             <tr>
                                                 <td colSpan={8} className="px-4 py-8 text-center text-sm text-neutral-500">
-                                                    No riding companies found
+                                                    No reseller companies found
                                                 </td>
                                             </tr>
                                         ) : (
@@ -442,7 +442,7 @@ export default function RidingCompaniesRecycleBin({ ridingCompanies = [], usersC
                         </>
                     ) : (
                         <div className="py-12 text-center">
-                            <p className="text-neutral-500">No deleted riding companies found.</p>
+                            <p className="text-neutral-500">No deleted reseller companies found.</p>
                         </div>
                     )}
                 </Card>
@@ -459,8 +459,8 @@ export default function RidingCompaniesRecycleBin({ ridingCompanies = [], usersC
                     open={massDeleteDialog}
                     onOpenChange={setMassDeleteDialog}
                     onConfirm={confirmMassDelete}
-                    title="Permanently Delete Selected Riding Companies"
-                    description={`Are you sure you want to permanently delete ${selectedRidingCompanies.size} riding company(ies)? This action cannot be undone.`}
+                    title="Permanently Delete Selected Reseller Companies"
+                    description={`Are you sure you want to permanently delete ${selectedRidingCompanies.size} reseller company(ies)? This action cannot be undone.`}
                 />
             </div>
         </AppLayout>

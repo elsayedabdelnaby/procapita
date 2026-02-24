@@ -84,6 +84,8 @@ interface DriverFollowUp {
 }
 
 const DEMO_RESELLER_HIDDEN_FOLLOWUP_COLUMNS = ['driver_campaign', 'driver_vehicle_type'];
+/** Driver columns hidden from all roles (vehicle fields) */
+const UI_HIDDEN_FOLLOWUP_DRIVER_COLUMNS = ['driver_vehicle_type'];
 
 interface DriverFollowUpsIndexProps {
     followUps: DriverFollowUp[];
@@ -98,7 +100,7 @@ const ALL_FOLLOWUP_COLUMNS = [
     { id: 'user_name', label: 'User Name', defaultVisible: true, defaultOrder: 3 },
     { id: 'assigned_to', label: 'Assigned To', defaultVisible: true, defaultOrder: 4 },
     { id: 'created_time', label: 'Created Time', defaultVisible: true, defaultOrder: 5 },
-    { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 7 },
+    { id: 'lead_stage', label: 'Stage', defaultVisible: true, defaultOrder: 7 },
     { id: 'lead_status', label: 'Lead Status', defaultVisible: true, defaultOrder: 7.5 },
     { id: 'lead_status_comment', label: 'Feedback Comment', defaultVisible: false, defaultOrder: 7.6 },
     { id: 'cancel_reason', label: 'Cancel Reasons', defaultVisible: false, defaultOrder: 7.65 },
@@ -123,7 +125,7 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'driver_next_time', label: 'Next Time (Leads)', defaultVisible: false, defaultOrder: 11.1 },
     { id: 'driver_last_follow_up', label: 'Last Follow-up (Leads)', defaultVisible: false, defaultOrder: 11.2 },
     { id: 'driver_assigned_to', label: 'Assigned To (Leads)', defaultVisible: false, defaultOrder: 11.3 },
-    { id: 'driver_lead_stage', label: 'Lead Stage (Leads)', defaultVisible: false, defaultOrder: 11.5 },
+    { id: 'driver_lead_stage', label: 'Stage (Leads)', defaultVisible: false, defaultOrder: 11.5 },
     { id: 'driver_current_stage', label: 'Current Stage (Leads)', defaultVisible: false, defaultOrder: 11.6 },
     { id: 'driver_last_assigned_time', label: 'Last Assigned Time (Leads)', defaultVisible: false, defaultOrder: 11.7 },
     { id: 'driver_last_assigned_date', label: 'Last Assigned Date (Leads)', defaultVisible: false, defaultOrder: 11.75 },
@@ -139,11 +141,12 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'driver_updated_at', label: 'Updated At (Leads)', defaultVisible: false, defaultOrder: 15 },
 ];
 
-// Combine all columns (filter riding/campaign/vehicle when demo_reseller)
+// Combine all columns (filter vehicle type for all; campaign/vehicle when demo_reseller)
 const getBaseColumns = (demoReseller: boolean) => {
-    const driverCols = demoReseller
-        ? ALL_DRIVER_COLUMNS.filter((c) => !DEMO_RESELLER_HIDDEN_FOLLOWUP_COLUMNS.includes(c.id))
-        : ALL_DRIVER_COLUMNS;
+    let driverCols = ALL_DRIVER_COLUMNS.filter((c) => !UI_HIDDEN_FOLLOWUP_DRIVER_COLUMNS.includes(c.id));
+    if (demoReseller) {
+        driverCols = driverCols.filter((c) => !DEMO_RESELLER_HIDDEN_FOLLOWUP_COLUMNS.includes(c.id));
+    }
     return [...ALL_FOLLOWUP_COLUMNS, ...driverCols];
 };
 
@@ -878,11 +881,11 @@ export default function DriverFollowUpsIndex({ followUps = [], demo_reseller = f
 
     return (
         <AppLayout>
-            <Head title="Lead Follow-ups" />
+            <Head title="Follow-ups" />
             <div className="p-6">
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold">Lead Follow-ups</h1>
+                        <h1 className="text-2xl font-bold">Follow-ups</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
                             Track all changes made to leads
                         </p>

@@ -86,14 +86,14 @@ export function RidingCompanyDeleteDialog({
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/20">
                             <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
                         </div>
-                        <DialogTitle>Delete Riding Company</DialogTitle>
+                        <DialogTitle>Delete Reseller Company</DialogTitle>
                     </div>
                     <DialogDescription className="pt-2">
                         {hasUsers ? (
                             <>
-                                Are you sure you want to delete "{ridingCompany?.name}"? This riding company has{' '}
+                                Are you sure you want to delete "{ridingCompany?.name}"? This reseller company has{' '}
                                 <strong>{usersCount}</strong> user{usersCount === 1 ? '' : 's'}. Please select a
-                                riding company to transfer them to.
+                                reseller company to transfer them to.
                             </>
                         ) : (
                             <>
@@ -117,7 +117,7 @@ export function RidingCompanyDeleteDialog({
                             disabled={isDeleting}
                         >
                             <SelectTrigger id="transfer-riding-company">
-                                <SelectValue placeholder="Select a riding company..." />
+                                <SelectValue placeholder="Select a reseller company..." />
                             </SelectTrigger>
                             <SelectContent>
                                 {(Array.isArray(availableRidingCompanies) ? availableRidingCompanies : [])

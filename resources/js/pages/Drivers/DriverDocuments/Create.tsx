@@ -6,27 +6,32 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
 
-interface RidingCompany {
+interface Reseller {
     id: number;
     name: string;
 }
 
 interface DriverDocumentsCreateProps {
-    ridingCompanies: RidingCompany[];
+    resellers: Reseller[];
 }
 
 export default function DriverDocumentsCreate({
-    ridingCompanies,
+    resellers,
 }: DriverDocumentsCreateProps) {
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, transform } = useForm({
         name: '',
-        riding_company_ids: [],
+        company_ids: [] as string[],
         type: 'file',
         required: false,
         notes: '',
         status: 'pending',
         active: true,
     });
+
+    transform((formData) => ({
+        ...formData,
+        company_ids: (formData.company_ids as string[]).map((id) => parseInt(String(id), 10)),
+    }));
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -35,11 +40,11 @@ export default function DriverDocumentsCreate({
 
     return (
         <AppLayout>
-            <Head title="Create Lead Document" />
+            <Head title="Create Document" />
 
             <div className="p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold">Create Lead Document</h1>
+                    <h1 className="text-2xl font-bold">Create Document</h1>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
                         Add a new document requirement for a lead
                     </p>
@@ -101,25 +106,25 @@ export default function DriverDocumentsCreate({
                             </div>
 
                             <div className="md:col-span-2">
-                                <Label htmlFor="riding_company_ids">
-                                    Riding Companies <span className="text-red-500">*</span>
+                                <Label htmlFor="company_ids">
+                                    Resellers <span className="text-red-500">*</span>
                                 </Label>
                                 <MultiSelect
-                                    options={ridingCompanies.map((company) => ({
-                                        value: company.id.toString(),
-                                        label: company.name,
+                                    options={resellers.map((r) => ({
+                                        value: r.id.toString(),
+                                        label: r.name,
                                     }))}
-                                    value={data.riding_company_ids}
-                                    onChange={(value) => setData('riding_company_ids', value)}
-                                    placeholder="Select riding companies..."
+                                    value={data.company_ids}
+                                    onChange={(value) => setData('company_ids', value)}
+                                    placeholder="Select resellers..."
                                     className="w-full"
                                     searchable={true}
                                 />
-                                {errors.riding_company_ids && (
-                                    <p className="text-sm text-red-500 mt-1">{errors.riding_company_ids}</p>
+                                {errors.company_ids && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.company_ids}</p>
                                 )}
                                 <p className="mt-1 text-xs text-neutral-500">
-                                    Select one or more riding companies. This document name will be unique and can be used for multiple riding companies. Documents will be created for all drivers in the selected companies.
+                                    Select one or more resellers. This document will be created for all leads in the selected resellers.
                                 </p>
                             </div>
 
@@ -215,7 +220,7 @@ export default function DriverDocumentsCreate({
                                     <p className="text-sm text-red-500">{errors.notes}</p>
                                 )}
                                 <p className="mt-1 text-xs text-neutral-500">
-                                    Additional notes or instructions that will be copied to lead documents.
+                                    Additional notes or instructions that will be copied to required documents.
                                 </p>
                             </div>
                         </div>
@@ -228,7 +233,7 @@ export default function DriverDocumentsCreate({
                             </Button>
                         </Link>
                         <Button type="submit" disabled={processing}>
-                            {processing ? 'Creating...' : 'Create Lead Document'}
+                            {processing ? 'Creating...' : 'Create Document'}
                         </Button>
                     </div>
                 </form>

@@ -10,7 +10,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { useState, useEffect, useMemo } from 'react';
 import { Search, Pencil, Eye, X } from 'lucide-react';
 
-interface RidingCompany {
+interface Reseller {
     id: number;
     name: string;
 }
@@ -18,7 +18,7 @@ interface RidingCompany {
 interface DriverDocument {
     id: number;
     name: string;
-    riding_companies: RidingCompany[];
+    resellers: Reseller[];
     type?: string;
     required?: boolean;
     active?: boolean;
@@ -40,7 +40,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
 
     const [deleteAllDialog, setDeleteAllDialog] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedRidingCompany, setSelectedRidingCompany] = useState<string>('all');
+    const [selectedReseller, setSelectedReseller] = useState<string>('all');
 
     // Reload page when window gains focus to check for deleted drivers
     useEffect(() => {
@@ -81,58 +81,44 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
     };
 
 
-    // Get unique riding companies for filter
-    const ridingCompanies = useMemo(() => {
-        const companies = new Map<number, string>();
+    // Get unique resellers for filter
+    const resellers = useMemo(() => {
+        const map = new Map<number, string>();
         driverDocuments.forEach((doc) => {
-            doc.riding_companies?.forEach((company) => {
-                if (company.id && company.name) {
-                    companies.set(company.id, company.name);
-                }
+            doc.resellers?.forEach((r) => {
+                if (r.id && r.name) map.set(r.id, r.name);
             });
         });
-        return Array.from(companies.entries()).map(([id, name]) => ({ id, name }));
+        return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
     }, [driverDocuments]);
 
-    // Filter documents based on search query and riding company
     const filteredDocuments = useMemo(() => {
         let filtered = driverDocuments;
-
-        // Filter by riding company
-        if (selectedRidingCompany !== 'all') {
-            const companyId = parseInt(selectedRidingCompany);
-            filtered = filtered.filter((doc) => 
-                doc.riding_companies?.some((company) => company.id === companyId)
-            );
+        if (selectedReseller !== 'all') {
+            const companyId = parseInt(selectedReseller);
+            filtered = filtered.filter((doc) => doc.resellers?.some((r) => r.id === companyId));
         }
-
-        // Filter by search query
         if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase().trim();
+            const q = searchQuery.toLowerCase().trim();
             filtered = filtered.filter((doc) => {
-                const documentName = doc.name?.toLowerCase() || '';
-                const ridingCompanyNames = doc.riding_companies?.map(c => c.name?.toLowerCase() || '').join(' ') || '';
-
-                return (
-                    documentName.includes(query) ||
-                    ridingCompanyNames.includes(query)
-                );
+                const name = doc.name?.toLowerCase() || '';
+                const resellerNames = doc.resellers?.map((r) => r.name?.toLowerCase() || '').join(' ') || '';
+                return name.includes(q) || resellerNames.includes(q);
             });
         }
-
         return filtered;
-    }, [driverDocuments, searchQuery, selectedRidingCompany]);
+    }, [driverDocuments, searchQuery, selectedReseller]);
 
     return (
         <AppLayout>
-            <Head title="Lead Documents" />
+            <Head title="Documents Required" />
 
             <div className="p-6">
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold">Lead Documents</h1>
+                        <h1 className="text-2xl font-bold">Documents Required</h1>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                            Manage lead documents and approvals
+                            Manage required documents and approvals
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -155,7 +141,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                             Export
                         </Button>
                         <Link href="/leads/lead-documents/create">
-                            <Button>Create Lead Document</Button>
+                            <Button>Create Document</Button>
                         </Link>
                     </div>
                 </div>
@@ -177,27 +163,27 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                                 </div>
                                 <div className="flex gap-2 items-center">
                                     <Select
-                                        value={selectedRidingCompany}
-                                        onValueChange={setSelectedRidingCompany}
+                                        value={selectedReseller}
+                                        onValueChange={setSelectedReseller}
                                     >
                                         <SelectTrigger className="w-[200px]">
-                                            <SelectValue placeholder="All Riding Companies" />
+                                            <SelectValue placeholder="All Resellers" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Riding Companies</SelectItem>
-                                            {ridingCompanies.map((company) => (
-                                                <SelectItem key={company.id} value={company.id.toString()}>
-                                                    {company.name}
+                                            <SelectItem value="all">All Resellers</SelectItem>
+                                            {resellers.map((r) => (
+                                                <SelectItem key={r.id} value={r.id.toString()}>
+                                                    {r.name}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    {(selectedRidingCompany !== 'all' || searchQuery) && (
+                                    {(selectedReseller !== 'all' || searchQuery) && (
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             onClick={() => {
-                                                setSelectedRidingCompany('all');
+                                                setSelectedReseller('all');
                                                 setSearchQuery('');
                                             }}
                                             className="gap-2"
@@ -208,7 +194,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                                     )}
                                 </div>
                             </div>
-                            {(searchQuery || selectedRidingCompany !== 'all') && (
+                            {(searchQuery || selectedReseller !== 'all') && (
                                 <p className="mb-4 text-sm text-neutral-500">
                                     Showing {filteredDocuments.length} of {driverDocuments.length} document(s)
                                 </p>
@@ -226,13 +212,13 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                                     ),
                                 },
                                 {
-                                    header: 'Riding Companies',
+                                    header: 'Resellers',
                                     accessor: (row) => (
                                         <div className="flex flex-wrap gap-1">
-                                            {row.riding_companies && row.riding_companies.length > 0 ? (
-                                                row.riding_companies.map((company) => (
-                                                    <Badge key={company.id} variant="outline" className="text-xs">
-                                                        {company.name}
+                                            {row.resellers && row.resellers.length > 0 ? (
+                                                row.resellers.map((r) => (
+                                                    <Badge key={r.id} variant="outline" className="text-xs">
+                                                        {r.name}
                                                     </Badge>
                                                 ))
                                             ) : (
@@ -286,12 +272,12 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                         </>
                     ) : (
                         <div className="py-12 text-center">
-                            <p className="text-neutral-500">No lead documents found.</p>
+                            <p className="text-neutral-500">No documents found.</p>
                             <Link
                                 href="/leads/lead-documents/create"
                                 className="mt-4 inline-block"
                             >
-                                <Button>Create First Lead Document</Button>
+                                <Button>Create First Document</Button>
                             </Link>
                         </div>
                     )}
@@ -303,7 +289,7 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                     onConfirm={confirmDelete}
                     title="Delete Document"
                     description={
-                        `Are you sure you want to delete the document "${deleteDialog.document?.name}"? This will delete this document name and all associated lead documents for all riding companies. This action cannot be undone.`
+                        `Are you sure you want to delete the document "${deleteDialog.document?.name}"? This will delete this document name and all associated documents for all reseller companies. This action cannot be undone.`
                     }
                 />
 
@@ -311,8 +297,8 @@ export default function DriverDocumentsIndex({ driverDocuments }: DriverDocument
                     open={deleteAllDialog}
                     onOpenChange={(open) => setDeleteAllDialog(open)}
                     onConfirm={confirmDeleteAll}
-                    title="Delete All Lead Documents"
-                    description={`Are you sure you want to delete all ${driverDocuments.length} lead document(s)? This action cannot be undone and will also delete all associated files.`}
+                    title="Delete All Documents"
+                    description={`Are you sure you want to delete all ${driverDocuments.length} document(s)? This action cannot be undone and will also delete all associated files.`}
                 />
             </div>
         </AppLayout>

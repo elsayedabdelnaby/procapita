@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Core\app\Http\Controllers\CompanyController;
+use Modules\Core\app\Http\Controllers\CompanyDocumentRequirementController;
 use Modules\Core\app\Http\Controllers\RoleController;
 use Modules\Core\app\Http\Controllers\UserController;
 
@@ -33,6 +34,16 @@ Route::middleware(['auth', 'verified'])->prefix('core')->name('core.')->group(fu
 
     // Company show: Super Admin (any company) or Company Admin (own company only) - after resource so "create" is not matched as ID
     Route::get('companies/{company}', [CompanyController::class, 'show'])->name('companies.show');
+
+    // Document Requirements per Reseller (Company)
+    Route::prefix('companies/{company}')->name('companies.')->group(function () {
+        Route::get('document-requirements', [CompanyDocumentRequirementController::class, 'index'])->name('document-requirements.index');
+        Route::get('document-requirements/create', [CompanyDocumentRequirementController::class, 'create'])->name('document-requirements.create');
+        Route::post('document-requirements', [CompanyDocumentRequirementController::class, 'store'])->name('document-requirements.store');
+    });
+    Route::get('document-requirements/{companyDocumentRequirement}/edit', [CompanyDocumentRequirementController::class, 'edit'])->name('companies.document-requirements.edit');
+    Route::put('document-requirements/{companyDocumentRequirement}', [CompanyDocumentRequirementController::class, 'update'])->name('companies.document-requirements.update');
+    Route::delete('document-requirements/{companyDocumentRequirement}', [CompanyDocumentRequirementController::class, 'destroy'])->name('companies.document-requirements.destroy');
 
     // Company-scoped Users Management (Company Admin - for their own company)
     Route::prefix('companies/{company}')->name('companies.')->group(function () {

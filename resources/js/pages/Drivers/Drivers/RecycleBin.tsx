@@ -125,7 +125,7 @@ const ALL_DRIVER_COLUMNS = [
     { id: 'next_follow_up', label: 'Next Follow-up', defaultVisible: false, defaultOrder: 8.6 },
     { id: 'last_follow_up', label: 'Last Follow-up', defaultVisible: false, defaultOrder: 8.7 },
     { id: 'assigned_time', label: 'Assigned Time', defaultVisible: false, defaultOrder: 8.8 },
-    { id: 'lead_stage', label: 'Lead Stage', defaultVisible: true, defaultOrder: 9 },
+    { id: 'lead_stage', label: 'Stage', defaultVisible: true, defaultOrder: 9 },
     { id: 'assigned_users', label: 'Assigned Users', defaultVisible: true, defaultOrder: 10 },
     { id: 'last_assigned_time', label: 'Last Assigned Time', defaultVisible: false, defaultOrder: 10.5 },
     { id: 'last_assigned_by', label: 'Last Assigned By', defaultVisible: false, defaultOrder: 10.6 },
@@ -3149,9 +3149,9 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                 ))}
                                             </tr>
                                             
-                                            {/* Lead Stage */}
+                                            {/* Stage */}
                                             <tr className="border-b hover:bg-muted/50">
-                                                <td className="px-4 py-3 text-sm font-medium">Lead Stage</td>
+                                                <td className="px-4 py-3 text-sm font-medium">Stage</td>
                                                 {mergeDrivers.map((driver) => (
                                                     <td key={driver.id} className="px-4 py-3 text-sm">
                                                         <div className="flex items-center gap-2">
@@ -3807,7 +3807,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Created Time</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">User Name</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Reseller</th>
-                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Stage</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Feedback Comment</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Notes</th>
@@ -3885,7 +3885,7 @@ export default function DriversRecycleBin({ drivers = [], importAvailableFields,
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Campaign</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Source</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Status</th>
-                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Lead Stage</th>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Stage</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Assigned To</th>
                                                                 <th className="px-4 py-3 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
                                                             </tr>
@@ -4366,7 +4366,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                             <p className="text-xs text-neutral-500 mt-1">Read-only: Automatically updated</p>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Lead Stage</label>
+                            <label className="block text-sm font-medium mb-1">Stage</label>
                             <Select
                                 value={data.lead_stage_id}
                                 onValueChange={(value) => setData('lead_stage_id', value)}
@@ -4376,7 +4376,7 @@ function QuickEditDialog({ driver, open, onOpenChange, filterOptions }: QuickEdi
                                     <SelectValue placeholder={
                                         loadingLeadStages
                                             ? 'Loading...'
-                                            : 'Select Lead Stage'
+                                            : 'Select Stage'
                                     } />
                                 </SelectTrigger>
                                 <SelectContent>

@@ -169,7 +169,7 @@ Route::middleware(['auth', 'verified'])->prefix('leads')->name('leads.')->group(
         Route::post('lead-stages/reorder', [LeadStageController::class, 'reorder'])->name('leadstages.reorder');
     });
 
-    // Lead Documents (under /leads/lead-documents - was driver-documents)
+    // Documents Required (under /leads/lead-documents - was driver-documents)
     Route::middleware(['permission:drivers.driverdocuments.create'])->group(function () {
         Route::get('lead-documents/create', [DriverDocumentController::class, 'create'])->name('driverdocuments.create');
         Route::post('lead-documents', [DriverDocumentController::class, 'store'])->name('driverdocuments.store');
@@ -215,7 +215,7 @@ Route::middleware(['auth', 'verified'])->prefix('leads')->name('leads.')->group(
         Route::post('lead-documents/{driverDocument}/update-status', [DriverDocumentController::class, 'updateStatus'])->name('driverdocuments.update-status');
     });
 
-    // Lead Follow-ups (under /leads/lead-follow-ups - was driver-follow-ups)
+    // Follow-ups (under /leads/lead-follow-ups - was driver-follow-ups)
     Route::middleware(['permission:drivers.driverfollowups.create'])->group(function () {
         Route::get('lead-follow-ups/create', [DriverFollowUpController::class, 'create'])->name('driverfollowups.create');
         Route::post('lead-follow-ups', [DriverFollowUpController::class, 'store'])->name('driverfollowups.store');
